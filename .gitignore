@@ -1,0 +1,61 @@
+# Environment Variables & Secrets
+.env
+.env.*
+!.env.example
+
+# Python Virtual Environments & Caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js & Web Build Artifacts
+node_modules/
+.next/
+dist/
+build/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# AI / ML Binary Model Weights (Protected from Git tracking)
+*.pt
+*.pth
+*.onnx
+*.bin
+*.safetensors
+*.ckpt
+*.h5
+*.pkl
+*.model
+*.tflite
+
+# Model Staging Directories (Track READMEs and .gitkeep only)
+ai/models/*
+!ai/models/**/README.md
+!ai/models/**/.gitkeep
+
+# Raw Audio Files & Test Recordings
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+
+# Benchmark Datasets & Raw Data Storage
+datasets/
+data/raw/
+data/cache/
+evaluation/data/
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/

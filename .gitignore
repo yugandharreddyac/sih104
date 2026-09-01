@@ -72,3 +72,11 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+# Raw downloaded datasets
+datasets/indicvoices_download/
+
+# Extracted audio
+*.flac
+datasets/raw/*
+!datasets/raw/**/.gitkeep
+!datasets/raw/**/README.md

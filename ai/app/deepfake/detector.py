@@ -94,8 +94,8 @@ class DeepfakeDetector:
         # 1. Extract Acoustic & LFCC Features
         features = self.feature_extractor.extract_features(samples)
 
-        # 2. Score via Model
-        prediction = self.model.predict(features)
+        # 2. Score via Model (Neural ONNX Primary + DSP Fallback)
+        prediction = self.model.predict(features, raw_samples=samples)
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 

@@ -39,7 +39,7 @@ def test_model_registry_integrity():
     deepfake_m = ModelRegistry.get_model("deepfake_aasist_spectral_v3")
     assert deepfake_m is not None
     assert deepfake_m.category == "DEEPFAKE"
-    assert deepfake_m.framework == "NUMPY_DSP_NEURAL"
+    assert deepfake_m.framework in ("ONNX_NEURAL_DSP", "NUMPY_DSP_NEURAL")
     assert deepfake_m.device in ["CPU", "CUDA"]
 
 

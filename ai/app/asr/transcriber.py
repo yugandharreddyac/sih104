@@ -42,7 +42,8 @@ class StreamingASRTranscriber:
     def transcribe(
         self,
         chunk: AudioChunkPayload,
-        quality: Optional[AudioQualityResult] = None
+        quality: Optional[AudioQualityResult] = None,
+        language_hint: Optional[str] = None
     ) -> ASRResult:
         """
         Transcribes streaming audio chunk into partial/final transcript segment.
@@ -62,7 +63,7 @@ class StreamingASRTranscriber:
 
         samples = self.decode_samples(chunk.audio_base64)
         text_hint = chunk.text_transcript or chunk.metadata.get("text_hint")
-        language_hint = chunk.metadata.get("language") or chunk.metadata.get("language_hint")
+        effective_lang_hint = language_hint or chunk.metadata.get("language") or chunk.metadata.get("language_hint")
         start_ms = chunk.timestamp_ms or 0
 
         raw_text, segments, lang, conf, uncertainty = self.engine.transcribe_chunk(
@@ -71,7 +72,7 @@ class StreamingASRTranscriber:
             speaker_channel=chunk.speaker_channel,
             start_ms=start_ms,
             quality=quality,
-            language_hint=language_hint
+            language_hint=effective_lang_hint
         )
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)

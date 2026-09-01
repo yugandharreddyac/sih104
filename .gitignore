@@ -47,8 +47,21 @@ ai/models/*
 *.m4a
 *.aac
 
-# Benchmark Datasets & Raw Data Storage
-datasets/
+# Benchmark Datasets & Raw Data Storage (Keep structure, READMEs, manifests; ignore audio/archives)
+datasets/raw/*
+!datasets/raw/**/.gitkeep
+!datasets/raw/**/README.md
+datasets/processed/*
+!datasets/processed/**/.gitkeep
+!datasets/processed/**/README.md
+!datasets/README.md
+!datasets/**/.gitkeep
+!datasets/metadata/
+!datasets/metadata/**
+datasets/**/*.tar
+datasets/**/*.tar.gz
+datasets/**/*.zip
+datasets/**/*.7z
 data/raw/
 data/cache/
 evaluation/data/

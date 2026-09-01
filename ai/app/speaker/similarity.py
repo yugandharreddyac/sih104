@@ -8,8 +8,9 @@ from typing import Tuple
 
 
 class SpeakerSimilarityMatcher:
-    def __init__(self, verification_threshold: float = 0.72):
+    def __init__(self, verification_threshold: float = 0.70, neural_threshold: float = 0.88):
         self.verification_threshold = verification_threshold
+        self.neural_threshold = neural_threshold
 
     def compute_similarity(self, emb1: list, emb2: list) -> float:
         """
@@ -31,11 +32,17 @@ class SpeakerSimilarityMatcher:
         cosine_sim = dot / (norm1 * norm2)
         return float(np.clip(cosine_sim, -1.0, 1.0))
 
-    def evaluate_match(self, similarity: float, threshold: float = None) -> Tuple[bool, float]:
+    def evaluate_match(self, similarity: float, threshold: float = None, is_neural: bool = False) -> Tuple[bool, float]:
         """
         Returns (is_match, confidence) based on cosine similarity and threshold margin.
         """
-        tau = threshold if threshold is not None else self.verification_threshold
+        if threshold is not None:
+            tau = threshold
+        elif is_neural:
+            tau = self.neural_threshold
+        else:
+            tau = self.verification_threshold
+
         is_match = similarity >= tau
 
         # Confidence is higher the further similarity is from threshold
@@ -43,3 +50,4 @@ class SpeakerSimilarityMatcher:
         confidence = float(np.clip(0.50 + margin * 1.5, 0.50, 0.98))
 
         return is_match, round(confidence, 3)
+

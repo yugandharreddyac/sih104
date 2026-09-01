@@ -125,17 +125,30 @@ class SpeakerVerifier:
 
         # 5. Compute Cosine Similarity
         sim_score = self.similarity_matcher.compute_similarity(incoming_emb.embedding, enrolled_embedding)
-        is_match, confidence = self.similarity_matcher.evaluate_match(sim_score, threshold=0.70)
+        is_neural = incoming_emb.dimension == 192 and len(enrolled_embedding) == 192
+        applied_threshold = 0.88 if is_neural else 0.70
+        is_match, confidence = self.similarity_matcher.evaluate_match(
+            sim_score,
+            threshold=applied_threshold,
+            is_neural=is_neural
+        )
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
         explainability: List[str] = []
+        mode_label = "NEURAL_ECAPA_TDNN" if is_neural else "DSP_RANDOM_PROJECTION"
         if is_match:
             status = SpeakerVerificationStatus.MATCH
-            explainability.append(f"Acoustic biometric match confirmed for '{enrolled_profile.speaker_name}' (Cosine similarity: {round(sim_score, 3)} >= 0.70).")
+            explainability.append(
+                f"Acoustic biometric match confirmed for '{enrolled_profile.speaker_name}' "
+                f"(Cosine similarity: {round(sim_score, 3)} >= {applied_threshold} [{mode_label}])."
+            )
         else:
             status = SpeakerVerificationStatus.MISMATCH
-            explainability.append(f"Speaker biometric MISMATCH. Incoming voice deviates from enrolled profile for '{enrolled_profile.speaker_name}' (Similarity: {round(sim_score, 3)} < 0.70).")
+            explainability.append(
+                f"Speaker biometric MISMATCH. Incoming voice deviates from enrolled profile for '{enrolled_profile.speaker_name}' "
+                f"(Similarity: {round(sim_score, 3)} < {applied_threshold} [{mode_label}])."
+            )
 
         return SpeakerVerificationResult(
             status=status,
@@ -143,7 +156,7 @@ class SpeakerVerifier:
             confidence=round(confidence, 3),
             is_enrolled=True,
             enrolled_speaker_id=speaker_id,
-            threshold_applied=0.70,
+            threshold_applied=applied_threshold,
             model_version=self.model_id,
             explainability=explainability,
             inference_latency_ms=inference_latency_ms

@@ -50,7 +50,7 @@ class SpeakerEnrollmentManager:
             "profile": SpeakerProfile(
                 speaker_id="speaker-cfo-001",
                 speaker_name="Eleanor Vance (Chief Financial Officer)",
-                embedding_dimension=128,
+                embedding_dimension=cfo_emb.dimension,
                 utterances_count=3,
                 enrolled_at="2026-08-30T10:00:00Z",
                 anti_spoof_verified=True,
@@ -113,7 +113,7 @@ class SpeakerEnrollmentManager:
         profile = SpeakerProfile(
             speaker_id=req.speaker_id,
             speaker_name=req.speaker_name,
-            embedding_dimension=128,
+            embedding_dimension=len(normalized_centroid),
             utterances_count=len(req.audio_utterances_base64),
             enrolled_at=now_iso,
             anti_spoof_verified=True,

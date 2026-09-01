@@ -91,9 +91,14 @@ class OverallAcousticAssessment(str, Enum):
 
 class LanguageCode(str, Enum):
     EN = "en"
+    EN_IN = "en-IN"
     HI = "hi"
+    TA = "ta"
     TE = "te"
+    BN = "bn"
+    MR = "mr"
     UNKNOWN = "unknown"
+    UNSUPPORTED = "unsupported"
 
 
 # --- Phase 5 Canonical Risk Signal Types ---

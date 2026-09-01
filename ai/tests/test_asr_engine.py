@@ -29,7 +29,7 @@ def test_language_identification_multilingual():
 
     # English
     lang_en, conf_en = lid.detect_language("Please transfer the funds immediately to my account.")
-    assert lang_en == LanguageCode.EN
+    assert lang_en in (LanguageCode.EN, LanguageCode.EN_IN)
     assert conf_en >= 0.85
 
     # Hindi (Devanagari)

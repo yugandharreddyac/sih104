@@ -95,16 +95,7 @@ class StreamingASREngine:
         return self._cached_neural_model is not None
 
     def _map_language_code(self, lang_str: Optional[str]) -> LanguageCode:
-        if not lang_str:
-            return LanguageCode.EN
-        norm = lang_str.strip().lower()
-        if norm in ("hi", "hin", "hindi"):
-            return LanguageCode.HI
-        elif norm in ("te", "tel", "telugu"):
-            return LanguageCode.TE
-        elif norm in ("en", "eng", "english"):
-            return LanguageCode.EN
-        return LanguageCode.UNKNOWN
+        return self.language_id.normalize_language_code(lang_str)
 
     def transcribe_chunk(
         self,
@@ -113,22 +104,22 @@ class StreamingASREngine:
         speaker_channel: int = 0,
         start_ms: int = 0,
         quality: Optional[AudioQualityResult] = None,
-        language_hint: Optional[str] = None
+        language_hint: Optional[str] = None,
+        session_id: Optional[str] = None
     ) -> Tuple[str, List[TranscriptSegment], LanguageCode, float, float]:
         """
-        Transcribes audio samples into finalized segments with dual-engine primary/fallback.
+        Transcribes audio samples into finalized segments with multilingual routing and dual-engine primary/fallback.
         Returns: (raw_transcript, segments, detected_language, confidence, uncertainty).
         """
         duration_ms = int((len(samples) / self.sample_rate) * 1000.0) if len(samples) > 0 else 250
         transcript = ""
-        detected_lang: Optional[LanguageCode] = None
-        lang_prob: float = 0.90
+        whisper_lang_raw: Optional[str] = None
+        whisper_lang_prob: Optional[float] = None
         segments: List[TranscriptSegment] = []
 
         # 1. Check explicit test/telephony text hint payload first
         if text_hint and text_hint.strip():
             transcript = text_hint.strip()
-            detected_lang, lang_prob = self.language_id.detect_language(transcript)
 
         # 2. Neural Primary Inference (Faster-Whisper CPU INT8)
         elif self.is_neural_active and len(samples) >= 800:
@@ -141,7 +132,10 @@ class StreamingASREngine:
                 # Check minimum acoustic energy before running neural graph
                 rms_energy = float(np.sqrt(np.mean(audio_float ** 2)))
                 if rms_energy > 0.005:
-                    neural_lang = language_hint if language_hint in ("en", "hi", "te") else None
+                    # Resolve ASR hint from explicit language_hint if provided
+                    route_pre = self.language_id.route_language(explicit_hint=language_hint, session_id=session_id)
+                    neural_lang = route_pre.asr_language_hint if (language_hint and route_pre.detection_source == "explicit") else None
+
                     segments_iter, info = self._cached_neural_model.transcribe(
                         audio_float,
                         beam_size=1,
@@ -159,8 +153,8 @@ class StreamingASREngine:
                     raw_neural_text = " ".join(text_parts).strip()
                     if raw_neural_text:
                         transcript = raw_neural_text
-                        detected_lang = self._map_language_code(info.language)
-                        lang_prob = float(info.language_probability) if hasattr(info, "language_probability") else 0.92
+                        whisper_lang_raw = info.language if hasattr(info, "language") else None
+                        whisper_lang_prob = float(info.language_probability) if hasattr(info, "language_probability") else 0.92
 
             except Exception as exc:
                 logger.warning(
@@ -175,11 +169,16 @@ class StreamingASREngine:
             if energy > 0.02:
                 # Acoustic energy present but neural uninitialized or inconclusive
                 transcript = "I am calling regarding your account security."
-                detected_lang, lang_prob = self.language_id.detect_language(transcript)
 
-        # 4. Finalize Language & Confidence
-        if detected_lang is None or detected_lang == LanguageCode.UNKNOWN:
-            detected_lang, _ = self.language_id.detect_language(transcript)
+        # 4. Resolve Multilingual Routing Decision
+        routing_decision = self.language_id.route_language(
+            explicit_hint=language_hint,
+            whisper_detected_lang=whisper_lang_raw,
+            whisper_probability=whisper_lang_prob,
+            text_content=transcript,
+            session_id=session_id
+        )
+        detected_lang = routing_decision.language_code
 
         base_conf = 0.92 if len(transcript) > 0 else 0.50
         conf, uncertainty = self.confidence_calc.calculate_confidence(base_conf, quality=quality)
@@ -190,7 +189,7 @@ class StreamingASREngine:
                 segment_id=f"seg-{int(time.time() * 1000)}-{speaker_channel}",
                 speaker_channel=speaker_channel,
                 text=transcript,
-                redacted_text=transcript,  # Will be redacted downstream by SensitiveDataDetector
+                redacted_text=transcript,  # Redacted downstream by SensitiveDataDetector
                 start_ms=start_ms,
                 end_ms=start_ms + duration_ms,
                 confidence=conf,

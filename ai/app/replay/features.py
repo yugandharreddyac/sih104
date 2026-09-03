@@ -21,7 +21,9 @@ class ReplayFeatureExtractor:
                 spectral_decay_slope=0.0,
                 high_freq_cutoff_ratio=0.0,
                 reverberation_decay_time_ms=0.0,
-                channel_impulse_distortion=0.0
+                channel_impulse_distortion=0.0,
+                is_narrowband=False,
+                effective_bandwidth_hz=8000.0
             )
 
         # 1. FFT Power Spectrum
@@ -29,18 +31,31 @@ class ReplayFeatureExtractor:
         mag = np.abs(np.fft.rfft(samples, n=nfft))
         freqs = np.fft.rfftfreq(nfft, 1.0 / self.sample_rate)
 
-        # 2. High-Frequency Spectral Roll-off & Cutoff (> 4500 Hz)
         low_band = mag[freqs < 3000.0]
         high_band = mag[freqs >= 4500.0]
 
+        total_energy = float(np.sum(mag)) if len(mag) > 0 else 1e-5
         low_energy = float(np.sum(low_band)) if len(low_band) > 0 else 1e-5
         high_energy = float(np.sum(high_band)) if len(high_band) > 0 else 1e-5
         high_freq_cutoff_ratio = float(high_energy / max(low_energy, 1e-5))
+        high_band_fraction = float(high_energy / max(total_energy, 1e-5))
+
+        # Channel bandwidth classification (Narrowband PSTN / G.711 exhibits cutoff above 3.8-4.5 kHz)
+        is_narrowband = bool(high_freq_cutoff_ratio < 0.04 and high_band_fraction < 0.05)
+        effective_bandwidth = 3800.0 if is_narrowband else 8000.0
 
         # 3. Spectral Decay Slope (Log-linear regression across spectrum)
         log_freqs = np.log(np.maximum(freqs[1:], 1.0))
         log_mag = np.log(np.maximum(mag[1:], 1e-6))
-        slope, _ = np.polyfit(log_freqs, log_mag, 1)
+        if len(log_freqs) > 1 and np.std(log_mag) > 1e-5:
+            try:
+                poly_slope, _ = np.polyfit(log_freqs, log_mag, 1)
+                slope = float(poly_slope) if np.isfinite(poly_slope) else 0.0
+            except Exception:
+                slope = 0.0
+        else:
+            slope = 0.0
+        slope = float(np.clip(slope, -20.0, 20.0))
 
         # 4. Double Reverberation Decay Anomaly Estimate
         # Replayed audio exhibits delayed energy decay envelope
@@ -57,19 +72,23 @@ class ReplayFeatureExtractor:
                 decay_time_ms = 0.0
         else:
             decay_time_ms = 10.0
+        decay_time_ms = float(np.clip(decay_time_ms, 0.0, 2000.0))
 
         # 5. Transducer Harmonic Non-Linearity (Normalized non-linear envelope residual)
         var_samples = float(np.var(samples))
         if var_samples > 1e-5:
-            # Non-linear clipping / saturation residual
             cubic_fit = np.mean((samples ** 3) ** 2)
-            channel_distortion = float(cubic_fit / (var_samples ** 3))
+            raw_distortion = float(cubic_fit / (var_samples ** 3))
+            channel_distortion = float(raw_distortion) if np.isfinite(raw_distortion) else 0.0
         else:
             channel_distortion = 0.0
+        channel_distortion = float(np.clip(channel_distortion, 0.0, 100.0))
 
         return ReplayFeatureVector(
             spectral_decay_slope=round(float(slope), 4),
             high_freq_cutoff_ratio=round(high_freq_cutoff_ratio, 4),
             reverberation_decay_time_ms=round(decay_time_ms, 2),
-            channel_impulse_distortion=round(channel_distortion, 5)
+            channel_impulse_distortion=round(channel_distortion, 5),
+            is_narrowband=is_narrowband,
+            effective_bandwidth_hz=effective_bandwidth
         )

@@ -137,7 +137,8 @@ class SpeakerEmbeddingExtractor:
             embedding=[round(float(x), 5) for x in normalized_vec],
             dimension=self.dsp_dim,
             energy_norm=round(norm, 4),
-            model_version=self.model_version
+            model_version=self.model_version,
+            engine_type="DSP_FALLBACK"
         )
 
     def extract_embedding(
@@ -156,7 +157,8 @@ class SpeakerEmbeddingExtractor:
                 embedding=zero_vec,
                 dimension=len(zero_vec),
                 energy_norm=0.0,
-                model_version=self.model_version
+                model_version=self.model_version,
+                engine_type="DSP_FALLBACK"
             )
 
         # 1. Primary Neural Path (ECAPA-TDNN ONNX Runtime)
@@ -183,7 +185,8 @@ class SpeakerEmbeddingExtractor:
                         embedding=[round(float(x), 5) for x in normalized_vec],
                         dimension=len(normalized_vec),
                         energy_norm=round(norm, 4),
-                        model_version=self.model_version
+                        model_version=self.model_version,
+                        engine_type="NEURAL"
                     )
             except Exception as exc:
                 logger.warning(

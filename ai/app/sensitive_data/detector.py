@@ -28,8 +28,8 @@ class SensitiveDataDetector:
         ]
 
         self.request_patterns = [
-            re.compile(r'\b(tell|give|share|read|send|provide|type|enter)\s+(me|us)?\s*(the|your)?\s*(otp|pin|password|cvv|code)\b', re.I),
-            re.compile(r'\b(bhejiye|bataye|share\s+karo|cheppandi)\b', re.I),
+            re.compile(r'\b(tell|give|share|read|send|provide|type|enter)\s+(me|us)?\s*(the|your)?\s*([0-9]+[-\s]digit\s+|one[-\s]time\s+|verification\s+)?(otp|pin|password|cvv|code|passcode)\b', re.I),
+            re.compile(r'\b(bhejiye|bataye|share\s+karo|cheppandi|sollu|kodunga|bolun|sanga)\b', re.I),
         ]
 
         self.read_aloud_patterns = [

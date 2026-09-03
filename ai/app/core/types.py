@@ -475,6 +475,7 @@ class DeepfakeAnalysisResult(BaseModel):
     lfcc_anomaly_score: float = 0.0
     artifacts_detected: List[str] = Field(default_factory=list)
     model_version: str
+    engine_type: Optional[str] = None
     explainability: List[str] = Field(default_factory=list)
     inference_latency_ms: float = 0.0
 
@@ -487,6 +488,7 @@ class SpeakerVerificationResult(BaseModel):
     enrolled_speaker_id: Optional[str] = None
     threshold_applied: float = 0.72
     model_version: str
+    engine_type: Optional[str] = None
     explainability: List[str] = Field(default_factory=list)
     inference_latency_ms: float = 0.0
 
@@ -498,6 +500,7 @@ class ReplayAnalysisResult(BaseModel):
     high_frequency_loss: bool = False
     reverberation_decay_anomaly: bool = False
     model_version: str
+    engine_type: Optional[str] = "DSP"
     explainability: List[str] = Field(default_factory=list)
     inference_latency_ms: float = 0.0
 

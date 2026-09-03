@@ -1,0 +1,82 @@
+# =============================================================
+# VOXSHIELD — Dataset Configuration
+# =============================================================
+# All paths are relative to the project root unless otherwise noted.
+# DO NOT hard-code developer-specific absolute paths here.
+# Override via environment variables in your local .env if needed.
+# =============================================================
+
+# ------------------------------------
+# Raw source dataset roots (READ-ONLY)
+# ------------------------------------
+ASVSPOOF2021_ROOT: datasets/raw/asvspoof2021
+INDICVOICES_ROOT: datasets/raw/indicvoices
+INDIC_PARLER_TTS_ROOT: datasets/raw/indic_parler_tts
+
+# ------------------------------------
+# Derived / generated data roots
+# ------------------------------------
+PROCESSED_ROOT: datasets/processed
+MANIFEST_ROOT: datasets/manifests
+METADATA_ROOT: datasets/metadata
+SPLITS_ROOT: datasets/splits
+
+# ------------------------------------
+# Legacy alias (Phase 7.1 manifest CSV)
+# ------------------------------------
+LEGACY_MANIFEST_CSV: datasets/metadata/dataset_manifest.csv
+
+# ------------------------------------
+# Target languages in scope
+# ------------------------------------
+TARGET_LANGUAGES:
+  - code: hi
+    name: Hindi
+  - code: te
+    name: Telugu
+  - code: ta
+    name: Tamil
+  - code: bn
+    name: Bengali
+  - code: mr
+    name: Marathi
+  - code: en-IN
+    name: Indian English
+
+# ------------------------------------
+# Initial sampling targets (clips per language)
+# ------------------------------------
+SAMPLING:
+  INDICVOICES_PER_LANGUAGE: 2000     # Upper bound for initial subset
+  INDIC_PARLER_TTS_PER_LANGUAGE: 2000  # Upper bound for initial subset
+  ASVSPOOF_SUBSET: true              # Use representative subset, not full corpus
+
+# ------------------------------------
+# Audio quality constraints
+# ------------------------------------
+AUDIO:
+  TARGET_SAMPLE_RATE: 16000          # Hz - standard for ASR/anti-spoofing
+  SUPPORTED_FORMATS:
+    - .wav
+    - .flac
+    - .mp3
+    - .ogg
+    - .m4a
+  MAX_DURATION_SECONDS: 30           # Clips longer than this are flagged for review
+  MIN_DURATION_SECONDS: 0.5          # Clips shorter than this are flagged for review
+
+# ------------------------------------
+# Storage safety thresholds
+# ------------------------------------
+STORAGE:
+  WARN_DISK_FREE_GB: 20              # Warn if free disk space falls below this
+  ESTIMATED_FULL_DATASET_GB: 70      # Approximate total size when fully downloaded
+  ESTIMATED_SUBSET_GB: 5             # Approximate size for initial representative subset
+
+# ------------------------------------
+# Split ratios (used by generate_dataset_manifest.py)
+# ------------------------------------
+SPLITS:
+  TRAIN: 0.70
+  VALIDATION: 0.15
+  TEST: 0.15

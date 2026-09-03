@@ -193,11 +193,23 @@ class UnifiedPipelineOrchestrator:
         except Exception as exc:
             component_errors["asr"] = str(exc)
             component_statuses["asr"] = "ERROR"
-            transcript = chunk.text_transcript or ""
-            redacted_transcript = transcript
-            asr_conf = 0.50
-            asr_unc = 0.50
-            asr_res = None
+            transcript = ""
+            redacted_transcript = ""
+            asr_conf = 0.0
+            asr_unc = 1.0
+            # Use module-level imports (ASRResult, PipelineStatus already imported at top)
+            asr_res = ASRResult(
+                status=PipelineStatus.MODEL_UNAVAILABLE,
+                model_version="whisper_base_int8",
+                transcript="",
+                redacted_transcript="",
+                language=LanguageCode.EN,
+                language_confidence=0.0,
+                word_count=0,
+                confidence=0.0,
+                uncertainty=1.0,
+                is_final=False
+            )
 
         # Multilingual Language Routing Decision
         try:
@@ -420,7 +432,7 @@ class UnifiedPipelineOrchestrator:
         except Exception as exc:
             component_errors["risk_fusion"] = str(exc)
             component_statuses["risk_fusion"] = "ERROR"
-            from ai.app.core.types import RiskDimensions, EvidenceGraph, HumanDecisionState
+            from ai.app.core.types import RiskDimensions, EvidenceGraph, HumanDecisionState  # noqa: PLC0415
             fusion_result = UnifiedRiskFusionResult(
                 status=PipelineStatus.ERROR,
                 call_id=call_id,

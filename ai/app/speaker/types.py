@@ -13,6 +13,7 @@ class SpeakerEmbeddingVector(BaseModel):
     dimension: int = 128
     energy_norm: float
     model_version: str
+    engine_type: str = "DSP_FALLBACK"
 
 
 class EnrollmentValidationResult(BaseModel):

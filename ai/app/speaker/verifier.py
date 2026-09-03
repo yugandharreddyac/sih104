@@ -66,6 +66,7 @@ class SpeakerVerifier:
                 enrolled_speaker_id=claimed_speaker_id,
                 threshold_applied=0.70,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=["Speaker biometric verification model is UNAVAILABLE in registry."],
                 inference_latency_ms=0.0
             )
@@ -82,6 +83,7 @@ class SpeakerVerifier:
                 enrolled_speaker_id=None,
                 threshold_applied=0.70,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=["No claimed speaker identity associated with this call session."],
                 inference_latency_ms=0.0
             )
@@ -99,6 +101,7 @@ class SpeakerVerifier:
                 enrolled_speaker_id=speaker_id,
                 threshold_applied=0.70,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=[f"Speaker identity '{speaker_id}' is not enrolled in the biometric registry."],
                 inference_latency_ms=0.0
             )
@@ -116,6 +119,7 @@ class SpeakerVerifier:
                 enrolled_speaker_id=speaker_id,
                 threshold_applied=0.70,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=[f"Insufficient speech duration ({round(duration_ms)}ms) for speaker embedding."],
                 inference_latency_ms=0.0
             )
@@ -158,6 +162,7 @@ class SpeakerVerifier:
             enrolled_speaker_id=speaker_id,
             threshold_applied=applied_threshold,
             model_version=self.model_id,
+            engine_type=incoming_emb.engine_type,
             explainability=explainability,
             inference_latency_ms=inference_latency_ms
         )

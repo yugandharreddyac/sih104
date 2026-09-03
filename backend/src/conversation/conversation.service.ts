@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { AuditService } from '../security/audit.service';
 
 export interface ConversationTurnPayload {
   callId: string;
@@ -12,12 +13,110 @@ export interface ConversationTurnPayload {
   metadata?: Record<string, any>;
 }
 
-export class ConversationService {
-  public static async analyzeTurn(payload: ConversationTurnPayload): Promise<any> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+export type ConversationFailureReason =
+  | 'AI_TIMEOUT'
+  | 'AI_HTTP_ERROR'
+  | 'AI_NETWORK_ERROR'
+  | 'AI_INVALID_RESPONSE'
+  | 'AI_UNAVAILABLE';
 
+export class ConversationService {
+  public static readonly AI_TIMEOUT_MS = 1200;
+
+  /**
+   * Validates that the AI service returned a valid object containing required sub-objects.
+   */
+  private static isValidConversationResponse(data: any): boolean {
+    if (!data || typeof data !== 'object') return false;
+    if (!data.asr || typeof data.asr !== 'object' || typeof data.asr.status !== 'string') return false;
+    if (!data.intent || typeof data.intent !== 'object') return false;
+    if (!data.social_engineering || typeof data.social_engineering !== 'object' || typeof data.social_engineering.status !== 'string') return false;
+    return true;
+  }
+
+  /**
+   * Constructs an explicit safe degraded failure structure without fabricating transcripts,
+   * intents, or social-engineering assessments.
+   */
+  private static buildDegradedResult(
+    payload: ConversationTurnPayload,
+    failureReason: ConversationFailureReason,
+    httpStatus?: number
+  ): any {
+    return {
+      call_id: payload.callId,
+      stream_id: payload.streamId,
+      turn_index: payload.chunkIndex,
+      timestamp: new Date().toISOString(),
+      analysis_status: failureReason,
+      http_status: httpStatus ?? null,
+      asr: {
+        status: 'NOT_AVAILABLE',
+        model_version: 'whisper_streaming_conformer_v4',
+        transcript: null,
+        redacted_transcript: null,
+        language: null,
+        language_confidence: null,
+        word_count: 0,
+        confidence: 0.0,
+        uncertainty: 1.0,
+        is_final: false,
+        supplied_transcript: payload.textTranscript || null,
+      },
+      intent: {
+        status: 'NOT_AVAILABLE',
+        primary_intent: 'NOT_AVAILABLE',
+        confidence: 0.0,
+        secondary_intents: [],
+        is_adversarial: false,
+        evidence_cues: [],
+      },
+      sensitive_data: {
+        status: 'NOT_AVAILABLE',
+        findings: [],
+        contains_direct_request: false,
+        contains_secret: false,
+        redacted_preview: payload.textTranscript || null,
+        highest_severity: 'LOW',
+      },
+      social_engineering: {
+        status: 'NOT_AVAILABLE',
+        model_version: 'social_eng_multi_turn_v4',
+        tactics_detected: [],
+        progression_state: 'NOT_AVAILABLE',
+        attack_sequence_score: null,
+        urgency_detected: false,
+        authority_pressure: false,
+        secrecy_demanded: false,
+        fear_coercion_detected: false,
+        verification_bypass_detected: false,
+        confidence: 0.0,
+        explainability: ['Conversational AI analysis unavailable; social engineering detection degraded.'],
+      },
+      requested_action: {
+        action_type: 'NOT_AVAILABLE',
+        target_object: null,
+        is_high_risk: false,
+        confidence: 0.0,
+        raw_action_text_redacted: null,
+      },
+      caller_claims: [],
+      inconsistencies: [],
+      current_phase: 'NOT_AVAILABLE',
+      total_nlp_latency_ms: 0.0,
+      evidence_summary: [
+        `Conversational AI analysis unavailable (${failureReason}); speech and NLP intelligence degraded.`,
+      ],
+    };
+  }
+
+  public static async analyzeTurn(payload: ConversationTurnPayload): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
+    let failureReason: ConversationFailureReason = 'AI_UNAVAILABLE';
+    let httpStatus: number | undefined = undefined;
+
+    try {
       const response = await fetch(`${env.AI_SERVICE_URL}/v1/conversation/analyze-turn`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -34,122 +133,86 @@ export class ConversationService {
         }),
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
 
-      if (response.ok) {
-        return await response.json();
+      if (!response.ok) {
+        failureReason = 'AI_HTTP_ERROR';
+        httpStatus = response.status;
+      } else {
+        try {
+          const data = await response.json();
+          if (this.isValidConversationResponse(data)) {
+            return data;
+          } else {
+            failureReason = 'AI_INVALID_RESPONSE';
+          }
+        } catch {
+          failureReason = 'AI_INVALID_RESPONSE';
+        }
       }
-    } catch {
-      // Local fallback
+    } catch (err: any) {
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        failureReason = 'AI_TIMEOUT';
+      } else {
+        failureReason = 'AI_NETWORK_ERROR';
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
 
-    const text = payload.textTranscript || 'I am calling regarding your account security.';
-    const isOtp = text.toLowerCase().includes('otp') || text.toLowerCase().includes('code');
+    // Record audit event safely without raw audio/transcripts
+    try {
+      await AuditService.record({
+        organizationId: payload.metadata?.organizationId || '00000000-0000-0000-0000-000000000001',
+        action: 'CONVERSATION_AI_UNAVAILABLE',
+        resourceType: 'CONVERSATION_SERVICE',
+        resourceId: payload.callId,
+        result: 'ERROR',
+        metadata: {
+          streamId: payload.streamId,
+          chunkIndex: payload.chunkIndex,
+          failureReason,
+          httpStatus,
+        },
+      });
+    } catch {}
 
-    return {
-      call_id: payload.callId,
-      stream_id: payload.streamId,
-      turn_index: payload.chunkIndex,
-      timestamp: new Date().toISOString(),
-      asr: {
-        status: 'AVAILABLE',
-        model_version: 'whisper_streaming_conformer_v4',
-        transcript: text,
-        redacted_transcript: isOtp ? text.replace(/\b\d{4,8}\b/g, '[REDACTED]') : text,
-        language: 'en',
-        language_confidence: 0.95,
-        word_count: text.split(' ').length,
-        confidence: 0.92,
-        uncertainty: 0.08,
-        is_final: true,
-      },
-      intent: {
-        primary_intent: isOtp ? 'OTP_REQUEST' : 'BENIGN_INQUIRY',
-        confidence: 0.90,
-        secondary_intents: [],
-        is_adversarial: isOtp,
-        evidence_cues: isOtp ? ["Matched 'otp'"] : ['Standard conversational inquiry.'],
-      },
-      sensitive_data: {
-        status: 'AVAILABLE',
-        findings: isOtp
-          ? [
-              {
-                entity_type: 'OTP',
-                role: 'DIRECT_REQUEST',
-                raw_preview_sanitized: 'Direct caller solicitation for OTP [REDACTED]',
-                confidence: 0.95,
-                severity: 'CRITICAL',
-              },
-            ]
-          : [],
-        contains_direct_request: isOtp,
-        contains_secret: isOtp,
-        redacted_preview: isOtp ? text.replace(/\b\d{4,8}\b/g, '[REDACTED]') : text,
-        highest_severity: isOtp ? 'CRITICAL' : 'LOW',
-      },
-      social_engineering: {
-        status: 'AVAILABLE',
-        model_version: 'social_eng_multi_turn_v4',
-        tactics_detected: isOtp ? ['AUTHORITY_EXPLOITATION', 'URGENCY_PRESSURE'] : [],
-        progression_state: isOtp ? 'SECRET_HARVESTING_ATTEMPTED' : 'BENIGN_CONVERSATION',
-        attack_sequence_score: isOtp ? 0.88 : 0.10,
-        urgency_detected: isOtp,
-        authority_pressure: isOtp,
-        secrecy_demanded: false,
-        fear_coercion_detected: false,
-        verification_bypass_detected: false,
-        confidence: isOtp ? 0.90 : 0.80,
-        explainability: isOtp ? ['Direct OTP solicitation following authority claim.'] : ['Benign inquiry.'],
-      },
-      requested_action: {
-        action_type: isOtp ? 'DISCLOSE_CREDENTIAL' : 'BENIGN_ACTION',
-        target_object: isOtp ? 'Disclose authentication credential / OTP' : 'Standard conversational inquiry',
-        is_high_risk: isOtp,
-        confidence: 0.92,
-        raw_action_text_redacted: isOtp ? 'Disclose OTP [REDACTED]' : text.substring(0, 40),
-      },
-      caller_claims: isOtp
-        ? [
-            {
-              claim_type: 'BANK_OFFICIAL',
-              claimed_identity: 'Bank Official / Fraud Prevention',
-              organization: 'Financial Institution',
-              confidence: 0.90,
-              stated_turn_index: payload.chunkIndex,
-            },
-          ]
-        : [],
-      inconsistencies: [],
-      current_phase: isOtp ? 'ACTION_REQUEST' : 'INQUIRY',
-      total_nlp_latency_ms: 3.2,
-      evidence_summary: isOtp ? ['Intent: OTP Request', 'Tactics: Authority & Urgency'] : ['Benign conversation turn.'],
-    };
+    return this.buildDegradedResult(payload, failureReason, httpStatus);
   }
 
   public static async getSummary(callId: string): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
     try {
-      const response = await fetch(`${env.AI_SERVICE_URL}/v1/conversation/${callId}/summary`);
+      const response = await fetch(`${env.AI_SERVICE_URL}/v1/conversation/${callId}/summary`, {
+        signal: controller.signal,
+      });
       if (response.ok) {
         return await response.json();
       }
-    } catch {}
+    } catch {} finally {
+      clearTimeout(timeoutId);
+    }
 
     return {
       call_id: callId,
-      total_turns: 1,
-      transcript_redacted: 'Call session active. Live conversation telemetry stream online.',
+      total_turns: 0,
+      transcript_redacted: 'Conversational memory unavailable (AI offline).',
     };
   }
 
   public static async clearMemory(callId: string): Promise<boolean> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
     try {
       const response = await fetch(`${env.AI_SERVICE_URL}/v1/conversation/${callId}`, {
         method: 'DELETE',
+        signal: controller.signal,
       });
       return response.ok;
     } catch {
       return true;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 }

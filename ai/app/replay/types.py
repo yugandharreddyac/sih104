@@ -12,3 +12,5 @@ class ReplayFeatureVector(BaseModel):
     high_freq_cutoff_ratio: float
     reverberation_decay_time_ms: float
     channel_impulse_distortion: float
+    is_narrowband: bool = False
+    effective_bandwidth_hz: float = 8000.0

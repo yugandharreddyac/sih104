@@ -192,6 +192,7 @@ class DeepfakeAcousticModel:
                         raw_spoof_score=round(combined_spoof, 4),
                         raw_confidence=round(combined_conf, 3),
                         model_version=self.model_version,
+                        engine_type="NEURAL",
                         feature_vector=features,
                         artifacts=artifacts
                     )
@@ -206,6 +207,7 @@ class DeepfakeAcousticModel:
             raw_spoof_score=round(dsp_spoof_score, 4),
             raw_confidence=round(dsp_confidence, 3),
             model_version=self.model_version,
+            engine_type="DSP_FALLBACK",
             feature_vector=features,
             artifacts=dsp_artifacts
         )

@@ -59,6 +59,7 @@ class ReplayDetector:
                 high_frequency_loss=False,
                 reverberation_decay_anomaly=False,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=["Replay detection model is currently UNAVAILABLE in registry."],
                 inference_latency_ms=0.0
             )
@@ -74,6 +75,7 @@ class ReplayDetector:
                 high_frequency_loss=False,
                 reverberation_decay_anomaly=False,
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=["Insufficient audio duration for replay impulse response estimation."],
                 inference_latency_ms=0.0
             )
@@ -87,6 +89,7 @@ class ReplayDetector:
                 high_frequency_loss=False,
                 reverberation_decay_anomaly=False,
                 model_version=self.model_id,
+                engine_type="DSP",
                 explainability=["Audio quality POOR; replay analysis reliability compromised."],
                 inference_latency_ms=round((time.perf_counter() - start_time) * 1000.0, 3)
             )
@@ -96,48 +99,75 @@ class ReplayDetector:
         explainability: List[str] = []
         replay_cues = 0
 
-        # Cue 1: Severe high-frequency roll-off typical of budget transducer playback
-        has_hf_loss = features.high_freq_cutoff_ratio < 0.04 and features.spectral_decay_slope < -2.8
-        if has_hf_loss:
-            replay_cues += 1
-            explainability.append(f"Severe high-frequency attenuation slope ({features.spectral_decay_slope}) consistent with loudspeaker playback.")
+        # Cue 1: High-Frequency Spectral Roll-off Evaluation
+        # If the channel is detected as narrowband telephony (<4 kHz), high-frequency loss
+        # naturally originates from transmission bandpass rather than physical loudspeaker replay.
+        raw_hf_loss = features.high_freq_cutoff_ratio < 0.04 and features.spectral_decay_slope < -2.8
+        if features.is_narrowband:
+            has_hf_loss = False  # Attenuate roll-off cue on narrowband telephone channels
+            explainability.append(
+                "Narrowband telephony channel detected (~3.4-4kHz cutoff); "
+                "spectral roll-off cue attenuated to prevent false positive replay alarm."
+            )
+        else:
+            has_hf_loss = raw_hf_loss
+            if has_hf_loss:
+                replay_cues += 1
+                explainability.append(
+                    f"Severe high-frequency attenuation slope ({features.spectral_decay_slope}) "
+                    "consistent with loudspeaker acoustic playback."
+                )
 
         # Cue 2: Extended double reverberation decay time
         has_reverb_anomaly = features.reverberation_decay_time_ms > 120.0
         if has_reverb_anomaly:
             replay_cues += 1
-            explainability.append(f"Elevated secondary room acoustic reverberation ({features.reverberation_decay_time_ms}ms).")
+            explainability.append(
+                f"Elevated secondary room acoustic reverberation ({features.reverberation_decay_time_ms}ms)."
+            )
 
         # Cue 3: High transducer harmonic distortion
-        if features.channel_impulse_distortion > 8.0:
+        has_distortion = features.channel_impulse_distortion > 8.0
+        if has_distortion:
             replay_cues += 1
             explainability.append("Non-linear transducer harmonic impulse distortion detected.")
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
+        # Decision & Heuristic Evidence Strength Assignment
         if replay_cues >= 2:
             status = ReplayStatus.REPLAY
             replay_prob = 0.88
-            confidence = 0.85
-            explainability.append("Multiple acoustic playback cues confirmed physical or digital replay.")
+            confidence = 0.80 if features.is_narrowband else 0.85
+            explainability.append("Multiple independent acoustic playback cues confirmed physical or digital replay.")
         elif replay_cues == 1:
             status = ReplayStatus.LIKELY_REPLAY
             replay_prob = 0.65
-            confidence = 0.60
-            explainability.append("Isolated playback indicator observed; moderate replay probability.")
+            confidence = 0.55 if features.is_narrowband else 0.60
+            explainability.append("Isolated playback indicator observed; moderate replay suspicion.")
         else:
             status = ReplayStatus.NOT_REPLAY
             replay_prob = 0.12
-            confidence = 0.82
-            explainability.append("Acoustic impulse response and frequency spectrum consistent with live direct microphone voice.")
+            if features.is_narrowband:
+                confidence = 0.70  # Tempered confidence because high-frequency spectrum was unobservable
+                explainability.append("Acoustic impulse response and reverberation envelope consistent with direct voice over narrowband channel.")
+            else:
+                confidence = 0.82
+                explainability.append("Acoustic impulse response and frequency spectrum consistent with live direct microphone voice.")
+
+        # If audio quality was mildly DEGRADED, adjust confidence safely
+        if quality and quality.rating == AudioQualityRating.DEGRADED:
+            confidence = max(0.25, confidence * (1.0 - quality.uncertainty_penalty * 0.4))
+            explainability.append("Audio signal is mildly degraded; replay evidence confidence slightly lowered.")
 
         return ReplayAnalysisResult(
             status=status,
-            replay_probability=round(replay_prob, 4),
-            confidence=round(confidence, 3),
+            replay_probability=round(float(replay_prob), 4),
+            confidence=round(float(confidence), 3),
             high_frequency_loss=has_hf_loss,
             reverberation_decay_anomaly=has_reverb_anomaly,
             model_version=self.model_id,
+            engine_type="DSP",
             explainability=explainability,
             inference_latency_ms=inference_latency_ms
         )

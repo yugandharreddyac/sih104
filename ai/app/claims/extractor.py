@@ -11,8 +11,8 @@ from ai.app.core.types import CallerClaim, CallerClaimType
 class CallerClaimExtractor:
     def __init__(self):
         self.claim_rules = [
-            (re.compile(r'\b(i\s+am|this\s+is)\s+(calling\s+from\s+)?(your\s+)?(bank|branch\s+manager|fraud\s+prevention\s+team)\b', re.I), CallerClaimType.BANK_OFFICIAL, "Bank Official / Fraud Prevention", "Financial Institution"),
-            (re.compile(r'\b(i\s+am|this\s+is)\s+(officer|inspector|from\s+the\s+police|cyber\s+crime\s+branch|cbi|fbi)\b', re.I), CallerClaimType.POLICE_LAW_ENFORCEMENT, "Law Enforcement / Police Officer", "Law Enforcement Agency"),
+            (re.compile(r'\b(i\s+am|this\s+is)\s+(calling\s+from\s+)?(the\s+|your\s+)?(bank|branch\s+manager|fraud\s+prevention\s+team)\b', re.I), CallerClaimType.BANK_OFFICIAL, "Bank Official / Fraud Prevention", "Financial Institution"),
+            (re.compile(r'\b(i\s+am|this\s+is)\s+(an?\s+)?(officer|inspector|from\s+the\s+police|cyber\s+crime\s+branch|cbi|fbi)\b', re.I), CallerClaimType.POLICE_LAW_ENFORCEMENT, "Law Enforcement / Police Officer", "Law Enforcement Agency"),
             (re.compile(r'\b(i\s+am|this\s+is)\s+(from\s+)?(it\s+support|helpdesk|system\s+administrator|tech\s+support)\b', re.I), CallerClaimType.IT_HELPDESK, "IT Helpdesk / System Administrator", "Corporate IT"),
             (re.compile(r'\b(i\s+am|this\s+is)\s+(the\s+)?(ceo|cfo|chief\s+executive|director|managing\s+director)\b', re.I), CallerClaimType.EXECUTIVE_CXO, "Executive CXO / Leadership", "Executive Management"),
             (re.compile(r'\b(i\s+am|this\s+is)\s+(your\s+)?(son|daughter|brother|sister|father|mother|relative)\b', re.I), CallerClaimType.FAMILY_MEMBER, "Family Member", "Personal/Family"),

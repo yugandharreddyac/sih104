@@ -143,13 +143,11 @@ def test_neural_engine_unavailable_dsp_fallback():
             start_ms=100
         )
 
-        assert raw_text == "I am calling regarding your account security."
-        assert len(segments) == 1
-        assert segments[0].speaker_channel == 1
-        assert segments[0].start_ms == 100
-        assert segments[0].end_ms == 600
-        assert lang == LanguageCode.EN
-        assert conf >= 0.80
+        # Critical Security Requirement: NEVER fabricate speech when neural model is unavailable
+        assert raw_text == ""
+        assert len(segments) == 0
+        assert conf == 0.0
+        assert uncertainty == 1.0
     finally:
         StreamingASREngine._cached_neural_model = original_model
 
@@ -173,10 +171,11 @@ def test_neural_inference_exception_dsp_fallback():
             start_ms=0
         )
 
-        # Must fall back gracefully to DSP heuristic without raising an exception
-        assert raw_text == "I am calling regarding your account security."
-        assert len(segments) == 1
-        assert lang == LanguageCode.EN
+        # Must fall back gracefully without raising an exception and without fabricating speech
+        assert raw_text == ""
+        assert len(segments) == 0
+        assert conf == 0.0
+        assert uncertainty == 1.0
     finally:
         StreamingASREngine._cached_neural_model = original_model
 

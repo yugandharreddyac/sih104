@@ -67,6 +67,7 @@ class DeepfakeDetector:
                 lfcc_anomaly_score=0.0,
                 artifacts_detected=[],
                 model_version=self.model_id,
+                engine_type=None,
                 explainability=["Deepfake detection model is currently UNAVAILABLE or NOT_LOADED in registry."],
                 inference_latency_ms=0.0
             )

@@ -1,39 +1,56 @@
-# VOXSHIELD: Phase 4 Conversational Intelligence & Streaming ASR
+# VOXSHIELD Phase 4 — Conversational Intelligence & Behavioral Analysis Architecture
 
-## 1. Executive Summary
-VOXSHIELD Phase 4 implements real-time semantic analysis, provider-agnostic streaming ASR, contextual intent classification, situational sensitive data gating, social engineering tactic extraction, and multi-turn attack sequence recognition.
+## 1. System Overview
+The Conversational Intelligence subsystem analyzes text transcripts produced by the Streaming ASR engine across multiple turns. It extracts semantic intent, identifies tactical social-engineering indicators, maintains bounded multi-turn session memory, verifies identity and behavioral consistency, and feeds behavioral signals into the 10-dimensional risk fusion engine.
 
-The system is built on the core principle:
-> **A genuine human voice does not make a conversation trustworthy.**
+```
+Streaming ASR (Whisper)
+         │
+         ▼
+[Transcript Normalized]
+         │
+ ┌───────┴────────────────────────┬─────────────────────────┐
+ ▼                                ▼                         ▼
+[Intent Classifier]      [Tactics Extractor]      [Sensitive Data Detector]
+ (17 Categories)          (7 Tactics Groups)       (Negation-Aware PII)
+         │                        │                         │
+         └───────────────┬────────┴─────────────────────────┘
+                         ▼
+        [Multi-Turn Attack Sequence Tracker]
+         (Attack Progression State Machine)
+                         │
+                         ▼
+       [Conversation Context & Memory Manager]
+        (Bounded Rolling Buffer - 20 Turns)
+                         │
+                         ▼
+       [Claims & Inconsistency Verifier]
+        (Identity Contradictions & Reversals)
+                         │
+                         ▼
+      [CanonicalSignalBus ──► RiskFusionEngine]
+```
 
----
+## 2. Intent Taxonomy & Semantic Engine
+* **Classification Engine**: Multi-token regex rule matching with ASR confidence scaling in `ConversationalIntentClassifier`.
+* **Categories**: `OTP_REQUEST`, `PASSWORD_RESET`, `MONEY_TRANSFER_REQUEST`, `REMOTE_ACCESS_REQUEST`, `AUTHENTICATION_BYPASS`, `CARD_INFORMATION_REQUEST`, `ACCOUNT_ACCESS`, `CALLBACK_AVOIDANCE`, `BENIGN_INQUIRY`, and aliases for generic financial/support inquiries.
+* **ASR Confidence Dampening**: $\text{calibrated\_confidence} = \text{base\_confidence} \times \text{asr\_confidence}$.
 
-## 2. Core Subsystems
+## 3. Social Engineering Taxonomy & Multilingual Support
+* **Tactics Groups**: Authority Exploitation, Urgency Pressure, Fear & Coercion, Secrecy Demands, Isolation Attempts, Verification Bypass, Financial Pressure.
+* **Indian Language & Dialect Coverage**: Rule patterns engineered for English, Hindi, Telugu, Tamil, Bengali, Marathi, and mixed code-switching.
+* **Attack Progression**:
+  - `BENIGN_CONVERSATION`
+  - `AUTHORITY_ESTABLISHED`
+  - `FEAR_URGENCY_INDUCED`
+  - `AUTHENTICATION_BYPASS_ATTEMPTED`
+  - `SECRET_HARVESTING_ATTEMPTED`
+  - `CRITICAL_ACTION_EXPLOITATION`
 
-### A. Provider-Agnostic Streaming ASR (`ai/app/asr/`)
-- Ingests canonical 16kHz float32 audio chunks.
-- Emits partial and finalized transcript segments with timestamps and word confidence.
-- Multilingual support: English (en), Hindi (hi), Telugu (te).
-- ASR uncertainty propagation: poor signal quality reduces downstream semantic confidence.
+## 4. Sensitive Data Protection & Redaction
+* **Negation Awareness**: Distinguishes defensive/educational statements ("The bank will never ask for your password") from malicious solicitations ("Please share your OTP").
+* **Immediate Ephemeral Redaction**: Replaces credentials with `[REDACTED]` before saving turns to memory or emitting events.
 
-### B. Bounded Conversation Memory (`ai/app/conversation/`)
-- Maintains a rolling 20-turn conversation buffer.
-- Evicts oldest turns automatically to maintain bounded memory bounds.
-- Zero raw audio is persisted in long-term storage.
-
-### C. Contextual Intent Classifier (`ai/app/intent/`)
-- Identifies critical intents (`OTP_REQUEST`, `PASSWORD_RESET`, `MONEY_TRANSFER_REQUEST`, `REMOTE_ACCESS_REQUEST`, `AUTHENTICATION_BYPASS`, `CARD_INFORMATION_REQUEST`, `BENIGN_INQUIRY`).
-- Evaluates multi-token syntactic dependencies rather than simple single-keyword matches.
-
-### D. Sensitive Data & Situation Gating (`ai/app/sensitive_data/`)
-- Distinguishes:
-  1. `BENIGN_MENTION`: e.g. "We will never ask for your password"
-  2. `DIRECT_REQUEST`: e.g. "Tell me your OTP"
-  3. `READ_ALOUD`: Spoken credential disclosure
-  4. `INSTRUCTION_TO_DISCLOSE`: Future disclosure solicitation
-- Enforces deterministic in-memory `[REDACTED]` sanitization before persistence.
-
-### E. Social Engineering Tactics & Multi-Turn Attack Sequences (`ai/app/social_engineering/`)
-- Tactic Extractors: Authority, Urgency, Fear, Secrecy, Isolation, Verification Bypass, Financial Pressure.
-- Multi-Turn Sequence State Machine:
-  `CLAIMED_AUTHORITY` $\to$ `CREATED_FEAR` $\to$ `ESTABLISHED_URGENCY` $\to$ `AUTHENTICATION_BYPASS` $\to$ `REQUESTED_SECRET` $\to$ `CRITICAL_ACTION`.
+## 5. Multi-Turn Session Memory & Call Isolation
+* **Bounded Buffer**: `CallConversationMemory` utilizes `deque(maxlen=20)` to strictly bound memory consumption during long calls.
+* **Isolation**: All session memory is keyed by unique `call_id`. Calling `remove(call_id)` upon stream termination purges state completely.

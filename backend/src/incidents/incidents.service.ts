@@ -84,6 +84,48 @@ export class IncidentsService {
     return incident;
   }
 
+  public static async correlateOrEscalateIncident(params: {
+    organizationId: string;
+    severity: IncidentSeverity;
+    attackClassification: string;
+    callId: string;
+    summary: string;
+    triggeredPolicies?: string[];
+    actionsTaken?: string[];
+    evidenceReferences?: Array<{ id: string; type: string; description: string; hash: string }>;
+    assignedToUserId?: string;
+    metadata?: Record<string, any>;
+  }): Promise<{ incident: IncidentRecord; isNew: boolean }> {
+    const existing = Array.from(this.incidents.values()).find(
+      (i) =>
+        i.callId === params.callId &&
+        i.organizationId === params.organizationId &&
+        (i.status === 'OPEN' || i.status === 'INVESTIGATING')
+    );
+
+    if (existing) {
+      const severityRank: Record<IncidentSeverity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
+      if (severityRank[params.severity] > severityRank[existing.severity]) {
+        existing.severity = params.severity;
+      }
+      if (params.triggeredPolicies) {
+        existing.triggeredPolicies = Array.from(new Set([...existing.triggeredPolicies, ...params.triggeredPolicies]));
+      }
+      if (params.actionsTaken) {
+        existing.actionsTaken = Array.from(new Set([...existing.actionsTaken, ...params.actionsTaken]));
+      }
+      existing.events.push({
+        type: 'THREAT_ESCALATION',
+        description: PrivacyFirewall.sanitize(params.summary).sanitizedText,
+        timestamp: new Date(),
+      });
+      return { incident: existing, isNew: false };
+    }
+
+    const newInc = await this.createIncident(params);
+    return { incident: newInc, isNew: true };
+  }
+
   public static listIncidents(organizationId?: string): IncidentRecord[] {
     this.seedSampleIncidentsIfEmpty();
     const all = Array.from(this.incidents.values());

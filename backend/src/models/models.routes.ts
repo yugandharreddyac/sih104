@@ -6,7 +6,9 @@ const router = Router();
 
 router.get('/', authenticate, async (req: Request, res: Response) => {
   try {
-    const response = await fetch(`${env.AI_SERVICE_URL}/v1/models`);
+    const response = await fetch(`${env.AI_SERVICE_URL}/v1/models`, {
+      signal: AbortSignal.timeout(1200),
+    });
     if (response.ok) {
       const data = await response.json();
       res.status(200).json({ success: true, data });

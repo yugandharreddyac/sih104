@@ -58,6 +58,16 @@ datasets/processed/*
 !datasets/**/.gitkeep
 !datasets/metadata/
 !datasets/metadata/**
+# manifests/ and splits/ — keep structure and docs; ignore large generated CSVs
+!datasets/manifests/
+!datasets/manifests/.gitkeep
+!datasets/manifests/*.md
+datasets/manifests/*.csv
+!datasets/splits/
+!datasets/splits/.gitkeep
+!datasets/splits/*.md
+datasets/splits/*.csv
+# Archive files anywhere under datasets/
 datasets/**/*.tar
 datasets/**/*.tar.gz
 datasets/**/*.zip
@@ -65,6 +75,9 @@ datasets/**/*.7z
 data/raw/
 data/cache/
 evaluation/data/
+evaluation/results/
+scratch/
+*.tsbuildinfo
 
 # OS & Editor Files
 .DS_Store
@@ -80,3 +93,4 @@ datasets/indicvoices_download/
 datasets/raw/*
 !datasets/raw/**/.gitkeep
 !datasets/raw/**/README.md
+

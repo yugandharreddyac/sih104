@@ -16,18 +16,109 @@ export interface UnifiedRiskEvaluationPayload {
 }
 
 export class RiskService {
+  public static readonly AI_TIMEOUT_MS = 1200;
   private static assessments: Map<string, any> = new Map();
   private static timelineHistory: Map<string, any[]> = new Map();
   private static aiBaseUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+
+  private static readonly VALID_RISK_LEVELS = new Set([
+    'SAFE',
+    'LOW',
+    'GUARDED',
+    'ELEVATED',
+    'HIGH',
+    'CRITICAL',
+    'INCONCLUSIVE',
+  ]);
+
+  /**
+   * Structural validator for AI Risk Fusion HTTP 200 response payload.
+   */
+  private static isValidRiskResponse(data: any): boolean {
+    if (!data || typeof data !== 'object') return false;
+    if (!data.dimensions || typeof data.dimensions !== 'object') return false;
+    if (
+      typeof data.overall_risk_score !== 'number' ||
+      !Number.isFinite(data.overall_risk_score) ||
+      data.overall_risk_score < 0 ||
+      data.overall_risk_score > 100
+    ) {
+      return false;
+    }
+    if (typeof data.risk_level !== 'string' || !this.VALID_RISK_LEVELS.has(data.risk_level)) {
+      return false;
+    }
+    if (data.confidence !== undefined && data.confidence !== null) {
+      if (typeof data.confidence !== 'number' || !Number.isFinite(data.confidence) || data.confidence < 0 || data.confidence > 1) {
+        return false;
+      }
+    }
+    if (data.uncertainty !== undefined && data.uncertainty !== null) {
+      if (typeof data.uncertainty !== 'number' || !Number.isFinite(data.uncertainty) || data.uncertainty < 0 || data.uncertainty > 1) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Constructs explicit safe degraded failure structure without fabricating benign scores.
+   */
+  private static buildDegradedResult(
+    payload: UnifiedRiskEvaluationPayload,
+    failureReason: string,
+    httpStatus?: number
+  ): any {
+    return {
+      status: 'NOT_AVAILABLE',
+      call_id: payload.callId,
+      stream_id: payload.streamId,
+      turn_index: payload.chunkIndex || 0,
+      analysis_status: failureReason,
+      http_status: httpStatus ?? null,
+      overall_risk_score: null,
+      risk_level: 'INCONCLUSIVE',
+      confidence: 0.0,
+      uncertainty: 1.0,
+      dimensions: {
+        overall: null,
+        identity_impersonation: null,
+        deepfake_synthetic: null,
+        replay_injection: null,
+        social_engineering: null,
+        credential_theft: null,
+        financial_fraud: null,
+        account_takeover: null,
+        verification_bypass: null,
+        inconsistency: null,
+      },
+      risk_velocity: 0.0,
+      risk_trajectory_trend: 'STABLE',
+      primary_drivers: ['Risk Fusion service unavailable; threat assessment degraded to INCONCLUSIVE.'],
+      contradicting_signals: [],
+      evidence_graph: {
+        nodes: [],
+        edges: [],
+        primary_findings: ['Risk Fusion intelligence degraded; no multi-modal synthesis available.'],
+        contradictions: [],
+      },
+      policy_recommendation: null,
+      human_workflow_state: 'AI_RECOMMENDED',
+      fusion_latency_ms: 0.0,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   public static async evaluateUnifiedRisk(payload: UnifiedRiskEvaluationPayload, actorUserId?: string): Promise<any> {
     const sanitizedMetadata = PrivacyFirewall.sanitizeObject(payload.metadata || {});
     const sanitizedTranscript = payload.textTranscript ? PrivacyFirewall.sanitize(payload.textTranscript).sanitizedText : undefined;
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
+    let failureReason = 'AI_UNAVAILABLE';
+    let httpStatus: number | undefined = undefined;
 
+    try {
       const response = await fetch(`${this.aiBaseUrl}/v1/fusion/evaluate-risk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,74 +135,80 @@ export class RiskService {
         }),
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`AI service responded with ${response.status}`);
+        failureReason = 'AI_HTTP_ERROR';
+        httpStatus = response.status;
+      } else {
+        try {
+          const data = await response.json();
+          if (this.isValidRiskResponse(data)) {
+            this.assessments.set(payload.callId, data);
+
+            if (!this.timelineHistory.has(payload.callId)) {
+              this.timelineHistory.set(payload.callId, []);
+            }
+            this.timelineHistory.get(payload.callId)!.push({
+              turnIndex: payload.chunkIndex || 0,
+              overallScore: data.overall_risk_score,
+              riskLevel: data.risk_level,
+              velocity: data.risk_velocity,
+              timestamp: data.timestamp || new Date().toISOString(),
+            });
+
+            if (data.overall_risk_score >= 80.0) {
+              try {
+                await AuditService.record({
+                  actorUserId,
+                  organizationId: '00000000-0000-0000-0000-000000000001',
+                  action: 'CRITICAL_RISK_DETECTED',
+                  resourceType: 'RISK_ASSESSMENT',
+                  resourceId: payload.callId,
+                  result: 'SUCCESS',
+                  metadata: { callId: payload.callId, overallScore: data.overall_risk_score, level: data.risk_level },
+                });
+              } catch {}
+            }
+
+            return data;
+          } else {
+            failureReason = 'AI_INVALID_RESPONSE';
+          }
+        } catch {
+          failureReason = 'AI_INVALID_RESPONSE';
+        }
       }
-
-      const data = await response.json();
-      this.assessments.set(payload.callId, data);
-
-      if (!this.timelineHistory.has(payload.callId)) {
-        this.timelineHistory.set(payload.callId, []);
-      }
-      this.timelineHistory.get(payload.callId)!.push({
-        turnIndex: payload.chunkIndex || 0,
-        overallScore: data.overall_risk_score,
-        riskLevel: data.risk_level,
-        velocity: data.risk_velocity,
-        timestamp: data.timestamp || new Date().toISOString(),
-      });
-
-      if (data.overall_risk_score >= 80.0) {
-        await AuditService.record({
-          actorUserId,
-          organizationId: '00000000-0000-0000-0000-000000000001',
-          action: 'CRITICAL_RISK_DETECTED',
-          resourceType: 'RISK_ASSESSMENT',
-          resourceId: payload.callId,
-          result: 'SUCCESS',
-          metadata: { callId: payload.callId, overallScore: data.overall_risk_score, level: data.risk_level },
-        });
-      }
-
-      return data;
     } catch (err: any) {
-      // Deterministic fallback if AI service is temporarily offline
-      const fallback = {
-        status: 'AVAILABLE',
-        call_id: payload.callId,
-        overall_risk_score: 10.0,
-        risk_level: 'SAFE',
-        confidence: 0.85,
-        uncertainty: 0.15,
-        dimensions: {
-          overall: 10.0,
-          identity_impersonation: 5.0,
-          deepfake_synthetic: 0.0,
-          replay_injection: 0.0,
-          social_engineering: 10.0,
-          credential_theft: 0.0,
-          financial_fraud: 0.0,
-          account_takeover: 0.0,
-          verification_bypass: 0.0,
-          inconsistency: 0.0,
-        },
-        risk_velocity: 0.0,
-        risk_trajectory_trend: 'STABLE',
-        primary_drivers: ['System operating in baseline deterministic monitoring mode.'],
-        contradicting_signals: [],
-        evidence_graph: { nodes: [], edges: [], primary_findings: ['Interaction consistent with normal business baseline.'], contradictions: [] },
-        policy_recommendation: null,
-        human_workflow_state: 'AI_RECOMMENDED',
-        fusion_latency_ms: 0.5,
-        timestamp: new Date().toISOString(),
-      };
-
-      this.assessments.set(payload.callId, fallback);
-      return fallback;
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        failureReason = 'AI_TIMEOUT';
+      } else {
+        failureReason = 'AI_NETWORK_ERROR';
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
+
+    // Record audit event for degraded risk fusion
+    try {
+      await AuditService.record({
+        actorUserId,
+        organizationId: '00000000-0000-0000-0000-000000000001',
+        action: 'RISK_FUSION_UNAVAILABLE',
+        resourceType: 'RISK_FUSION_SERVICE',
+        resourceId: payload.callId,
+        result: 'ERROR',
+        metadata: {
+          streamId: payload.streamId,
+          chunkIndex: payload.chunkIndex || 0,
+          failureReason,
+          httpStatus,
+        },
+      });
+    } catch {}
+
+    const fallback = this.buildDegradedResult(payload, failureReason, httpStatus);
+    this.assessments.set(payload.callId, fallback);
+    return fallback;
   }
 
   public static getAssessmentForCall(callId: string): any {

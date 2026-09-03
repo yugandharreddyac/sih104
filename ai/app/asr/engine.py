@@ -164,11 +164,10 @@ class StreamingASREngine:
                 transcript = ""
 
         # 3. Deterministic DSP Fallback Path
-        if not transcript and len(samples) >= 800:
-            energy = float(np.sqrt(np.mean(samples ** 2)))
-            if energy > 0.02:
-                # Acoustic energy present but neural uninitialized or inconclusive
-                transcript = "I am calling regarding your account security."
+        # When neural model is uninitialized, missing weights, or fails inference,
+        # do NOT fabricate speech. Transcript remains empty string "", confidence is 0.0, uncertainty is 1.0.
+        if not transcript:
+            transcript = ""
 
         # 4. Resolve Multilingual Routing Decision
         routing_decision = self.language_id.route_language(
@@ -180,8 +179,12 @@ class StreamingASREngine:
         )
         detected_lang = routing_decision.language_code
 
-        base_conf = 0.92 if len(transcript) > 0 else 0.50
-        conf, uncertainty = self.confidence_calc.calculate_confidence(base_conf, quality=quality)
+        if not transcript:
+            conf = 0.0
+            uncertainty = 1.0
+        else:
+            base_conf = 0.92
+            conf, uncertainty = self.confidence_calc.calculate_confidence(base_conf, quality=quality)
 
         # 5. Build Structured Segments
         if transcript:

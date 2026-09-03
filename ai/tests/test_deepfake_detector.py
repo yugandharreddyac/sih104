@@ -254,4 +254,39 @@ def test_deepfake_result_contract_integrity():
     assert isinstance(res.artifacts_detected, list)
     assert isinstance(res.explainability, list)
     assert res.model_version == detector.model_id
+    assert res.engine_type in ("NEURAL", "DSP_FALLBACK")
     assert res.inference_latency_ms >= 0.0
+
+
+def test_deepfake_engine_provenance_neural_and_fallback():
+    detector = DeepfakeDetector(sample_rate=16000)
+    audio_b64 = generate_bona_fide_human_speech(duration_sec=1.0)
+    chunk = AudioChunkPayload(
+        call_id="call-provenance-01",
+        chunk_index=0,
+        sample_rate=16000,
+        audio_base64=audio_b64
+    )
+
+    # 1. Primary path (NEURAL when model is present)
+    res = detector.analyze(chunk)
+    assert res.engine_type in ("NEURAL", "DSP_FALLBACK")
+
+    # 2. Forced DSP Fallback path
+    pred_dsp = detector.model.predict(
+        detector.feature_extractor.extract_features(detector.decode_samples(audio_b64)),
+        raw_samples=detector.decode_samples(audio_b64),
+        force_dsp=True
+    )
+    assert pred_dsp.engine_type == "DSP_FALLBACK"
+
+    # 3. Insufficient audio (duration < 300ms) -> engine_type is None
+    short_chunk = AudioChunkPayload(
+        call_id="call-provenance-short",
+        chunk_index=0,
+        sample_rate=16000,
+        audio_base64=generate_bona_fide_human_speech(duration_sec=0.1)
+    )
+    short_res = detector.analyze(short_chunk)
+    assert short_res.status == DeepfakeStatus.INSUFFICIENT_AUDIO
+    assert short_res.engine_type is None

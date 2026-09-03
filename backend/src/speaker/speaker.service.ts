@@ -14,6 +14,7 @@ export class SpeakerService {
       const response = await fetch(`${env.AI_SERVICE_URL}/v1/speaker/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(1200),
         body: JSON.stringify({
           speaker_id: payload.speakerId,
           speaker_name: payload.speakerName,
@@ -54,7 +55,9 @@ export class SpeakerService {
 
   public static async listProfiles(): Promise<any[]> {
     try {
-      const response = await fetch(`${env.AI_SERVICE_URL}/v1/speakers`);
+      const response = await fetch(`${env.AI_SERVICE_URL}/v1/speakers`, {
+        signal: AbortSignal.timeout(1200),
+      });
       if (response.ok) {
         return await response.json();
       }
@@ -77,7 +80,9 @@ export class SpeakerService {
 
   public static async getProfile(speakerId: string): Promise<any> {
     try {
-      const response = await fetch(`${env.AI_SERVICE_URL}/v1/speaker/${speakerId}`);
+      const response = await fetch(`${env.AI_SERVICE_URL}/v1/speaker/${speakerId}`, {
+        signal: AbortSignal.timeout(1200),
+      });
       if (response.ok) {
         return await response.json();
       }
@@ -91,6 +96,7 @@ export class SpeakerService {
     try {
       const response = await fetch(`${env.AI_SERVICE_URL}/v1/speaker/${speakerId}`, {
         method: 'DELETE',
+        signal: AbortSignal.timeout(1200),
       });
       return response.ok;
     } catch {

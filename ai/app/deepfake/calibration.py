@@ -45,6 +45,7 @@ class DeepfakeCalibrator:
                 lfcc_anomaly_score=0.0,
                 artifacts_detected=[],
                 model_version=prediction.model_version,
+                engine_type=None,
                 explainability=explainability,
                 inference_latency_ms=inference_latency_ms
             )
@@ -66,6 +67,7 @@ class DeepfakeCalibrator:
                 lfcc_anomaly_score=0.0,
                 artifacts_detected=prediction.artifacts,
                 model_version=prediction.model_version,
+                engine_type=prediction.engine_type,
                 explainability=explainability,
                 inference_latency_ms=inference_latency_ms
             )
@@ -100,6 +102,7 @@ class DeepfakeCalibrator:
             lfcc_anomaly_score=round(float(prediction.raw_spoof_score), 4),
             artifacts_detected=prediction.artifacts,
             model_version=prediction.model_version,
+            engine_type=prediction.engine_type,
             explainability=explainability,
             inference_latency_ms=inference_latency_ms
         )

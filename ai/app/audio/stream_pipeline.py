@@ -59,7 +59,7 @@ class AudioStreamPipeline:
 
         # Phase 2/3 Acoustic Intelligence Engines
         self.vad = VoiceActivityDetector(sample_rate=target_sample_rate)
-        self.quality = AudioQualityAnalyzer(sample_rate=target_rate_safe(target_sample_rate))
+        self.quality = AudioQualityAnalyzer(sample_rate=target_sample_rate)
         self.deepfake = DeepfakeDetector(sample_rate=target_sample_rate)
         self.speaker = SpeakerVerifier(sample_rate=target_sample_rate)
         self.replay = ReplayDetector(sample_rate=target_sample_rate)

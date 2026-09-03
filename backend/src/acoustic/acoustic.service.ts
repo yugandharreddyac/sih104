@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { AuditService } from '../security/audit.service';
 
 export interface AcousticAnalyzePayload {
   callId: string;
@@ -11,12 +12,128 @@ export interface AcousticAnalyzePayload {
   metadata?: Record<string, any>;
 }
 
-export class AcousticService {
-  public static async analyze(payload: AcousticAnalyzePayload): Promise<any> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+export type AcousticFailureReason =
+  | 'AI_TIMEOUT'
+  | 'AI_HTTP_ERROR'
+  | 'AI_NETWORK_ERROR'
+  | 'AI_INVALID_RESPONSE'
+  | 'AI_UNAVAILABLE';
 
+export class AcousticService {
+  public static readonly AI_TIMEOUT_MS = 1200;
+
+  /**
+   * Validates that the AI service returned a valid object containing required sub-objects.
+   */
+  private static isValidAcousticResponse(data: any): boolean {
+    if (!data || typeof data !== 'object') return false;
+    if (!data.deepfake || typeof data.deepfake !== 'object' || typeof data.deepfake.status !== 'string') return false;
+    if (!data.speaker || typeof data.speaker !== 'object' || typeof data.speaker.status !== 'string') return false;
+    if (!data.replay || typeof data.replay !== 'object' || typeof data.replay.status !== 'string') return false;
+    return true;
+  }
+
+  /**
+   * Constructs an explicit safe degraded failure structure without fabricating security assessments.
+   */
+  private static buildDegradedResult(
+    payload: AcousticAnalyzePayload,
+    failureReason: AcousticFailureReason,
+    httpStatus?: number
+  ): any {
+    return {
+      call_id: payload.callId,
+      stream_id: payload.streamId,
+      chunk_index: payload.chunkIndex,
+      timestamp: new Date().toISOString(),
+      overall_assessment: 'NOT_AVAILABLE',
+      analysis_status: failureReason,
+      http_status: httpStatus ?? null,
+      deepfake: {
+        status: 'NOT_AVAILABLE',
+        spoof_score: null,
+        confidence: 0.0,
+        uncertainty: 1.0,
+        model_version: 'deepfake_aasist_spectral_v3',
+        engine_type: null,
+        explainability: ['Acoustic AI service unavailable; deepfake detection degraded.'],
+        inference_latency_ms: null,
+      },
+      speaker: {
+        status: 'NOT_AVAILABLE',
+        similarity_score: null,
+        confidence: 0.0,
+        is_enrolled: false,
+        enrolled_speaker_id: null,
+        threshold_applied: null,
+        model_version: 'speaker_xvector_biometric_v3',
+        engine_type: null,
+        explainability: ['Acoustic AI service unavailable; biometric speaker verification degraded.'],
+        inference_latency_ms: null,
+      },
+      replay: {
+        status: 'NOT_AVAILABLE',
+        replay_probability: null,
+        confidence: 0.0,
+        high_frequency_loss: null,
+        reverberation_decay_anomaly: null,
+        model_version: 'replay_spectral_decay_v3',
+        engine_type: null,
+        explainability: ['Acoustic AI service unavailable; replay detection degraded.'],
+        inference_latency_ms: null,
+      },
+      manipulation: {
+        level: 'NOT_AVAILABLE',
+        discontinuity_score: null,
+        splicing_detected: null,
+        packet_repetition_detected: null,
+        indicators: [],
+        explainability: ['Acoustic AI service unavailable; audio manipulation analysis degraded.'],
+      },
+      vad: {
+        state: 'UNKNOWN',
+        speech_probability: null,
+        energy_rms: null,
+        zero_crossing_rate: null,
+        spectral_centroid: null,
+        confidence: 0.0,
+        processing_latency_ms: null,
+      },
+      quality: {
+        rating: 'UNKNOWN',
+        rms_dbfs: null,
+        peak_amplitude: null,
+        clipping_ratio: null,
+        silence_ratio: null,
+        snr_estimate_db: null,
+        dynamic_range_db: null,
+        sample_rate: 16000,
+        channels: 1,
+        duration_ms: null,
+        uncertainty_penalty: 1.0,
+        notes: 'Acoustic AI service unavailable; quality metrics degraded.',
+      },
+      temporal_metrics: {
+        window_duration_seconds: 0.0,
+        accumulated_speech_seconds: 0.0,
+        total_chunks_processed: payload.chunkIndex || 0,
+        is_warmed_up: false,
+        stability_confidence: 0.0,
+      },
+      total_ai_latency_ms: 0.0,
+      evidence_summary: [
+        `Acoustic AI analysis unavailable (${failureReason}); assessment degraded to prevent false trust.`,
+      ],
+    };
+  }
+
+  public static async analyze(payload: AcousticAnalyzePayload): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
+    let failureReason: AcousticFailureReason = 'AI_UNAVAILABLE';
+    let httpStatus: number | undefined = undefined;
+
+    try {
       const response = await fetch(`${env.AI_SERVICE_URL}/v1/acoustic/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -33,116 +150,74 @@ export class AcousticService {
         }),
         signal: controller.signal,
       });
-      clearTimeout(timeoutId);
 
-      if (response.ok) {
-        return await response.json();
+      if (!response.ok) {
+        failureReason = 'AI_HTTP_ERROR';
+        httpStatus = response.status;
+      } else {
+        try {
+          const data = await response.json();
+          if (this.isValidAcousticResponse(data)) {
+            return data;
+          } else {
+            failureReason = 'AI_INVALID_RESPONSE';
+          }
+        } catch {
+          failureReason = 'AI_INVALID_RESPONSE';
+        }
       }
-    } catch {
-      // Graceful fallback if AI service is offline or timeout
+    } catch (err: any) {
+      if (err.name === 'AbortError' || controller.signal.aborted) {
+        failureReason = 'AI_TIMEOUT';
+      } else {
+        failureReason = 'AI_NETWORK_ERROR';
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
 
-    // Fallback explainable structure
-    return {
-      call_id: payload.callId,
-      stream_id: payload.streamId,
-      chunk_index: payload.chunkIndex,
-      timestamp: new Date().toISOString(),
-      overall_assessment: 'INCONCLUSIVE',
-      deepfake: {
-        status: 'AUTHENTIC',
-        spoof_score: 0.15,
-        confidence: 0.80,
-        uncertainty: 0.10,
-        model_version: 'deepfake_aasist_spectral_v3',
-        explainability: ['Acoustic harmonic distribution consistent with natural speech.'],
-        inference_latency_ms: 2.1,
-      },
-      speaker: {
-        status: payload.claimedSpeakerId ? 'MATCH' : 'NOT_ENROLLED',
-        similarity_score: payload.claimedSpeakerId ? 0.85 : null,
-        confidence: payload.claimedSpeakerId ? 0.88 : null,
-        is_enrolled: !!payload.claimedSpeakerId,
-        enrolled_speaker_id: payload.claimedSpeakerId,
-        threshold_applied: 0.70,
-        model_version: 'speaker_xvector_biometric_v3',
-        explainability: payload.claimedSpeakerId
-          ? ['Biometric match confirmed against enrolled profile.']
-          : ['No claimed speaker identity associated.'],
-        inference_latency_ms: 1.5,
-      },
-      replay: {
-        status: 'NOT_REPLAY',
-        replay_probability: 0.10,
-        confidence: 0.85,
-        high_frequency_loss: false,
-        reverberation_decay_anomaly: false,
-        model_version: 'replay_spectral_decay_v3',
-        explainability: ['Direct microphone acoustic frequency profile verified.'],
-        inference_latency_ms: 1.1,
-      },
-      manipulation: {
-        level: 'NO_INDICATOR',
-        discontinuity_score: 0.0,
-        splicing_detected: false,
-        packet_repetition_detected: false,
-        indicators: [],
-        explainability: ['No transport splicing or stream injection detected.'],
-      },
-      vad: {
-        state: 'SPEECH',
-        speech_probability: 0.85,
-        energy_rms: 0.04,
-        zero_crossing_rate: 0.08,
-        spectral_centroid: 1200.0,
-        confidence: 0.90,
-        processing_latency_ms: 0.8,
-      },
-      quality: {
-        rating: 'GOOD',
-        rms_dbfs: -26.0,
-        peak_amplitude: 0.45,
-        clipping_ratio: 0.0,
-        silence_ratio: 0.1,
-        snr_estimate_db: 22.0,
-        dynamic_range_db: 25.0,
-        sample_rate: 16000,
-        channels: 1,
-        duration_ms: 250.0,
-        uncertainty_penalty: 0.0,
-        notes: 'Optimal acoustic levels and SNR for real-time analysis.',
-      },
-      temporal_metrics: {
-        window_duration_seconds: 0.75,
-        accumulated_speech_seconds: 0.75,
-        total_chunks_processed: 3,
-        is_warmed_up: true,
-        stability_confidence: 0.85,
-      },
-      total_ai_latency_ms: 5.5,
-      evidence_summary: [
-        'Acoustic harmonic distribution consistent with natural speech.',
-        'Direct microphone acoustic frequency profile verified.',
-      ],
-    };
+    // Record audit event safely without leaking raw audio
+    try {
+      await AuditService.record({
+        organizationId: payload.metadata?.organizationId || '00000000-0000-0000-0000-000000000001',
+        action: 'ACOUSTIC_AI_UNAVAILABLE',
+        resourceType: 'ACOUSTIC_SERVICE',
+        resourceId: payload.callId,
+        result: 'ERROR',
+        metadata: {
+          streamId: payload.streamId,
+          chunkIndex: payload.chunkIndex,
+          failureReason,
+          httpStatus,
+        },
+      });
+    } catch {}
+
+    return this.buildDegradedResult(payload, failureReason, httpStatus);
   }
 
   public static async getStatus(): Promise<any> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.AI_TIMEOUT_MS);
     try {
-      const response = await fetch(`${env.AI_SERVICE_URL}/v1/status`);
+      const response = await fetch(`${env.AI_SERVICE_URL}/v1/status`, {
+        signal: controller.signal,
+      });
       if (response.ok) {
         return await response.json();
       }
-    } catch {}
+    } catch {} finally {
+      clearTimeout(timeoutId);
+    }
 
     return {
-      overall_status: 'PHASE_3_ACOUSTIC_INTELLIGENCE_ACTIVE',
+      overall_status: 'ACOUSTIC_INTELLIGENCE_DEGRADED',
       modules: {
-        deepfake_detection: { status: 'AVAILABLE', model: 'deepfake_aasist_spectral_v3' },
-        speaker_verification: { status: 'AVAILABLE', model: 'speaker_xvector_biometric_v3' },
-        replay_detection: { status: 'AVAILABLE', model: 'replay_spectral_decay_v3' },
-        vad: { status: 'AVAILABLE', model: 'acoustic_multi_feature_vad_v2' },
-        audio_quality: { status: 'AVAILABLE', model: 'signal_health_quality_v2' },
+        deepfake_detection: { status: 'UNAVAILABLE', model: 'deepfake_aasist_spectral_v3' },
+        speaker_verification: { status: 'UNAVAILABLE', model: 'speaker_xvector_biometric_v3' },
+        replay_detection: { status: 'UNAVAILABLE', model: 'replay_spectral_decay_v3' },
+        vad: { status: 'UNAVAILABLE', model: 'acoustic_multi_feature_vad_v2' },
+        audio_quality: { status: 'UNAVAILABLE', model: 'signal_health_quality_v2' },
       },
     };
   }

@@ -226,8 +226,11 @@ def test_asr_dsp_fallback_on_neural_fault():
         samples = (0.5 * np.sin(2 * np.pi * 400 * t)).astype(np.float32)
 
         txt, segs, lang, conf, unc = engine.transcribe_chunk(samples=samples)
-        assert len(txt) > 0
-        assert len(segs) > 0
+        # Critical security guarantee: When neural ASR faults, no speech is fabricated
+        assert txt == ""
+        assert len(segs) == 0
+        assert conf == 0.0
+        assert unc == 1.0
         assert lang in (LanguageCode.EN, LanguageCode.EN_IN)
     finally:
         StreamingASREngine._cached_neural_model = original_model

@@ -215,5 +215,31 @@ def test_speaker_verification_result_contract():
     assert res.threshold_applied in (0.70, 0.88)
     assert res.similarity_score is not None
     assert res.confidence is not None
+    assert res.engine_type in ("NEURAL", "DSP_FALLBACK")
     assert res.inference_latency_ms >= 0.0
     assert len(res.explainability) > 0
+
+
+def test_speaker_engine_provenance_neural_and_fallback():
+    verifier = SpeakerVerifier(sample_rate=16000)
+    utt = generate_speaker_tone(f0=220.0, duration_sec=1.0)
+    samples = verifier.decode_samples(utt)
+
+    # 1. Primary path (NEURAL when model is loaded)
+    emb_neural = verifier.embedding_extractor.extract_embedding(samples, speaker_id="spk-prov-01")
+    assert emb_neural.engine_type in ("NEURAL", "DSP_FALLBACK")
+
+    # 2. Forced DSP Fallback path
+    emb_dsp = verifier.embedding_extractor.extract_embedding(samples, speaker_id="spk-prov-02", force_dsp=True)
+    assert emb_dsp.engine_type == "DSP_FALLBACK"
+
+    # 3. Unenrolled speaker -> engine_type is None
+    chunk_unenrolled = AudioChunkPayload(
+        call_id="call-unenrolled",
+        chunk_index=0,
+        audio_base64=utt,
+        claimed_speaker_id="spk-nonexistent"
+    )
+    res_unenrolled = verifier.verify_speaker(chunk_unenrolled)
+    assert res_unenrolled.status == SpeakerVerificationStatus.NOT_ENROLLED
+    assert res_unenrolled.engine_type is None

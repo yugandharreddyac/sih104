@@ -9,6 +9,7 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(16).default('voxshield_super_secure_jwt_secret_dev_key_2026!'),
   JWT_EXPIRES_IN: z.string().default('8h'),
   DATABASE_URL: z.string().default('postgresql://voxshield_user:voxshield_secure_pass@localhost:5432/voxshield_db'),
+  PERSISTENCE_MODE: z.enum(['strict', 'fallback']).default('fallback'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   AI_SERVICE_URL: z.string().default('http://localhost:8000'),
   ENCRYPTION_KEY: z.string().min(32).default('0123456789abcdef0123456789abcdef'), // 32 bytes for AES-256

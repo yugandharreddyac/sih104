@@ -623,10 +623,14 @@ export default function CallsPage() {
                                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
                                 : unifiedRisk.riskLevel === 'HIGH'
                                 ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
-                                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : unifiedRisk.riskLevel === 'ELEVATED' || unifiedRisk.riskLevel === 'GUARDED'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                : unifiedRisk.riskLevel === 'LOW' || unifiedRisk.riskLevel === 'SAFE'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-slate-700/40 text-slate-300 border border-slate-600/40'
                             }`}
                           >
-                            {unifiedRisk.riskLevel} THREAT ({unifiedRisk.overallRiskScore.toFixed(1)}/100)
+                            {unifiedRisk.riskLevel} THREAT ({typeof unifiedRisk.overallRiskScore === 'number' ? `${unifiedRisk.overallRiskScore.toFixed(1)}/100` : 'NOT AVAILABLE'})
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 font-mono mt-0.5">
@@ -709,11 +713,11 @@ export default function CallsPage() {
                       </span>
                       <div className="flex items-center gap-3 text-[11px] font-mono">
                         <span className="text-slate-400">
-                          Confidence: <strong className="text-emerald-400">{(unifiedRisk.confidence * 100).toFixed(0)}%</strong>
+                          Confidence: <strong className="text-emerald-400">{typeof unifiedRisk.confidence === 'number' ? `${(unifiedRisk.confidence * 100).toFixed(0)}%` : 'N/A'}</strong>
                         </span>
                         <span className="text-slate-400 flex items-center gap-1">
                           Velocity: <TrendingUp className="w-3 h-3 text-rose-400" />
-                          <strong className="text-rose-400">+{unifiedRisk.riskVelocity}/s</strong>
+                          <strong className="text-rose-400">+{unifiedRisk.riskVelocity ?? 0}/s</strong>
                         </span>
                       </div>
                     </div>
@@ -734,10 +738,10 @@ export default function CallsPage() {
                         <div key={i} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-1">
                           <div className="flex justify-between text-[10px] font-mono text-slate-400">
                             <span className="truncate">{dim.label}</span>
-                            <span className="font-bold text-white">{dim.val.toFixed(0)}</span>
+                            <span className="font-bold text-white">{typeof dim.val === 'number' ? dim.val.toFixed(0) : 'N/A'}</span>
                           </div>
                           <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                            <div className={`h-full ${dim.color} rounded-full`} style={{ width: `${Math.min(100, dim.val)}%` }} />
+                            <div className={`h-full ${dim.color} rounded-full`} style={{ width: `${typeof dim.val === 'number' ? Math.min(100, Math.max(0, dim.val)) : 0}%` }} />
                           </div>
                         </div>
                       ))}

@@ -38,7 +38,7 @@ export class ConversationService {
    * Constructs an explicit safe degraded failure structure without fabricating transcripts,
    * intents, or social-engineering assessments.
    */
-  private static buildDegradedResult(
+  public static buildDegradedResult(
     payload: ConversationTurnPayload,
     failureReason: ConversationFailureReason,
     httpStatus?: number

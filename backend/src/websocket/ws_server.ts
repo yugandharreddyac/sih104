@@ -5,6 +5,7 @@ import { TokenService } from '../auth/jwt';
 import { AuthUser, Permission, RoleName, ROLE_PERMISSIONS } from '../auth/types';
 import { AudioNormalizer } from '../calls/audio_normalizer';
 import { StreamBufferManager } from '../calls/stream_buffer';
+import { SpeechBufferManager } from '../calls/speech_buffer';
 import { CallsService } from '../calls/calls.service';
 import { AuditService } from '../security/audit.service';
 import { AcousticService } from '../acoustic/acoustic.service';
@@ -131,6 +132,7 @@ export class WebSocketGateway {
       ws.on('close', () => {
         if (state.activeCallId) {
           StreamBufferManager.remove(state.activeCallId);
+          SpeechBufferManager.remove(state.activeCallId);
         }
         this.clientStates.delete(ws);
         console.info(`🔌 WebSocket client disconnected`);
@@ -501,19 +503,22 @@ export class WebSocketGateway {
 
       const metrics = buffer.getMetrics();
 
-      // Execute Phase 3 Acoustic and Phase 4 Conversational Intelligence Pipelines concurrently (Parallel)
-      const [acousticResult, convResult] = await Promise.all([
-        AcousticService.analyze({
-          callId,
-          streamId,
-          chunkIndex: sequenceNumber,
-          sampleRate: 16000,
-          channels: 1,
-          audioBase64: normalized.base64Data,
-          claimedSpeakerId,
-          metadata: { sequenceNumber, durationMs: normalized.durationMs },
-        }),
-        ConversationService.analyzeTurn({
+      // Execute Fast Acoustic Intelligence (Immediate 256ms Path)
+      const acousticResult = await AcousticService.analyze({
+        callId,
+        streamId,
+        chunkIndex: sequenceNumber,
+        sampleRate: 16000,
+        channels: 1,
+        audioBase64: normalized.base64Data,
+        claimedSpeakerId,
+        metadata: { sequenceNumber, durationMs: normalized.durationMs },
+      });
+
+      let convResult: any;
+      if (textTranscript) {
+        // Direct text provided (test fixture or client hint): process synchronously
+        convResult = await ConversationService.analyzeTurn({
           callId,
           streamId,
           chunkIndex: sequenceNumber,
@@ -522,8 +527,94 @@ export class WebSocketGateway {
           speakerChannel,
           timestampMs: Date.now(),
           claimedSpeakerId,
-        }),
-      ]);
+        });
+      } else {
+        // Asynchronous VAD-based Speech Buffer (2-3s speech accumulator for Whisper)
+        const speechBuf = SpeechBufferManager.getOrCreate(callId, streamId);
+        const isSpeech = acousticResult.vad?.state === 'SPEECH';
+        const speechSegment = speechBuf.push(normalized.pcmBuffer, normalized.durationMs, isSpeech);
+
+        if (speechSegment) {
+          // Asynchronous non-blocking dispatch
+          (async () => {
+            try {
+              const asyncConv = await ConversationService.analyzeTurn({
+                callId,
+                streamId,
+                chunkIndex: speechSegment.turnIndex,
+                audioBase64: speechSegment.audioBase64,
+                speakerChannel,
+                timestampMs: speechSegment.timestampMs,
+                claimedSpeakerId,
+              });
+
+              if (speechBuf.markProcessingComplete(speechSegment.turnIndex)) {
+                if (asyncConv.asr?.transcript) {
+                  this.broadcast({
+                    type: 'ASR_FINAL',
+                    callId,
+                    sequenceNumber: speechSegment.turnIndex,
+                    payload: asyncConv.asr,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+
+                if (asyncConv.social_engineering?.attack_sequence_score >= 0.7) {
+                  this.broadcast({
+                    type: 'SOCIAL_ENGINEERING_ALERT',
+                    callId,
+                    sequenceNumber: speechSegment.turnIndex,
+                    payload: {
+                      progression_state: asyncConv.social_engineering.progression_state,
+                      score: asyncConv.social_engineering.attack_sequence_score,
+                      tactics: asyncConv.social_engineering.tactics_detected,
+                      evidence: asyncConv.evidence_summary,
+                    },
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+
+                const asyncRisk = await RiskService.evaluateUnifiedRisk(
+                  {
+                    callId,
+                    streamId,
+                    chunkIndex: speechSegment.turnIndex,
+                    audioBase64: speechSegment.audioBase64,
+                    textTranscript: asyncConv.asr?.transcript,
+                    claimedSpeakerId,
+                  },
+                  state.user?.id
+                );
+
+                this.broadcast({
+                  type: 'UNIFIED_RISK_ASSESSMENT',
+                  callId,
+                  sequenceNumber: speechSegment.turnIndex,
+                  payload: asyncRisk,
+                  timestamp: new Date().toISOString(),
+                });
+
+                if (asyncRisk.policy_recommendation?.is_triggered) {
+                  this.broadcast({
+                    type: 'POLICY_ENFORCEMENT_TRIGGER',
+                    callId,
+                    payload: asyncRisk.policy_recommendation,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              }
+            } catch {
+              speechBuf.markProcessingComplete(speechSegment.turnIndex);
+            }
+          })();
+        }
+
+        // Fast safe placeholder for immediate telemetry frame
+        convResult = ConversationService.buildDegradedResult(
+          { callId, streamId, chunkIndex: sequenceNumber },
+          'AI_UNAVAILABLE'
+        );
+      }
 
       // Construct complete real-time analysis telemetry event
       const telemetry: WSMessage = {
@@ -672,6 +763,7 @@ export class WebSocketGateway {
 
       if (callId) {
         StreamBufferManager.remove(callId);
+        SpeechBufferManager.remove(callId);
         state.activeCallId = undefined;
         state.activeStreamId = undefined;
 

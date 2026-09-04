@@ -22,14 +22,124 @@ export class AudioNormalizer {
   public static readonly BYTES_PER_SAMPLE = 2; // 16-bit signed PCM
   public static readonly MAX_CHUNK_BYTES = 512 * 1024; // 512 KB maximum per chunk
 
+  private static readonly UNSUPPORTED_CODEC_TOKENS = new Set([
+    'alaw',
+    'mulaw',
+    'ulaw',
+    'g711',
+    'g711a',
+    'g711u',
+    'pcma',
+    'pcmu',
+    'amr',
+    'amrnb',
+    'amr-nb',
+    'amrwb',
+    'amr-wb',
+    'gsm',
+    'g729',
+    'g722',
+    'opus',
+    'mp3',
+    'mpeg',
+    'aac',
+    'ogg',
+    'flac',
+    'vorbis',
+    'speex',
+  ]);
+
+  /**
+   * Identifies whether the specified codec/format indicates an unsupported compressed format.
+   */
+  public static isUnsupportedCompressedCodec(codecOrFormat?: string): boolean {
+    if (!codecOrFormat || typeof codecOrFormat !== 'string') {
+      return false;
+    }
+    const clean = codecOrFormat.trim().toLowerCase();
+    if (!clean) {
+      return false;
+    }
+
+    // Explicitly allowed PCM / WAV formats
+    if (
+      clean === 'pcm_s16le' ||
+      clean === 'pcm' ||
+      clean === 'raw' ||
+      clean === 'linear_pcm' ||
+      clean === 'wav' ||
+      clean === 'audio/wav' ||
+      clean === 'audio/x-wav'
+    ) {
+      return false;
+    }
+
+    // Normalize MIME types (e.g. "audio/opus" -> "opus", "audio/mpeg" -> "mpeg")
+    let token = clean;
+    if (token.startsWith('audio/')) {
+      token = token.substring(6);
+    }
+    if (token.startsWith('x-')) {
+      token = token.substring(2);
+    }
+
+    if (AudioNormalizer.UNSUPPORTED_CODEC_TOKENS.has(token)) {
+      return true;
+    }
+
+    const sanitized = token.replace(/[\.\-_]/g, '');
+    const sanitizedUnsupported = [
+      'alaw',
+      'mulaw',
+      'ulaw',
+      'g711',
+      'g711a',
+      'g711u',
+      'pcma',
+      'pcmu',
+      'amr',
+      'amrnb',
+      'amrwb',
+      'gsm',
+      'g729',
+      'g722',
+      'opus',
+      'mp3',
+      'mpeg',
+      'aac',
+      'ogg',
+      'flac',
+      'vorbis',
+      'speex',
+    ];
+
+    return sanitizedUnsupported.some((u) => sanitized === u || sanitized.includes(u));
+  }
+
   /**
    * Validates and normalizes raw audio buffer or base64 string.
    */
   public static normalize(
     input: Buffer | string,
     inSampleRate: number = 16000,
-    inChannels: number = 1
+    inChannels: number = 1,
+    codecOrFormat?: string
   ): NormalizedAudioResult {
+    // 0. Codec / format safety check
+    if (this.isUnsupportedCompressedCodec(codecOrFormat)) {
+      return {
+        isValid: false,
+        format: 'pcm_s16le',
+        sampleRate: inSampleRate,
+        channels: inChannels,
+        pcmBuffer: Buffer.alloc(0),
+        base64Data: '',
+        sampleCount: 0,
+        durationMs: 0,
+        error: `UNSUPPORTED_CODEC_REQUIRES_PCM: ${codecOrFormat}`,
+      };
+    }
+
     let rawBuffer: Buffer;
 
     if (typeof input === 'string') {

@@ -89,7 +89,7 @@ def get_pipeline_status():
             "deepfake_detection": {
                 "status": stream_pipeline.deepfake.status.value,
                 "model": stream_pipeline.deepfake.model_id,
-                "note": "Phase 5: AASIST/RawNet2-aligned spectral & vocoder artifact detector active."
+                "note": "Phase 5: Robustness-Augmented MiniAcousticCNN spectral & LFCC artifact detector active with DSP fallback."
             },
             "speaker_verification": {
                 "status": stream_pipeline.speaker.status.value,

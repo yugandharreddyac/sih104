@@ -353,7 +353,19 @@ class UnifiedPipelineOrchestrator:
 
         # Transport / Manipulation
         try:
-            manipulation_res = self.manipulation.analyze(samples)
+            has_gap = None
+            if chunk.metadata:
+                if "sequenceGap" in chunk.metadata:
+                    has_gap = bool(chunk.metadata["sequenceGap"])
+                elif "sequence_gap" in chunk.metadata:
+                    has_gap = bool(chunk.metadata["sequence_gap"])
+
+            manipulation_res = self.manipulation.analyze(
+                samples,
+                sequence_number=chunk_idx,
+                has_sequence_gap=has_gap,
+                session_id=stream_id or call_id
+            )
             component_statuses["manipulation_detector"] = "AVAILABLE"
         except Exception as exc:
             component_errors["manipulation_detector"] = str(exc)

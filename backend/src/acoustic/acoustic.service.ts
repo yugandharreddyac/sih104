@@ -8,6 +8,8 @@ export interface AcousticAnalyzePayload {
   channels?: number;
   audioBase64?: string;
   claimedSpeakerId?: string;
+  channel_type?: 'WIDEBAND' | 'TELEPHONY' | 'AUTO';
+  codec?: string;
   metadata?: Record<string, any>;
 }
 
@@ -29,6 +31,8 @@ export class AcousticService {
           format: 'pcm_s16le',
           audio_base64: payload.audioBase64,
           claimed_speaker_id: payload.claimedSpeakerId,
+          channel_type: payload.channel_type,
+          codec: payload.codec,
           metadata: payload.metadata || {},
         }),
         signal: controller.signal,
@@ -57,6 +61,8 @@ export class AcousticService {
         model_version: 'deepfake_aasist_spectral_v3',
         explainability: ['Acoustic harmonic distribution consistent with natural speech.'],
         inference_latency_ms: 2.1,
+        channel_type_applied: payload.channel_type === 'TELEPHONY' ? 'TELEPHONY' : 'WIDEBAND',
+        threshold_applied: payload.channel_type === 'TELEPHONY' ? 0.525 : 0.685,
       },
       speaker: {
         status: payload.claimedSpeakerId ? 'MATCH' : 'NOT_ENROLLED',

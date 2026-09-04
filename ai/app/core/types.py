@@ -49,6 +49,12 @@ class AudioQualityRating(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class ChannelType(str, Enum):
+    WIDEBAND = "WIDEBAND"
+    TELEPHONY = "TELEPHONY"
+    AUTO = "AUTO"
+
+
 class DeepfakeStatus(str, Enum):
     AUTHENTIC = "AUTHENTIC"
     SUSPICIOUS = "SUSPICIOUS"
@@ -463,6 +469,8 @@ class AudioQualityResult(BaseModel):
     duration_ms: float
     uncertainty_penalty: float = Field(..., ge=0.0, le=1.0)
     notes: str
+    spectral_bandwidth_hz: Optional[float] = None
+    high_frequency_ratio: Optional[float] = None
 
 
 class DeepfakeAnalysisResult(BaseModel):
@@ -477,6 +485,8 @@ class DeepfakeAnalysisResult(BaseModel):
     model_version: str
     explainability: List[str] = Field(default_factory=list)
     inference_latency_ms: float = 0.0
+    channel_type_applied: ChannelType = ChannelType.WIDEBAND
+    threshold_applied: float = 0.685
 
 
 class SpeakerVerificationResult(BaseModel):
@@ -568,6 +578,8 @@ class AudioChunkPayload(BaseModel):
     speaker_channel: int = 0
     timestamp_ms: Optional[int] = None
     claimed_speaker_id: Optional[str] = None
+    channel_type: Optional[ChannelType] = None
+    codec: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 

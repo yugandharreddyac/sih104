@@ -1,0 +1,69 @@
+{
+  "experiment_title": "VOXSHIELD Phase 1C.4 \u2014 Source-Disjoint MiniAcousticCNN Training",
+  "model_architecture": "MiniAcousticCNN",
+  "parameter_count": 93442,
+  "input_shape": [
+    2,
+    60,
+    301
+  ],
+  "feature_configuration": {
+    "channels": [
+      "log_mel_spectrogram",
+      "lfcc_spectrogram"
+    ],
+    "n_bins": 60,
+    "sample_rate": 16000,
+    "window_sec": 3.0,
+    "window_samples": 48000,
+    "n_fft": 512,
+    "hop_length": 160,
+    "win_length": 400
+  },
+  "system_environment": {
+    "python_version": "3.13.7",
+    "pytorch_version": "2.14.0+cpu",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel"
+  },
+  "training_hyperparameters": {
+    "random_seed": 42,
+    "epochs": 15,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "optimizer": "Adam",
+    "loss": "CrossEntropyLoss",
+    "device": "cpu"
+  },
+  "manifest_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\source_disjoint_train_val_manifest.parquet",
+  "checkpoint_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\source_disjoint_training\\best_source_disjoint_mini_acoustic_cnn.pt",
+  "checkpoint_size_bytes": 1141801,
+  "total_wall_clock_sec": 363.03,
+  "best_epoch": 15,
+  "best_validation_metrics": {
+    "loss": 0.4343,
+    "accuracy": 0.7833,
+    "precision": 0.7852,
+    "recall": 0.78,
+    "f1": 0.7826,
+    "roc_auc": 0.8828,
+    "fpr": 0.2133,
+    "fnr": 0.22,
+    "eer": 0.22,
+    "eer_threshold": 0.4967,
+    "tn": 118,
+    "fp": 32,
+    "fn": 33,
+    "tp": 117,
+    "eval_time_sec": 1.7
+  },
+  "methodology_assertions": {
+    "a07_a19_unseen_test_evaluated": false,
+    "unseen_test_data_used_for_training_or_selection": false,
+    "existing_cnn_checkpoint_modified": false,
+    "existing_benchmark_modified": false,
+    "unseen_test_manifest_modified": false,
+    "production_code_modified": false,
+    "external_data_downloaded": false
+  }
+}

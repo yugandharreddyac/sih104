@@ -1,0 +1,275 @@
+{
+  "title": "VOXSHIELD Phase 2D \u2014 Final AI/ML Consolidation Audit",
+  "status": "PHASE 2 COMPLETE \u2014 FINAL RESEARCH CANDIDATE ESTABLISHED",
+  "executive_decision": {
+    "recommended_research_model": "MiniAcousticCNN (Robustness-Augmented Checkpoint)",
+    "checkpoint_path": "ai/neural_prototype/results/robust_training/best_robust_mini_acoustic_cnn.pt",
+    "parameters": 93442,
+    "checkpoint_size_kb": 1114.71,
+    "pure_neural_latency_ms": 6.57,
+    "full_pipeline_latency_ms": 14.2,
+    "primary_operating_policy": "Policy C (Dual-Mode / Maximum F1: \u03b8_clean=0.6850, \u03b8_telephony=0.5250)",
+    "alternative_conservative_policy": "Policy B (Balanced / FPR<=10%: \u03b8_clean=0.7950, \u03b8_telephony=0.7800)",
+    "traditional_fallback": "Random Forest Baseline (ai/models/traditional/benchmark_best_model.joblib, 48-D DSP features, 0.59 ms)"
+  },
+  "model_comparison_table": [
+    {
+      "model": "Random Forest Baseline",
+      "parameters": "N/A (Tree ensemble)",
+      "dataset_provenance": "ASVspoof 2021 DF 2,000 Benchmark (Train: 1,400, 108 systems)",
+      "evaluation_type": "In-domain held-out test (300 samples, overlapping systems)",
+      "operating_threshold": 0.5,
+      "accuracy": 0.6433,
+      "precision": 0.7792,
+      "recall": 0.4,
+      "f1": 0.5286,
+      "roc_auc": 0.8106,
+      "fpr": 0.1133,
+      "fnr": 0.6,
+      "eer": 0.27,
+      "latency": "0.59 ms (inference only)"
+    },
+    {
+      "model": "MiniAcousticCNN (In-Domain)",
+      "parameters": 93442,
+      "dataset_provenance": "ASVspoof 2021 DF 2,000 Benchmark (Train: 1,400, 108 systems)",
+      "evaluation_type": "In-domain held-out test (300 samples, overlapping systems)",
+      "operating_threshold": 0.93,
+      "accuracy": 0.7933,
+      "precision": 0.8333,
+      "recall": 0.7333,
+      "f1": 0.7801,
+      "roc_auc": 0.8876,
+      "fpr": 0.1467,
+      "fnr": 0.2667,
+      "eer": 0.1867,
+      "latency": "6.57 ms (neural) / ~88 ms (pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Source-Disjoint Clean)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 (Train: 1,400, 97 systems, 0 A07-A19 exposure)",
+      "evaluation_type": "Genuine Unseen-Generator Test C0 Clean (300 samples, A07-A19)",
+      "operating_threshold": 0.5,
+      "accuracy": 0.7467,
+      "precision": 0.9022,
+      "recall": 0.5533,
+      "f1": 0.686,
+      "roc_auc": 0.9026,
+      "fpr": 0.06,
+      "fnr": 0.4467,
+      "eer": 0.1833,
+      "latency": "6.57 ms (neural) / 13.27 ms (eval pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Source-Disjoint Clean)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 (Train: 1,400, 97 systems, 0 A07-A19 exposure)",
+      "evaluation_type": "Telephony Robustness Test C3 G.711 A-law (300 samples, A07-A19)",
+      "operating_threshold": 0.5,
+      "accuracy": 0.6033,
+      "precision": 0.5886,
+      "recall": 0.6867,
+      "f1": 0.6338,
+      "roc_auc": 0.6847,
+      "fpr": 0.48,
+      "fnr": 0.3133,
+      "eer": 0.3233,
+      "latency": "6.57 ms (neural) / 15.20 ms (eval pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Robustness-Augmented)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 2x Balanced (2,800: 1,400 clean + 1,400 augmented)",
+      "evaluation_type": "Genuine Unseen-Generator Test C0 Clean (300 samples, A07-A19)",
+      "operating_threshold": 0.5,
+      "accuracy": 0.8133,
+      "precision": 0.8561,
+      "recall": 0.7533,
+      "f1": 0.8014,
+      "roc_auc": 0.8733,
+      "fpr": 0.1267,
+      "fnr": 0.2467,
+      "eer": 0.2267,
+      "latency": "6.57 ms (neural) / 13.35 ms (eval pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Robustness-Augmented)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 2x Balanced (2,800: 1,400 clean + 1,400 augmented)",
+      "evaluation_type": "Telephony Robustness Test C3 G.711 A-law (300 samples, A07-A19)",
+      "operating_threshold": 0.5,
+      "accuracy": 0.7067,
+      "precision": 0.6782,
+      "recall": 0.7867,
+      "f1": 0.7284,
+      "roc_auc": 0.7702,
+      "fpr": 0.3733,
+      "fnr": 0.2133,
+      "eer": 0.3133,
+      "latency": "6.57 ms (neural) / 15.25 ms (eval pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Robustness-Augmented)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 2x Balanced (2,800: 1,400 clean + 1,400 augmented)",
+      "evaluation_type": "Calibrated Dual-Mode Policy C Test C0 Clean (300 samples, A07-A19)",
+      "operating_threshold": 0.685,
+      "accuracy": 0.7433,
+      "precision": 0.9398,
+      "recall": 0.52,
+      "f1": 0.6695,
+      "roc_auc": 0.8733,
+      "fpr": 0.0333,
+      "fnr": 0.48,
+      "eer": 0.2267,
+      "latency": "6.57 ms (neural) / 13.35 ms (eval pipeline)"
+    },
+    {
+      "model": "MiniAcousticCNN (Robustness-Augmented)",
+      "parameters": 93442,
+      "dataset_provenance": "VCC2020 + VCC2018 2x Balanced (2,800: 1,400 clean + 1,400 augmented)",
+      "evaluation_type": "Calibrated Dual-Mode Policy C Test C3 G.711 A-law (300 samples, A07-A19)",
+      "operating_threshold": 0.525,
+      "accuracy": 0.7,
+      "precision": 0.6829,
+      "recall": 0.7467,
+      "f1": 0.7134,
+      "roc_auc": 0.7702,
+      "fpr": 0.3467,
+      "fnr": 0.2533,
+      "eer": 0.3133,
+      "latency": "6.57 ms (neural) / 15.25 ms (eval pipeline)"
+    }
+  ],
+  "sih_requirement_mapping": {
+    "AI-generated voice detection": {
+      "status": "SUPPORTED BY EXPERIMENT",
+      "evidence": "Achieved 0.8733 - 0.9026 ROC-AUC and up to 75.33% spoof recall on 13 genuinely unseen attack systems A07-A19 without in-training exposure."
+    },
+    "Voice cloning detection": {
+      "status": "SUPPORTED BY EXPERIMENT",
+      "evidence": "Model trained on 97 voice conversion (VCC) systems successfully detects unseen TTS and neural vocoder clones (A08, A09, A11, A14, A15 at 91%-100% recall)."
+    },
+    "Replay / spoof detection": {
+      "status": "PARTIALLY SUPPORTED",
+      "evidence": "Logical access synthetic audio is rigorously detected; physical acoustic replay through physical loudspeakers and room impulse responses was not tested."
+    },
+    "Spectral / acoustic analysis": {
+      "status": "SUPPORTED BY EXPERIMENT",
+      "evidence": "Two-channel feature extraction utilizes 60-bin Log-Mel Spectrogram + 60-bin Linear Frequency Cepstral Coefficients (LFCC) covering 80 Hz - 8,000 Hz."
+    },
+    "Prosody analysis": {
+      "status": "NOT ESTABLISHED",
+      "evidence": "The model relies strictly on short-term spectral envelope and cepstral harmonics (STFT frames); fundamental frequency (F0) tracking and syllable-level prosody features are not extracted."
+    },
+    "Real-time processing": {
+      "status": "SUPPORTED BY EXPERIMENT",
+      "evidence": "3.0-second audio window is processed in ~13-15 ms full evaluation pipeline on CPU, yielding a real-time factor (RTF) of ~0.005, well below 1.0."
+    },
+    "Low latency": {
+      "status": "SUPPORTED BY EXPERIMENT",
+      "evidence": "Pure neural forward pass requires only 6.57 ms on an Intel Core i5 CPU."
+    },
+    "ASR (Speech-to-Text)": {
+      "status": "NOT ESTABLISHED",
+      "evidence": "No speech recognition engine was evaluated or benchmarked in this acoustic deepfake pipeline."
+    },
+    "Sensitive-data detection": {
+      "status": "NOT ESTABLISHED",
+      "evidence": "Detection of sensitive credentials (OTP, Aadhaar, PAN) requires transcript text from ASR; acoustic models do not process lexical semantics."
+    },
+    "Social-engineering detection": {
+      "status": "NOT ESTABLISHED",
+      "evidence": "Scam pattern analysis and conversational urgency analysis operate on text/dialogue, not acoustic waveforms."
+    },
+    "Multilingual / Indian-language robustness": {
+      "status": "NOT ESTABLISHED",
+      "evidence": "All evaluated datasets (ASVspoof, VCC) are English-language speech; Indic phonetic robustness has not been tested."
+    },
+    "Enterprise / banking integration": {
+      "status": "PARTIALLY SUPPORTED",
+      "evidence": "Standard telephony G.711 A-law/mu-law codec robustness was verified, but PBX/SIP telephony trunk integration and production concurrency were not tested."
+    }
+  },
+  "scorecard": [
+    {
+      "area": "Neural deepfake detection",
+      "status": "SUPPORTED",
+      "evidence": "ROC-AUC 0.8733-0.9026, 93,442 params, 13 unseen systems tested."
+    },
+    {
+      "area": "Unseen-generator evaluation",
+      "status": "SUPPORTED",
+      "evidence": "Zero attack system overlap; A07-A19 evaluated frozen."
+    },
+    {
+      "area": "Channel robustness",
+      "status": "SUPPORTED",
+      "evidence": "Evaluated on 6 conditions; G.711 A-law/mu-law augmentation improves F1 by ~10 pp."
+    },
+    {
+      "area": "Threshold calibration",
+      "status": "SUPPORTED",
+      "evidence": "Validation-derived thresholds tested on held-out test set (Policy B & C evaluated)."
+    },
+    {
+      "area": "CPU feasibility",
+      "status": "SUPPORTED",
+      "evidence": "6.57 ms forward pass on Intel Core i5-1235U CPU."
+    },
+    {
+      "area": "Real-time feasibility",
+      "status": "SUPPORTED",
+      "evidence": "RTF ~0.005 (3.0s audio processed in <16 ms)."
+    },
+    {
+      "area": "Speaker verification",
+      "status": "NOT ESTABLISHED",
+      "evidence": "Model classifies spoof vs bona-fide, does not perform 1:1 speaker biometric enrollment."
+    },
+    {
+      "area": "ASR",
+      "status": "NOT ESTABLISHED",
+      "evidence": "No transcription engine evaluated in Phase 1/2."
+    },
+    {
+      "area": "Indian-language robustness",
+      "status": "NOT ESTABLISHED",
+      "evidence": "English-only benchmark audio used."
+    },
+    {
+      "area": "Production readiness",
+      "status": "PARTIALLY SUPPORTED",
+      "evidence": "Research prototype validated; concurrency, packaging, and UI deployment remain."
+    }
+  ],
+  "what_is_proven": [
+    "A compact 93,442-parameter MiniAcousticCNN can run efficiently on standard laptop CPUs (6.57 ms forward pass).",
+    "Source-disjoint partitioning (training on VCC2020/2018, evaluating on ASVspoof A07-A19) establishes genuine unseen-generator generalization without data leakage.",
+    "Channel-augmented training (2x balanced set) prevents model collapse under G.711 telephony and additive noise, improving telephony F1 by ~10 percentage points.",
+    "Validation-derived threshold calibration successfully transfers false-positive suppression to clean wideband audio (FPR reduced to 3.33% under Policy C, 2.00% under Policy B).",
+    "No single fixed threshold simultaneously provides maximal spoof recall (>80%) and ultra-low false alarms (<5%) across both clean audio and telephony channels."
+  ],
+  "what_is_not_proven": [
+    "Commercial voice-cloner robustness (ElevenLabs, OpenAI Voice Engine, Cartesia, PlayHT).",
+    "Arbitrary unseen neural vocoders beyond the 13 academic systems in ASVspoof 2019.",
+    "Indian-language, accent, or multilingual robustness (Hindi, Tamil, Telugu, etc.).",
+    "Real in-the-wild cellular/PSTN telephone network carrier jitter and packet loss.",
+    "Uncontrolled ambient background noise outside the synthetic 15 dB Gaussian model.",
+    "Physical acoustic replay attacks through physical loudspeakers and room reverberation.",
+    "Production-scale concurrent stream handling and latency under multi-tenant load.",
+    "End-to-end user experience and mobile application integration.",
+    "Guaranteed security-grade or legal evidentiary certainty."
+  ],
+  "integrity": {
+    "training_performed": false,
+    "existing_checkpoint_modified": false,
+    "existing_dataset_modified": false,
+    "existing_manifest_modified": false,
+    "existing_calibration_modified": false,
+    "production_code_modified": false,
+    "external_downloads": false,
+    "package_installation": false
+  }
+}

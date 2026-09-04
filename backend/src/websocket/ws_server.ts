@@ -48,9 +48,52 @@ export interface WSMessage {
   timestamp?: string;
 }
 
+export interface CallAsrPendingChunk {
+  callId: string;
+  streamId: string;
+  normalizedAudio: Buffer;
+  base64Data: string;
+  sequenceNumber: number;
+  textTranscript?: string;
+  claimedSpeakerId?: string;
+  speakerChannel?: number;
+  actorUserId?: string;
+}
+
+export interface CallAsrState {
+  inFlight: boolean;
+  hasPendingAudio: boolean;
+  pendingChunk?: CallAsrPendingChunk;
+  lastCommittedSeq: number;
+  latestConvResult?: any;
+}
+
 export class WebSocketGateway {
   private static wss: WebSocketServer | null = null;
   private static clientStates: Map<WebSocket, WSClientState> = new Map();
+  private static callAsrStates: Map<string, CallAsrState> = new Map();
+
+  private static getOrCreateAsrState(callId: string): CallAsrState {
+    let asrState = this.callAsrStates.get(callId);
+    if (!asrState) {
+      asrState = {
+        inFlight: false,
+        hasPendingAudio: false,
+        lastCommittedSeq: -1,
+      };
+      this.callAsrStates.set(callId, asrState);
+    }
+    return asrState;
+  }
+
+  private static isCallActive(callId: string): boolean {
+    for (const client of this.clientStates.values()) {
+      if (client.activeCallId === callId) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   public static initialize(server: http.Server): void {
     this.wss = new WebSocketServer({
@@ -91,6 +134,7 @@ export class WebSocketGateway {
       ws.on('close', () => {
         if (state.activeCallId) {
           StreamBufferManager.remove(state.activeCallId);
+          this.callAsrStates.delete(state.activeCallId);
         }
         this.clientStates.delete(ws);
         console.info(`🔌 WebSocket client disconnected`);
@@ -239,13 +283,17 @@ export class WebSocketGateway {
       const channels = msg.payload?.channels || 1;
 
       // Normalize audio
-      const normalized = AudioNormalizer.normalize(rawAudio, sampleRate, channels);
+      const codecOrFormat = msg.payload?.codec || msg.payload?.format;
+      const normalized = AudioNormalizer.normalize(rawAudio, sampleRate, channels, codecOrFormat);
       if (!normalized.isValid) {
+        const isCodecError = normalized.error?.startsWith('UNSUPPORTED_CODEC_REQUIRES_PCM');
         ws.send(
           JSON.stringify({
             type: 'ERROR',
-            error: 'INVALID_AUDIO_FORMAT',
-            message: normalized.error,
+            error: isCodecError ? 'UNSUPPORTED_CODEC_REQUIRES_PCM' : 'INVALID_AUDIO_FORMAT',
+            message: isCodecError
+              ? `Codec '${codecOrFormat}' is unsupported for live streaming. VoxShield requires uncompressed 16-bit linear PCM (pcm_s16le).`
+              : normalized.error,
           })
         );
         return;
@@ -260,8 +308,20 @@ export class WebSocketGateway {
         durationMs: normalized.durationMs,
       });
 
+      // Priority 5: Deduplication & Stale-Sequence Guard
+      if (pushResult.isDuplicate) {
+        return;
+      }
+      if (pushResult.isStale) {
+        return;
+      }
+
       const metrics = buffer.getMetrics();
       const startProcTime = Date.now();
+
+      // Extract optional channel metadata
+      const channel_type = msg.payload?.channel_type || msg.payload?.channelType;
+      const codec = msg.payload?.codec;
 
       // Execute full Phase 3 Acoustic Intelligence Pipeline
       let acousticResult = await AcousticService.analyze({
@@ -272,23 +332,19 @@ export class WebSocketGateway {
         channels: 1,
         audioBase64: normalized.base64Data,
         claimedSpeakerId: msg.payload?.claimedSpeakerId || msg.payload?.claimed_speaker_id,
-        metadata: { sequenceNumber, durationMs: normalized.durationMs },
+        channel_type,
+        codec,
+        metadata: {
+          sequenceNumber,
+          durationMs: normalized.durationMs,
+          sequenceGap: pushResult.sequenceError,
+        },
       });
 
-      // Execute Phase 4 Conversational Intelligence Pipeline
-      let convResult = await ConversationService.analyzeTurn({
-        callId,
-        streamId: state.activeStreamId,
-        chunkIndex: sequenceNumber,
-        audioBase64: normalized.base64Data,
-        textTranscript: msg.payload?.text_transcript || msg.payload?.transcript,
-        speakerChannel: msg.payload?.speakerChannel || 0,
-        timestampMs: Date.now(),
-        claimedSpeakerId: msg.payload?.claimedSpeakerId || msg.payload?.claimed_speaker_id,
-      });
+      const asrState = this.getOrCreateAsrState(callId);
 
-      // Construct complete real-time analysis telemetry event
-      const telemetry: WSMessage = {
+      // Construct immediate real-time analysis telemetry event (Acoustic path takes precedence)
+      const immediateTelemetry: WSMessage = {
         type: 'AUDIO_TELEMETRY',
         callId,
         streamId: state.activeStreamId,
@@ -302,76 +358,38 @@ export class WebSocketGateway {
           vad: acousticResult.vad,
           quality: acousticResult.quality,
           temporal_metrics: acousticResult.temporal_metrics,
-          conversation: convResult,
+          conversation: asrState.latestConvResult,
           metrics,
-          pipeline_latency_ms: acousticResult.total_ai_latency_ms + (convResult.total_nlp_latency_ms || 0),
-          evidence_summary: [...(acousticResult.evidence_summary || []), ...(convResult.evidence_summary || [])],
+          pipeline_latency_ms: acousticResult.total_ai_latency_ms,
+          evidence_summary: acousticResult.evidence_summary || [],
           phase: 'PHASE_4_CONVERSATIONAL_INTELLIGENCE',
           models: {
-            deepfake: acousticResult.deepfake.status,
-            speaker: acousticResult.speaker.status,
-            replay: acousticResult.replay.status,
-            asr: convResult.asr?.status || 'AVAILABLE',
-            social_engineering: convResult.social_engineering?.status || 'AVAILABLE',
+            deepfake: acousticResult.deepfake?.status || 'AVAILABLE',
+            speaker: acousticResult.speaker?.status || 'AVAILABLE',
+            replay: acousticResult.replay?.status || 'AVAILABLE',
+            asr: asrState.latestConvResult?.asr?.status || 'AVAILABLE',
+            social_engineering: asrState.latestConvResult?.social_engineering?.status || 'AVAILABLE',
           },
         },
         timestamp: new Date().toISOString(),
       };
 
-      // Broadcast telemetry to all connected clients
-      this.broadcast(telemetry);
+      // Broadcast acoustic telemetry to all connected clients IMMEDIATELY
+      this.broadcast(immediateTelemetry);
 
-      if (convResult.asr?.transcript) {
-        this.broadcast({
-          type: 'ASR_FINAL',
-          callId,
-          sequenceNumber,
-          payload: convResult.asr,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      if (convResult.social_engineering?.attack_sequence_score >= 0.70) {
-        this.broadcast({
-          type: 'SOCIAL_ENGINEERING_ALERT',
-          callId,
-          sequenceNumber,
-          payload: {
-            progression_state: convResult.social_engineering.progression_state,
-            score: convResult.social_engineering.attack_sequence_score,
-            tactics: convResult.social_engineering.tactics_detected,
-            evidence: convResult.evidence_summary,
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Execute Phase 5 Unified Multi-Modal Risk Fusion
-      const unifiedRisk = await RiskService.evaluateUnifiedRisk({
+      // Dispatch conversation / ASR analysis asynchronously (single-flight)
+      this.scheduleAsrTurn({
         callId,
-        streamId: state.activeStreamId,
-        chunkIndex: sequenceNumber,
-        audioBase64: normalized.base64Data,
-        textTranscript: msg.payload?.text_transcript || msg.payload?.transcript,
-        claimedSpeakerId: msg.payload?.claimedSpeakerId || msg.payload?.claimed_speaker_id,
-      }, state.user?.id);
-
-      this.broadcast({
-        type: 'UNIFIED_RISK_ASSESSMENT',
-        callId,
+        streamId: state.activeStreamId || `stream-${Date.now()}`,
         sequenceNumber,
-        payload: unifiedRisk,
-        timestamp: new Date().toISOString(),
+        normalizedAudio: normalized.pcmBuffer,
+        base64Data: normalized.base64Data,
+        textTranscript: msg.payload?.text_transcript || msg.payload?.transcript,
+        speakerChannel: msg.payload?.speakerChannel || 0,
+        claimedSpeakerId: msg.payload?.claimedSpeakerId || msg.payload?.claimed_speaker_id,
+        actorUserId: state.user?.id,
       });
 
-      if (unifiedRisk.policy_recommendation?.is_triggered) {
-        this.broadcast({
-          type: 'POLICY_ENFORCEMENT_TRIGGER',
-          callId,
-          payload: unifiedRisk.policy_recommendation,
-          timestamp: new Date().toISOString(),
-        });
-      }
       return;
     }
 
@@ -397,6 +415,7 @@ export class WebSocketGateway {
       const callId = msg.callId || state.activeCallId;
       if (callId) {
         StreamBufferManager.remove(callId);
+        this.callAsrStates.delete(callId);
         state.activeCallId = undefined;
         state.activeStreamId = undefined;
 
@@ -447,5 +466,152 @@ export class WebSocketGateway {
       timestamp: new Date().toISOString(),
     };
     this.broadcast(msg);
+  }
+
+  private static scheduleAsrTurn(chunkInfo: CallAsrPendingChunk): void {
+    const asrState = this.getOrCreateAsrState(chunkInfo.callId);
+
+    if (asrState.inFlight) {
+      // Single-flight: another ASR is currently running for this call.
+      // Replace pendingChunk with newest chunk (drop older intermediate chunks).
+      asrState.hasPendingAudio = true;
+      asrState.pendingChunk = chunkInfo;
+      return;
+    }
+
+    asrState.inFlight = true;
+    this.executeAsrTurn(chunkInfo);
+  }
+
+  private static async executeAsrTurn(chunkInfo: CallAsrPendingChunk): Promise<void> {
+    const { callId, streamId, sequenceNumber } = chunkInfo;
+    let convResult: any = null;
+
+    try {
+      convResult = await ConversationService.analyzeTurn({
+        callId,
+        streamId,
+        chunkIndex: sequenceNumber,
+        audioBase64: chunkInfo.base64Data,
+        textTranscript: chunkInfo.textTranscript,
+        speakerChannel: chunkInfo.speakerChannel || 0,
+        timestampMs: Date.now(),
+        claimedSpeakerId: chunkInfo.claimedSpeakerId,
+      });
+    } catch (err) {
+      console.warn(`[ASR/Conversation] Async analyzeTurn error for call ${callId}:`, err);
+    }
+
+    const asrState = this.callAsrStates.get(callId);
+
+    // If call ended or was cleaned up while ASR was running, discard results
+    if (!asrState || !this.isCallActive(callId)) {
+      if (asrState) {
+        asrState.inFlight = false;
+        asrState.hasPendingAudio = false;
+        asrState.pendingChunk = undefined;
+      }
+      return;
+    }
+
+    try {
+      // Sequence safety: Do not commit a result older than lastCommittedSeq
+      if (convResult && sequenceNumber >= asrState.lastCommittedSeq) {
+        asrState.lastCommittedSeq = sequenceNumber;
+        asrState.latestConvResult = convResult;
+
+        // Broadcast ASR_FINAL if transcript is available
+        if (convResult.asr?.transcript) {
+          this.broadcast({
+            type: 'ASR_FINAL',
+            callId,
+            sequenceNumber,
+            payload: convResult.asr,
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // Broadcast SOCIAL_ENGINEERING_ALERT if threshold met
+        if (convResult.social_engineering?.attack_sequence_score >= 0.70) {
+          this.broadcast({
+            type: 'SOCIAL_ENGINEERING_ALERT',
+            callId,
+            sequenceNumber,
+            payload: {
+              progression_state: convResult.social_engineering.progression_state,
+              score: convResult.social_engineering.attack_sequence_score,
+              tactics: convResult.social_engineering.tactics_detected,
+              evidence: convResult.evidence_summary,
+            },
+            timestamp: new Date().toISOString(),
+          });
+        }
+
+        // Broadcast updated conversation telemetry event
+        this.broadcast({
+          type: 'AUDIO_TELEMETRY',
+          callId,
+          streamId,
+          sequenceNumber,
+          payload: {
+            conversation: convResult,
+            pipeline_latency_ms: convResult.total_nlp_latency_ms || 0,
+            evidence_summary: convResult.evidence_summary || [],
+            phase: 'PHASE_4_CONVERSATIONAL_INTELLIGENCE',
+            models: {
+              asr: convResult.asr?.status || 'AVAILABLE',
+              social_engineering: convResult.social_engineering?.status || 'AVAILABLE',
+            },
+          },
+          timestamp: new Date().toISOString(),
+        });
+
+        // Execute Phase 5 Unified Multi-Modal Risk Fusion asynchronously
+        try {
+          const unifiedRisk = await RiskService.evaluateUnifiedRisk(
+            {
+              callId,
+              streamId,
+              chunkIndex: sequenceNumber,
+              audioBase64: chunkInfo.base64Data,
+              textTranscript: chunkInfo.textTranscript || convResult.asr?.transcript,
+              claimedSpeakerId: chunkInfo.claimedSpeakerId,
+            },
+            chunkInfo.actorUserId
+          );
+
+          if (this.isCallActive(callId)) {
+            this.broadcast({
+              type: 'UNIFIED_RISK_ASSESSMENT',
+              callId,
+              sequenceNumber,
+              payload: unifiedRisk,
+              timestamp: new Date().toISOString(),
+            });
+
+            if (unifiedRisk?.policy_recommendation?.is_triggered) {
+              this.broadcast({
+                type: 'POLICY_ENFORCEMENT_TRIGGER',
+                callId,
+                payload: unifiedRisk.policy_recommendation,
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        } catch (riskErr) {
+          console.warn(`[RiskService] Error evaluating unified risk for call ${callId}:`, riskErr);
+        }
+      }
+    } finally {
+      // Step 5: Check pending audio
+      asrState.inFlight = false;
+      if (asrState.hasPendingAudio && asrState.pendingChunk && this.isCallActive(callId)) {
+        const nextChunk = asrState.pendingChunk;
+        asrState.hasPendingAudio = false;
+        asrState.pendingChunk = undefined;
+        // Schedule next single-flight ASR execution for the latest pending chunk
+        this.scheduleAsrTurn(nextChunk);
+      }
+    }
   }
 }

@@ -12,6 +12,8 @@ import { ConversationService } from '../conversation/conversation.service';
 import { RiskService } from '../risk/risk.service';
 import { IncidentsService } from '../incidents/incidents.service';
 import { env } from '../config/env';
+import { RedisPubSubService } from '../infrastructure/redis_pubsub';
+import { activeWsConnections, wsErrorsTotal } from '../health/metrics.controller';
 
 export interface WSClientState {
   ws: WebSocket;
@@ -57,6 +59,7 @@ export interface WSMessage {
   format?: string;
   user?: { email: string; role: string };
   metrics?: any;
+  organizationId?: string;
 }
 
 export class WebSocketGateway {
@@ -65,9 +68,24 @@ export class WebSocketGateway {
 
   private static pingInterval: NodeJS.Timeout | null = null;
 
-  public static initialize(server: http.Server): void {
+  private static isSubscribed = false;
+
+  public static async initialize(server: http.Server): Promise<void> {
+    if (this.wss) return;
+
     // Ensure sample calls exist for valid stream validation in standalone mode
     CallsService.seedSampleCallsIfEmpty();
+
+    // Initialize Redis for cross-instance scaling
+    await RedisPubSubService.initialize();
+
+    if (!this.isSubscribed) {
+      RedisPubSubService.subscribe((msgPayload) => {
+        // Receive broadcast from another instance via Redis and distribute locally
+        this.broadcastLocal(msgPayload);
+      });
+      this.isSubscribed = true;
+    }
 
     this.wss = new WebSocketServer({
       server,
@@ -99,15 +117,18 @@ export class WebSocketGateway {
       });
 
       this.clientStates.set(ws, state);
+      activeWsConnections.inc(1);
       console.info(`🔌 WebSocket client connected from ${ipAddress}`);
 
       ws.on('message', async (message: string | Buffer) => {
         try {
           const msgStr = typeof message === 'string' ? message : message.toString('utf-8');
+          console.log('WS_SERVER_RX:', msgStr);
           let parsed: any;
           try {
             parsed = JSON.parse(msgStr);
           } catch (jsonErr: any) {
+            wsErrorsTotal.inc({ error_type: 'INVALID_PAYLOAD' });
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
@@ -120,6 +141,7 @@ export class WebSocketGateway {
           }
 
           if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+            wsErrorsTotal.inc({ error_type: 'INVALID_PAYLOAD' });
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
@@ -133,6 +155,7 @@ export class WebSocketGateway {
 
           await this.handleClientMessage(state, parsed);
         } catch (e: any) {
+          wsErrorsTotal.inc({ error_type: 'INTERNAL_ERROR' });
           ws.send(
             JSON.stringify({
               type: 'ERROR',
@@ -149,6 +172,7 @@ export class WebSocketGateway {
           StreamBufferManager.remove(state.activeCallId);
         }
         this.clientStates.delete(ws);
+        activeWsConnections.dec(1);
         console.info(`🔌 WebSocket client disconnected`);
       });
 
@@ -194,6 +218,7 @@ export class WebSocketGateway {
       });
       this.wss = null;
     }
+    await RedisPubSubService.close();
   }
 
   private static hasPermission(user?: AuthUser, requiredPermission: Permission = Permission.CALLS_STREAM): boolean {
@@ -561,6 +586,7 @@ export class WebSocketGateway {
         callId,
         streamId,
         sequenceNumber,
+        organizationId: state.user?.organizationId,
         payload: {
           overall_assessment: acousticResult.overall_assessment,
           deepfake: acousticResult.deepfake,
@@ -594,6 +620,7 @@ export class WebSocketGateway {
           type: 'ASR_FINAL',
           callId,
           sequenceNumber,
+          organizationId: state.user?.organizationId,
           payload: convResult.asr,
           timestamp: new Date().toISOString(),
         });
@@ -604,6 +631,7 @@ export class WebSocketGateway {
           type: 'SOCIAL_ENGINEERING_ALERT',
           callId,
           sequenceNumber,
+          organizationId: state.user?.organizationId,
           payload: {
             progression_state: convResult.social_engineering.progression_state,
             score: convResult.social_engineering.attack_sequence_score,
@@ -631,6 +659,7 @@ export class WebSocketGateway {
         type: 'UNIFIED_RISK_ASSESSMENT',
         callId,
         sequenceNumber,
+        organizationId: state.user?.organizationId,
         payload: unifiedRisk,
         timestamp: new Date().toISOString(),
       });
@@ -639,6 +668,7 @@ export class WebSocketGateway {
         this.broadcast({
           type: 'POLICY_ENFORCEMENT_TRIGGER',
           callId,
+          organizationId: state.user?.organizationId,
           payload: unifiedRisk.policy_recommendation,
           timestamp: new Date().toISOString(),
         });
@@ -718,6 +748,7 @@ export class WebSocketGateway {
         this.broadcast({
           type: 'END_STREAM',
           callId,
+          organizationId: state.user?.organizationId,
           timestamp: new Date().toISOString(),
         });
       }
@@ -725,6 +756,7 @@ export class WebSocketGateway {
     }
 
     // 7. Unknown message type fallback
+    wsErrorsTotal.inc({ error_type: 'UNKNOWN_MESSAGE_TYPE' });
     ws.send(
       JSON.stringify({
         type: 'ERROR',
@@ -736,9 +768,20 @@ export class WebSocketGateway {
   }
 
   public static broadcast(msg: WSMessage): void {
+    this.broadcastLocal(msg);
+    // Propagate to other horizontally scaled instances via Redis
+    RedisPubSubService.publish(msg).catch(() => {});
+  }
+
+  private static broadcastLocal(msg: WSMessage): void {
     const payload = JSON.stringify(msg);
-    for (const [ws] of this.clientStates) {
+    for (const [ws, state] of this.clientStates) {
       if (ws.readyState === WebSocket.OPEN) {
+        if (msg.organizationId) {
+          if (!state.authenticated || !state.user || state.user.organizationId !== msg.organizationId) {
+            continue;
+          }
+        }
         ws.send(payload);
       }
     }
@@ -749,11 +792,13 @@ export class WebSocketGateway {
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     message: string;
     action: string;
+    organizationId?: string;
   }): void {
     const sanitizedMsg = PrivacyFirewall.sanitize(alert.message).sanitizedText;
     const msg: WSMessage = {
       type: 'SOC_ALERT',
       callId: alert.callId,
+      organizationId: alert.organizationId,
       payload: {
         severity: alert.severity,
         message: sanitizedMsg,

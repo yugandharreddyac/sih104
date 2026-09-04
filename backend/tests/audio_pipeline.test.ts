@@ -336,7 +336,7 @@ describe('Phase 2: Step 2.1 WebSocket Input Validation & RBAC Integration Tests'
     });
 
     server = http.createServer();
-    WebSocketGateway.initialize(server);
+    await WebSocketGateway.initialize(server);
     await new Promise<void>((resolve) => {
       server.listen(0, () => {
         port = (server.address() as any).port;

@@ -12,6 +12,7 @@ import { verificationRoutes } from './verification/verification.routes';
 import { riskRoutes } from './risk/risk.routes';
 import { auditRoutes } from './audit/audit.routes';
 import { healthRoutes } from './health/health.routes';
+import { MetricsController, httpRequestsTotal, httpRequestDurationMs } from './health/metrics.controller';
 import { WebSocketGateway } from './websocket/ws_server';
 import { AuthService } from './auth/auth.service';
 import { PoliciesService } from './policies/policies.service';
@@ -61,6 +62,24 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Prometheus HTTP Metrics Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/metrics') {
+    return next();
+  }
+  const start = process.hrtime();
+  res.on('finish', () => {
+    const diff = process.hrtime(start);
+    const durationMs = (diff[0] * 1e3) + (diff[1] * 1e-6);
+    // Use req.path instead of req.route to avoid high cardinality if there are many unique paths,
+    // but in a production setup, it's better to use actual route patterns. For this scale, it's fine.
+    const route = req.path;
+    httpRequestsTotal.inc({ method: req.method, route, status_code: res.statusCode });
+    httpRequestDurationMs.observe({ method: req.method, route, status_code: res.statusCode }, durationMs);
+  });
+  next();
+});
+
 // Initialize in-memory seed stores
 AuthService.initializeDefaultUsers();
 PoliciesService.initializeDefaultPolicies();
@@ -68,6 +87,7 @@ CallsService.seedSampleCallsIfEmpty();
 
 // Mount API Namespaces
 app.use('/api/health', healthRoutes);
+app.get('/metrics', MetricsController.getMetrics);
 app.use('/api/auth', authRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/incidents', incidentRoutes);
@@ -124,7 +144,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 // Server Initialization
 export const server = http.createServer(app);
-WebSocketGateway.initialize(server);
+WebSocketGateway.initialize(server).catch(err => console.error('WS Init failed:', err));
 
 // Ensure WebSocket connections and intervals are cleaned up when the HTTP server closes
 server.on('close', async () => {

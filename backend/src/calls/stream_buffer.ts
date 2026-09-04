@@ -148,4 +148,11 @@ export class StreamBufferManager {
   public static getActiveBufferCount(): number {
     return this.buffers.size;
   }
+
+  public static clearAll(): void {
+    for (const buf of this.buffers.values()) {
+      buf.clear();
+    }
+    this.buffers.clear();
+  }
 }

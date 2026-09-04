@@ -15,12 +15,14 @@ export interface SpeechSegment {
 }
 
 export class CallSpeechBuffer {
-  private static readonly TARGET_BUFFER_DURATION_MS = 2500; // 2.5s optimal for Whisper
-  private static readonly MAX_BUFFER_DURATION_MS = 5000;    // 5.0s hard maximum bound
-  private static readonly MIN_DISPATCH_DURATION_MS = 1000;   // 1.0s minimum speech chunk
+  public static readonly TARGET_BUFFER_DURATION_MS = 2500; // 2.5s optimal for Whisper
+  public static readonly MAX_BUFFER_DURATION_MS = 5000;    // 5.0s hard maximum bound
+  public static readonly MIN_DISPATCH_DURATION_MS = 1000;   // 1.0s minimum speech chunk
+  public static readonly SILENCE_FLUSH_THRESHOLD_MS = 500; // 500ms silence after speech triggers natural boundary flush
 
   private accumulatedBuffers: Buffer[] = [];
   private accumulatedDurationMs = 0;
+  private consecutiveSilenceMs = 0;
   private currentTurnIndex = 0;
   private lastProcessedTurnIndex = -1;
   private isProcessing = false;
@@ -29,7 +31,7 @@ export class CallSpeechBuffer {
 
   /**
    * Appends PCM buffer to the speech accumulator.
-   * Returns a ready-to-process SpeechSegment if buffer threshold reached or forced.
+   * Returns a ready-to-process SpeechSegment if buffer threshold reached or natural speech boundary detected.
    */
   public push(
     pcmBuffer: Buffer,
@@ -37,10 +39,14 @@ export class CallSpeechBuffer {
     isSpeech: boolean,
     forceFlush = false
   ): SpeechSegment | null {
-    // Only accumulate voiced speech frames or if force flushed
-    if (isSpeech || this.accumulatedDurationMs > 0) {
+    if (isSpeech) {
       this.accumulatedBuffers.push(pcmBuffer);
       this.accumulatedDurationMs += durationMs;
+      this.consecutiveSilenceMs = 0;
+    } else {
+      if (this.accumulatedDurationMs > 0) {
+        this.consecutiveSilenceMs += durationMs;
+      }
     }
 
     // Check if buffer capacity exceeded (drop oldest to prevent unbounded memory growth)
@@ -53,8 +59,13 @@ export class CallSpeechBuffer {
       }
     }
 
+    const naturalBoundary =
+      this.consecutiveSilenceMs >= CallSpeechBuffer.SILENCE_FLUSH_THRESHOLD_MS &&
+      this.accumulatedDurationMs >= CallSpeechBuffer.MIN_DISPATCH_DURATION_MS;
+
     const shouldDispatch =
       this.accumulatedDurationMs >= CallSpeechBuffer.TARGET_BUFFER_DURATION_MS ||
+      naturalBoundary ||
       (forceFlush && this.accumulatedDurationMs >= CallSpeechBuffer.MIN_DISPATCH_DURATION_MS);
 
     if (shouldDispatch && !this.isProcessing) {
@@ -75,6 +86,7 @@ export class CallSpeechBuffer {
 
     this.accumulatedBuffers = [];
     this.accumulatedDurationMs = 0;
+    this.consecutiveSilenceMs = 0;
     this.isProcessing = true;
 
     return {
@@ -99,6 +111,7 @@ export class CallSpeechBuffer {
   public clear(): void {
     this.accumulatedBuffers = [];
     this.accumulatedDurationMs = 0;
+    this.consecutiveSilenceMs = 0;
     this.isProcessing = false;
   }
 }
@@ -127,5 +140,12 @@ export class SpeechBufferManager {
 
   public static getActiveCount(): number {
     return this.buffers.size;
+  }
+
+  public static clearAll(): void {
+    for (const buf of this.buffers.values()) {
+      buf.clear();
+    }
+    this.buffers.clear();
   }
 }

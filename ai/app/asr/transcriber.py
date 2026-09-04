@@ -72,7 +72,8 @@ class StreamingASRTranscriber:
             speaker_channel=chunk.speaker_channel,
             start_ms=start_ms,
             quality=quality,
-            language_hint=effective_lang_hint
+            language_hint=effective_lang_hint,
+            session_id=chunk.call_id
         )
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)

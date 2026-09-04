@@ -1,0 +1,76 @@
+{
+  "title": "Phase 1B.5 Frozen Validation-Threshold Held-Out Test Evaluation",
+  "frozen_validation_threshold": 0.93,
+  "checkpoint_file": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\checkpoints\\best_mini_acoustic_cnn.pt",
+  "checkpoint_epoch": 8,
+  "test_sample_count": 300,
+  "class_distribution": {
+    "bonafide": 150,
+    "spoof": 150
+  },
+  "confusion_matrix": {
+    "tn": 128,
+    "fp": 22,
+    "fn": 40,
+    "tp": 110
+  },
+  "ranking_discrimination_metrics": {
+    "roc_auc": 0.8876,
+    "eer": 0.1867,
+    "eer_threshold": 0.914
+  },
+  "operating_point_metrics_at_frozen_threshold": {
+    "threshold": 0.93,
+    "accuracy": 0.7933,
+    "precision": 0.8333,
+    "recall": 0.7333,
+    "f1": 0.7801,
+    "fpr": 0.1467,
+    "fnr": 0.2667,
+    "abs_diff_fpr_fnr": 0.12
+  },
+  "inference_latency_ms_per_sample": 6.568,
+  "rf_baseline_comparison": {
+    "rf_baseline": {
+      "model_name": "RandomForest Baseline",
+      "accuracy": 0.6433,
+      "precision": 0.7792,
+      "recall": 0.4,
+      "f1": 0.5286,
+      "fpr": 0.1133,
+      "fnr": 0.6,
+      "roc_auc": 0.8106,
+      "eer": 0.27,
+      "latency_ms": 0.59
+    },
+    "mini_acoustic_cnn_at_0_93": {
+      "accuracy": 0.7933,
+      "precision": 0.8333,
+      "recall": 0.7333,
+      "f1": 0.7801,
+      "fpr": 0.1467,
+      "fnr": 0.2667,
+      "roc_auc": 0.8876,
+      "eer": 0.1867,
+      "latency_ms": 6.568
+    },
+    "delta_cnn_minus_rf": {
+      "accuracy": 0.15,
+      "precision": 0.0541,
+      "recall": 0.3333,
+      "f1": 0.2515,
+      "fpr": 0.0334,
+      "fnr": -0.3333,
+      "roc_auc": 0.077,
+      "eer": -0.0833,
+      "latency_ms": 5.9782
+    }
+  },
+  "methodology_assertions": {
+    "threshold_selection_split": "validation_only",
+    "test_set_used_only_for_final_held_out_evaluation": true,
+    "no_retraining_performed": true,
+    "no_checkpoint_modification_performed": true,
+    "no_threshold_adjustment_performed": true
+  }
+}

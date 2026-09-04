@@ -14,21 +14,32 @@ from ai.app.core.types import (
     PipelineStatus,
     AudioChunkPayload,
     AudioQualityResult,
-    AudioQualityRating
+    AudioQualityRating,
+    ChannelType
 )
 from ai.app.core.model_registry import ModelRegistry
 from ai.app.deepfake.features import AcousticFeatureExtractor
 from ai.app.deepfake.model import DeepfakeAcousticModel
-from ai.app.deepfake.calibration import DeepfakeCalibrator
+from ai.app.deepfake.calibration import (
+    DeepfakeCalibrator,
+    WIDEBAND_THRESHOLD,
+    TELEPHONY_THRESHOLD
+)
 
 
 class DeepfakeDetector:
     def __init__(self, sample_rate: int = 16000):
         self.sample_rate = sample_rate
-        self.model_id = "deepfake_aasist_spectral_v3"
+        self.model_id = "robust_mini_acoustic_cnn_v1"
         self.feature_extractor = AcousticFeatureExtractor(sample_rate=sample_rate)
         self.model = DeepfakeAcousticModel(model_version=self.model_id)
-        self.calibrator = DeepfakeCalibrator(spoof_threshold=0.62, authentic_threshold=0.36)
+        # Policy C validated thresholds: 0.685 (Wideband), 0.525 (Telephony)
+        self.calibrator = DeepfakeCalibrator(
+            spoof_threshold=WIDEBAND_THRESHOLD,
+            authentic_threshold=0.50,
+            wideband_threshold=WIDEBAND_THRESHOLD,
+            telephony_threshold=TELEPHONY_THRESHOLD
+        )
 
         model_meta = ModelRegistry.get_model(self.model_id)
         self.status = model_meta.status if model_meta else PipelineStatus.AVAILABLE
@@ -56,27 +67,10 @@ class DeepfakeDetector:
         """
         start_time = time.perf_counter()
 
-        if self.status != PipelineStatus.AVAILABLE:
-            return DeepfakeAnalysisResult(
-                status=DeepfakeStatus.MODEL_UNAVAILABLE,
-                spoof_score=None,
-                confidence=None,
-                uncertainty=1.0,
-                spectral_flatness_anomaly=False,
-                vocoder_distortion_score=0.0,
-                lfcc_anomaly_score=0.0,
-                artifacts_detected=[],
-                model_version=self.model_id,
-                engine_type=None,
-                explainability=["Deepfake detection model is currently UNAVAILABLE or NOT_LOADED in registry."],
-                inference_latency_ms=0.0
-            )
-
-        samples = self.decode_samples(chunk.audio_base64)
-        duration_ms = (len(samples) / self.sample_rate) * 1000.0 if len(samples) > 0 else 0.0
-
         # Fallback quality if not provided
         if quality is None:
+            samples_peek = self.decode_samples(chunk.audio_base64)
+            duration_ms = (len(samples_peek) / self.sample_rate) * 1000.0 if len(samples_peek) > 0 else 0.0
             quality = AudioQualityResult(
                 rating=AudioQualityRating.GOOD,
                 rms_dbfs=-26.0,
@@ -92,6 +86,32 @@ class DeepfakeDetector:
                 notes="Default baseline quality."
             )
 
+        if self.status != PipelineStatus.AVAILABLE:
+            applied_channel, applied_thresh, _ = self.calibrator.resolve_threshold(
+                channel_type=chunk.channel_type,
+                codec=chunk.codec,
+                quality=quality
+            )
+            return DeepfakeAnalysisResult(
+                status=DeepfakeStatus.MODEL_UNAVAILABLE,
+                spoof_score=None,
+                confidence=None,
+                uncertainty=1.0,
+                spectral_flatness_anomaly=False,
+                vocoder_distortion_score=0.0,
+                lfcc_anomaly_score=0.0,
+                artifacts_detected=[],
+                model_version=self.model_id,
+                engine_type=None,
+                explainability=["Deepfake detection model is currently UNAVAILABLE or NOT_LOADED in registry."],
+                inference_latency_ms=0.0,
+                channel_type_applied=applied_channel,
+                threshold_applied=applied_thresh
+            )
+
+        samples = self.decode_samples(chunk.audio_base64)
+        duration_ms = (len(samples) / self.sample_rate) * 1000.0 if len(samples) > 0 else 0.0
+
         # 1. Extract Acoustic & LFCC Features
         features = self.feature_extractor.extract_features(samples)
 
@@ -100,12 +120,14 @@ class DeepfakeDetector:
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
-        # 3. Calibrate with Quality Uncertainty
+        # 3. Calibrate with Channel-Aware Threshold & Quality Uncertainty
         result = self.calibrator.calibrate(
             prediction=prediction,
             quality=quality,
             speech_duration_ms=duration_ms,
-            inference_latency_ms=inference_latency_ms
+            inference_latency_ms=inference_latency_ms,
+            channel_type=chunk.channel_type,
+            codec=chunk.codec,
         )
 
         return result

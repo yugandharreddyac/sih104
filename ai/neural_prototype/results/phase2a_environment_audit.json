@@ -1,0 +1,227 @@
+{
+  "audit_title": "VOXSHIELD Phase 2A.1 — Telephony / Channel Robustness Environment Audit",
+  "audit_date": "2026-09-03",
+  "audit_type": "READ-ONLY",
+  "frozen_model": {
+    "checkpoint_path": "ai/neural_prototype/results/source_disjoint_training/best_source_disjoint_mini_acoustic_cnn.pt",
+    "architecture": "MiniAcousticCNN",
+    "parameter_count": 93442,
+    "input_shape": [2, 60, 301],
+    "training_provenance": "VCC2020 + VCC2018 (97 attack systems, 0 A07-A19 exposure, 0 speaker overlap)",
+    "status": "STRICTLY FROZEN (No retraining, no threshold modification)"
+  },
+  "environment": {
+    "python_version": "3.13.7",
+    "virtual_environment": ".venv-neural (isolated)",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "hardware": "Intel Core i5-1235U CPU (10 cores / 12 threads), 15.7 GB RAM",
+    "cuda_gpu": "None (CPU only execution)"
+  },
+  "available_audio_tools": {
+    "ffmpeg": {
+      "available": true,
+      "version": "9.0.1-full_build-shared (Gyan.dev WinGet build)",
+      "executable_path": "C:\\Users\\bhavy\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg.Shared_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-9.0.1-full_build-shared\\bin\\ffmpeg.EXE",
+      "supported_encoders": [
+        "pcm_mulaw (G.711 mu-law)",
+        "pcm_alaw (G.711 A-law)",
+        "libopencore_amrnb / amr_nb (AMR-NB)",
+        "libgsm / gsm (GSM 06.10)"
+      ],
+      "usable_without_install": true
+    },
+    "pytorch": {
+      "available": true,
+      "version": "2.14.0+cpu",
+      "usable_without_install": true
+    },
+    "torchaudio": {
+      "available": true,
+      "version": "2.11.0+cpu",
+      "available_modules": [
+        "torchaudio.transforms.Resample",
+        "torchaudio.transforms.MelSpectrogram",
+        "torchaudio.transforms.Spectrogram",
+        "torchaudio.functional.linear_fbanks"
+      ],
+      "usable_without_install": true
+    },
+    "soundfile": {
+      "available": true,
+      "version": "0.14.0",
+      "supported_subtypes": [
+        "PCM_16",
+        "FLOAT",
+        "ULAW (G.711 mu-law)",
+        "ALAW (G.711 A-law)",
+        "GSM610 (GSM Full Rate)"
+      ],
+      "usable_without_install": true
+    },
+    "scipy": {
+      "available": true,
+      "version": "1.18.1",
+      "available_modules": [
+        "scipy.signal.butter",
+        "scipy.signal.sosfilt",
+        "scipy.signal.resample_poly",
+        "scipy.signal.fftconvolve"
+      ],
+      "usable_without_install": true
+    },
+    "numpy": {
+      "available": true,
+      "version": "2.5.2",
+      "usable_without_install": true
+    }
+  },
+  "existing_pipeline_behavior": {
+    "expected_input_sample_rate": 16000,
+    "expected_channels": 1,
+    "target_duration_seconds": 3.0,
+    "target_sample_count": 48000,
+    "waveform_normalization": "Integer range detection (>1.0 divides by 32768.0), zero-centering DC offset removal, pre-emphasis filter (alpha=0.97)",
+    "cropping_and_padding": "Deterministic prefix crop if >= 48,000 samples; deterministic zero-padding at end if < 48,000 samples",
+    "feature_channels": [
+      "Channel 0: Log-Mel Spectrogram (60 bins, 80 Hz - 8000 Hz, standardized)",
+      "Channel 1: LFCC Spectrogram (60 linear filterbank bins, DCT-II, standardized)"
+    ],
+    "compatibility_with_telephony": "The feature extractor strictly expects 16,000 Hz 1D tensors. Telephony audio sampled at 8 kHz (or compressed via G.711/AMR) MUST undergo round-trip resampling (16 kHz -> 8 kHz -> 16 kHz) prior to feature extraction so the time dimension remains exactly 301 frames and frequency bins remain aligned."
+  },
+  "feasible_transformations": {
+    "8khz_resampling": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "torchaudio.transforms.Resample(16000, 8000) followed by Resample(8000, 16000), or scipy.signal.resample_poly"
+    },
+    "g711_mulaw": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "soundfile (subtype='ULAW', 8 kHz) or FFmpeg (-c:a pcm_mulaw -ar 8000)"
+    },
+    "g711_alaw": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "soundfile (subtype='ALAW', 8 kHz) or FFmpeg (-c:a pcm_alaw -ar 8000)"
+    },
+    "amr_nb": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "FFmpeg (-c:a libopencore_amrnb -ar 8000 -b:a 12.2k)"
+    },
+    "gsm_06_10": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "soundfile (subtype='GSM610', 8 kHz) or FFmpeg (-c:a libgsm -ar 8000)"
+    },
+    "telephone_bandpass": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "scipy.signal.butter 4th order bandpass (300 Hz - 3400 Hz) via sosfilt"
+    },
+    "additive_noise": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "numpy.random.normal scaled to target SNR (e.g., 15 dB or 20 dB)"
+    },
+    "amplitude_variation": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "Linear scaling factor (e.g. 0.5x, 1.5x) or random dB gain"
+    },
+    "clipping": {
+      "status": "DIRECTLY AVAILABLE",
+      "mechanism": "numpy.clip(samples * gain, -1.0, 1.0)"
+    },
+    "synthetic_reverberation": {
+      "status": "POSSIBLE WITH EXISTING TOOLS",
+      "mechanism": "scipy.signal.fftconvolve with synthetic exponentially decaying noise impulse response"
+    }
+  },
+  "unavailable_transformations": {
+    "real_measured_rirs": {
+      "status": "REQUIRES EXTERNAL TOOL/DATA",
+      "reason": "Realistic acoustic impulse responses require downloading an external RIR dataset (e.g., BUT Reverb DB or Aachen Impulse Response Database)."
+    },
+    "real_world_environmental_noise": {
+      "status": "REQUIRES EXTERNAL TOOL/DATA",
+      "reason": "Realistic non-stationary ambient noise (e.g. urban, cafe, office, traffic) requires downloading a noise library (e.g., MUSAN or DEMAND)."
+    },
+    "voip_packet_loss_simulation": {
+      "status": "REQUIRES EXTERNAL TOOL/DATA",
+      "reason": "Requires dedicated network emulation software (NetEm) or a specialized Gilbert-Elliott packet loss simulator script."
+    }
+  },
+  "recommended_evaluation_matrix": [
+    {
+      "condition_id": "C0_CLEAN_BASELINE",
+      "transformation": "None (Clean original 16 kHz uncompressed FLAC)",
+      "target_sample_rate": 16000,
+      "expected_effect": "Reference baseline performance established in Phase 1C.5 (ROC-AUC 0.9026, F1 0.6860, EER 18.33%).",
+      "why_it_matters": "Provides the untouched anchor point to measure relative degradation under channel distortion.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    },
+    {
+      "condition_id": "C1_8KHZ_TELEPHONY_RESAMPLE",
+      "transformation": "16 kHz -> 8 kHz -> 16 kHz round-trip resampling",
+      "target_sample_rate": 8000,
+      "expected_effect": "Eliminates all acoustic content above 4,000 Hz Nyquist frequency, stripping high-frequency vocoder harmonics.",
+      "why_it_matters": "Isolates the pure effect of standard telephony bandwidth downsampling without non-linear companding.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    },
+    {
+      "condition_id": "C2_G711_MULAW",
+      "transformation": "G.711 mu-law (8 kHz, 8-bit logarithmic companding, 64 kbps)",
+      "target_sample_rate": 8000,
+      "expected_effect": "Quantization distortion, dynamic range compression, and high-frequency cutoff.",
+      "why_it_matters": "Standard landline and VoIP telephony protocol in North America and Japan; primary carrier format for IVR fraud.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    },
+    {
+      "condition_id": "C3_G711_ALAW",
+      "transformation": "G.711 A-law (8 kHz, 8-bit logarithmic companding, 64 kbps)",
+      "target_sample_rate": 8000,
+      "expected_effect": "Quantization distortion with piecewise-linear A-law curve, distinct from mu-law.",
+      "why_it_matters": "Mandatory standard for Indian telecom carriers, European cellular networks, and international gateways.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    },
+    {
+      "condition_id": "C4_TELEPHONE_BANDPASS",
+      "transformation": "ITU-T G.151 telephone bandpass filter (300 Hz - 3400 Hz)",
+      "target_sample_rate": 16000,
+      "expected_effect": "Attenuates low-frequency pitch harmonics (<300 Hz) and high-frequency spectral cues (>3400 Hz).",
+      "why_it_matters": "Simulates acoustic characteristics of physical landline telephone earpieces and microphones.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    },
+    {
+      "condition_id": "C5_ADDITIVE_NOISE_15DB",
+      "transformation": "Additive Gaussian noise at 15 dB SNR",
+      "target_sample_rate": 16000,
+      "expected_effect": "Masks subtle spectral energy differentials in quiet phonemes and unvoiced fricatives.",
+      "why_it_matters": "Simulates typical ambient noise levels during a mobile phone voice call.",
+      "feasibility": "DIRECTLY AVAILABLE",
+      "requires_external_tool": false
+    }
+  ],
+  "evaluation_dataset": {
+    "manifest_file": "ai/neural_prototype/results/unseen_attack_eval_manifest.parquet",
+    "sample_count": 300,
+    "bonafide_samples": 150,
+    "spoof_samples": 150,
+    "attack_systems": [
+      "A07", "A08", "A09", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A17", "A18", "A19"
+    ],
+    "speaker_separation": "Strict 0 speaker overlap with source-disjoint training (20 speakers) and validation (6 speakers)",
+    "attack_separation": "Strict 0 attack-system overlap with source-disjoint training (VCC2020+VCC2018, 97 systems)"
+  },
+  "methodology_constraints": [
+    "The source-disjoint MiniAcousticCNN checkpoint (best_source_disjoint_mini_acoustic_cnn.pt) must remain frozen.",
+    "Original evaluation audio files must remain untouched; transformed copies or in-memory arrays will be evaluated.",
+    "Original ground-truth labels (0 for bonafide, 1 for spoof) must be preserved without alteration.",
+    "Test labels from the transformed audio must never be used to tune thresholds or select models.",
+    "Primary evaluation for every channel condition must use the frozen default threshold of 0.50.",
+    "Each condition must be evaluated and reported independently alongside the clean baseline."
+  ],
+  "risks_and_limitations": [
+    "Nyquist bandlimiting at 8 kHz strips all spectral content between 4,000 Hz and 8,000 Hz, leaving Channel 0 (Log-Mel) and Channel 1 (LFCC) zeroed out in upper frequency bins.",
+    "Without telephony-augmented re-training, significant degradation in raw sensitivity (Recall) is expected when applying clean-trained models to 8 kHz G.711 channels.",
+    "Synthetic Gaussian noise provides a controlled benchmark but does not model realistic non-stationary street/traffic noise."
+  ]
+}

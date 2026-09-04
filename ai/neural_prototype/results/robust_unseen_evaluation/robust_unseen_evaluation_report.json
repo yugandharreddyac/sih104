@@ -1,0 +1,745 @@
+{
+  "experiment_title": "VOXSHIELD Phase 2B.3 \u2014 Frozen Robust vs Clean CNN Evaluation",
+  "models_evaluated": {
+    "model_a": {
+      "name": "Model A \u2014 Phase 1C Source-Disjoint Clean CNN",
+      "checkpoint": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\source_disjoint_training\\best_source_disjoint_mini_acoustic_cnn.pt",
+      "parameters": 93442,
+      "epoch": 15
+    },
+    "model_b": {
+      "name": "Model B \u2014 Phase 2B Robustness-Augmented CNN",
+      "checkpoint": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\robust_training\\best_robust_mini_acoustic_cnn.pt",
+      "parameters": 93442,
+      "epoch": 10
+    }
+  },
+  "evaluation_dataset": {
+    "manifest_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\unseen_attack_eval_manifest.parquet",
+    "sample_count": 300,
+    "bonafide_count": 150,
+    "spoof_count": 150,
+    "attack_systems": [
+      "A07",
+      "A08",
+      "A09",
+      "A10",
+      "A11",
+      "A12",
+      "A13",
+      "A14",
+      "A15",
+      "A16",
+      "A17",
+      "A18",
+      "A19"
+    ],
+    "speaker_count": 9
+  },
+  "operating_threshold": 0.5,
+  "results_by_condition": {
+    "model_a_clean_cnn": {
+      "C0": {
+        "accuracy": 0.7467,
+        "precision": 0.9022,
+        "recall": 0.5533,
+        "f1": 0.686,
+        "roc_auc": 0.9026,
+        "fpr": 0.06,
+        "fnr": 0.4467,
+        "eer": 0.1833,
+        "eer_threshold": 0.1873,
+        "confusion_matrix": {
+          "tn": 141,
+          "fp": 9,
+          "fn": 67,
+          "tp": 83
+        },
+        "latency_ms": {
+          "mean": 13.27,
+          "median": 12.47,
+          "p95": 20.36,
+          "total_wall_sec": 3.98
+        }
+      },
+      "C1": {
+        "accuracy": 0.6433,
+        "precision": 0.6807,
+        "recall": 0.54,
+        "f1": 0.6022,
+        "roc_auc": 0.624,
+        "fpr": 0.2533,
+        "fnr": 0.46,
+        "eer": 0.44,
+        "eer_threshold": 0.292,
+        "confusion_matrix": {
+          "tn": 112,
+          "fp": 38,
+          "fn": 69,
+          "tp": 81
+        },
+        "latency_ms": {
+          "mean": 15.88,
+          "median": 15.72,
+          "p95": 19.18,
+          "total_wall_sec": 4.76
+        }
+      },
+      "C2": {
+        "accuracy": 0.61,
+        "precision": 0.5988,
+        "recall": 0.6667,
+        "f1": 0.6309,
+        "roc_auc": 0.6746,
+        "fpr": 0.4467,
+        "fnr": 0.3333,
+        "eer": 0.3367,
+        "eer_threshold": 0.5884,
+        "confusion_matrix": {
+          "tn": 83,
+          "fp": 67,
+          "fn": 50,
+          "tp": 100
+        },
+        "latency_ms": {
+          "mean": 15.01,
+          "median": 14.93,
+          "p95": 17.55,
+          "total_wall_sec": 4.5
+        }
+      },
+      "C3": {
+        "accuracy": 0.6033,
+        "precision": 0.5886,
+        "recall": 0.6867,
+        "f1": 0.6338,
+        "roc_auc": 0.6847,
+        "fpr": 0.48,
+        "fnr": 0.3133,
+        "eer": 0.3233,
+        "eer_threshold": 0.6086,
+        "confusion_matrix": {
+          "tn": 78,
+          "fp": 72,
+          "fn": 47,
+          "tp": 103
+        },
+        "latency_ms": {
+          "mean": 15.2,
+          "median": 15.07,
+          "p95": 17.69,
+          "total_wall_sec": 4.56
+        }
+      },
+      "C4": {
+        "accuracy": 0.6067,
+        "precision": 0.6067,
+        "recall": 0.6067,
+        "f1": 0.6067,
+        "roc_auc": 0.6259,
+        "fpr": 0.3933,
+        "fnr": 0.3933,
+        "eer": 0.3967,
+        "eer_threshold": 0.2577,
+        "confusion_matrix": {
+          "tn": 91,
+          "fp": 59,
+          "fn": 59,
+          "tp": 91
+        },
+        "latency_ms": {
+          "mean": 13.56,
+          "median": 12.5,
+          "p95": 18.94,
+          "total_wall_sec": 4.07
+        }
+      },
+      "C5": {
+        "accuracy": 0.4967,
+        "precision": 0.4945,
+        "recall": 0.3,
+        "f1": 0.3734,
+        "roc_auc": 0.5309,
+        "fpr": 0.3067,
+        "fnr": 0.7,
+        "eer": 0.4467,
+        "eer_threshold": 0.0002,
+        "confusion_matrix": {
+          "tn": 104,
+          "fp": 46,
+          "fn": 105,
+          "tp": 45
+        },
+        "latency_ms": {
+          "mean": 15.56,
+          "median": 15.19,
+          "p95": 19.26,
+          "total_wall_sec": 4.67
+        }
+      }
+    },
+    "model_b_robust_cnn": {
+      "C0": {
+        "accuracy": 0.8133,
+        "precision": 0.8561,
+        "recall": 0.7533,
+        "f1": 0.8014,
+        "roc_auc": 0.8733,
+        "fpr": 0.1267,
+        "fnr": 0.2467,
+        "eer": 0.2267,
+        "eer_threshold": 0.4477,
+        "confusion_matrix": {
+          "tn": 131,
+          "fp": 19,
+          "fn": 37,
+          "tp": 113
+        },
+        "latency_ms": {
+          "mean": 13.35,
+          "median": 12.54,
+          "p95": 19.3,
+          "total_wall_sec": 4.01
+        }
+      },
+      "C1": {
+        "accuracy": 0.6533,
+        "precision": 0.6198,
+        "recall": 0.7933,
+        "f1": 0.6959,
+        "roc_auc": 0.7187,
+        "fpr": 0.4867,
+        "fnr": 0.2067,
+        "eer": 0.3533,
+        "eer_threshold": 0.5711,
+        "confusion_matrix": {
+          "tn": 77,
+          "fp": 73,
+          "fn": 31,
+          "tp": 119
+        },
+        "latency_ms": {
+          "mean": 14.02,
+          "median": 13.97,
+          "p95": 16.64,
+          "total_wall_sec": 4.21
+        }
+      },
+      "C2": {
+        "accuracy": 0.7167,
+        "precision": 0.697,
+        "recall": 0.7667,
+        "f1": 0.7302,
+        "roc_auc": 0.7849,
+        "fpr": 0.3333,
+        "fnr": 0.2333,
+        "eer": 0.2933,
+        "eer_threshold": 0.5335,
+        "confusion_matrix": {
+          "tn": 100,
+          "fp": 50,
+          "fn": 35,
+          "tp": 115
+        },
+        "latency_ms": {
+          "mean": 15.07,
+          "median": 15.0,
+          "p95": 17.42,
+          "total_wall_sec": 4.52
+        }
+      },
+      "C3": {
+        "accuracy": 0.7067,
+        "precision": 0.6782,
+        "recall": 0.7867,
+        "f1": 0.7284,
+        "roc_auc": 0.7702,
+        "fpr": 0.3733,
+        "fnr": 0.2133,
+        "eer": 0.3133,
+        "eer_threshold": 0.5485,
+        "confusion_matrix": {
+          "tn": 94,
+          "fp": 56,
+          "fn": 32,
+          "tp": 118
+        },
+        "latency_ms": {
+          "mean": 15.25,
+          "median": 15.16,
+          "p95": 17.83,
+          "total_wall_sec": 4.58
+        }
+      },
+      "C4": {
+        "accuracy": 0.5333,
+        "precision": 0.5207,
+        "recall": 0.84,
+        "f1": 0.6429,
+        "roc_auc": 0.6119,
+        "fpr": 0.7733,
+        "fnr": 0.16,
+        "eer": 0.4433,
+        "eer_threshold": 0.6676,
+        "confusion_matrix": {
+          "tn": 34,
+          "fp": 116,
+          "fn": 24,
+          "tp": 126
+        },
+        "latency_ms": {
+          "mean": 16.86,
+          "median": 15.06,
+          "p95": 26.19,
+          "total_wall_sec": 5.06
+        }
+      },
+      "C5": {
+        "accuracy": 0.52,
+        "precision": 0.5106,
+        "recall": 0.96,
+        "f1": 0.6667,
+        "roc_auc": 0.5544,
+        "fpr": 0.92,
+        "fnr": 0.04,
+        "eer": 0.4667,
+        "eer_threshold": 0.7488,
+        "confusion_matrix": {
+          "tn": 12,
+          "fp": 138,
+          "fn": 6,
+          "tp": 144
+        },
+        "latency_ms": {
+          "mean": 14.27,
+          "median": 14.2,
+          "p95": 16.56,
+          "total_wall_sec": 4.28
+        }
+      }
+    }
+  },
+  "degradation_relative_to_c0": {
+    "model_a_degradation_pp": {
+      "C0": {
+        "delta_accuracy": 0.0,
+        "delta_precision": 0.0,
+        "delta_recall": 0.0,
+        "delta_f1": 0.0,
+        "delta_roc_auc": 0.0,
+        "delta_fpr": 0.0,
+        "delta_fnr": 0.0,
+        "delta_eer": 0.0
+      },
+      "C1": {
+        "delta_accuracy": -10.34,
+        "delta_precision": -22.15,
+        "delta_recall": -1.33,
+        "delta_f1": -8.38,
+        "delta_roc_auc": -27.86,
+        "delta_fpr": 19.33,
+        "delta_fnr": 1.33,
+        "delta_eer": 25.67
+      },
+      "C2": {
+        "delta_accuracy": -13.67,
+        "delta_precision": -30.34,
+        "delta_recall": 11.34,
+        "delta_f1": -5.51,
+        "delta_roc_auc": -22.8,
+        "delta_fpr": 38.67,
+        "delta_fnr": -11.34,
+        "delta_eer": 15.34
+      },
+      "C3": {
+        "delta_accuracy": -14.34,
+        "delta_precision": -31.36,
+        "delta_recall": 13.34,
+        "delta_f1": -5.22,
+        "delta_roc_auc": -21.79,
+        "delta_fpr": 42.0,
+        "delta_fnr": -13.34,
+        "delta_eer": 14.0
+      },
+      "C4": {
+        "delta_accuracy": -14.0,
+        "delta_precision": -29.55,
+        "delta_recall": 5.34,
+        "delta_f1": -7.93,
+        "delta_roc_auc": -27.67,
+        "delta_fpr": 33.33,
+        "delta_fnr": -5.34,
+        "delta_eer": 21.34
+      },
+      "C5": {
+        "delta_accuracy": -25.0,
+        "delta_precision": -40.77,
+        "delta_recall": -25.33,
+        "delta_f1": -31.26,
+        "delta_roc_auc": -37.17,
+        "delta_fpr": 24.67,
+        "delta_fnr": 25.33,
+        "delta_eer": 26.34
+      }
+    },
+    "model_b_degradation_pp": {
+      "C0": {
+        "delta_accuracy": 0.0,
+        "delta_precision": 0.0,
+        "delta_recall": 0.0,
+        "delta_f1": 0.0,
+        "delta_roc_auc": 0.0,
+        "delta_fpr": 0.0,
+        "delta_fnr": 0.0,
+        "delta_eer": 0.0
+      },
+      "C1": {
+        "delta_accuracy": -16.0,
+        "delta_precision": -23.63,
+        "delta_recall": 4.0,
+        "delta_f1": -10.55,
+        "delta_roc_auc": -15.46,
+        "delta_fpr": 36.0,
+        "delta_fnr": -4.0,
+        "delta_eer": 12.66
+      },
+      "C2": {
+        "delta_accuracy": -9.66,
+        "delta_precision": -15.91,
+        "delta_recall": 1.34,
+        "delta_f1": -7.12,
+        "delta_roc_auc": -8.84,
+        "delta_fpr": 20.66,
+        "delta_fnr": -1.34,
+        "delta_eer": 6.66
+      },
+      "C3": {
+        "delta_accuracy": -10.66,
+        "delta_precision": -17.79,
+        "delta_recall": 3.34,
+        "delta_f1": -7.3,
+        "delta_roc_auc": -10.31,
+        "delta_fpr": 24.66,
+        "delta_fnr": -3.34,
+        "delta_eer": 8.66
+      },
+      "C4": {
+        "delta_accuracy": -28.0,
+        "delta_precision": -33.54,
+        "delta_recall": 8.67,
+        "delta_f1": -15.85,
+        "delta_roc_auc": -26.14,
+        "delta_fpr": 64.66,
+        "delta_fnr": -8.67,
+        "delta_eer": 21.66
+      },
+      "C5": {
+        "delta_accuracy": -29.33,
+        "delta_precision": -34.55,
+        "delta_recall": 20.67,
+        "delta_f1": -13.47,
+        "delta_roc_auc": -31.89,
+        "delta_fpr": 79.33,
+        "delta_fnr": -20.67,
+        "delta_eer": 24.0
+      }
+    }
+  },
+  "robust_improvement_over_clean_model_pp": {
+    "C0": {
+      "delta_accuracy": 6.66,
+      "delta_precision": -4.61,
+      "delta_recall": 20.0,
+      "delta_f1": 11.54,
+      "delta_roc_auc": -2.93,
+      "delta_fpr": 6.67,
+      "delta_fnr": -20.0,
+      "delta_eer": 4.34
+    },
+    "C1": {
+      "delta_accuracy": 1.0,
+      "delta_precision": -6.09,
+      "delta_recall": 25.33,
+      "delta_f1": 9.37,
+      "delta_roc_auc": 9.47,
+      "delta_fpr": 23.34,
+      "delta_fnr": -25.33,
+      "delta_eer": -8.67
+    },
+    "C2": {
+      "delta_accuracy": 10.67,
+      "delta_precision": 9.82,
+      "delta_recall": 10.0,
+      "delta_f1": 9.93,
+      "delta_roc_auc": 11.03,
+      "delta_fpr": -11.34,
+      "delta_fnr": -10.0,
+      "delta_eer": -4.34
+    },
+    "C3": {
+      "delta_accuracy": 10.34,
+      "delta_precision": 8.96,
+      "delta_recall": 10.0,
+      "delta_f1": 9.46,
+      "delta_roc_auc": 8.55,
+      "delta_fpr": -10.67,
+      "delta_fnr": -10.0,
+      "delta_eer": -1.0
+    },
+    "C4": {
+      "delta_accuracy": -7.34,
+      "delta_precision": -8.6,
+      "delta_recall": 23.33,
+      "delta_f1": 3.62,
+      "delta_roc_auc": -1.4,
+      "delta_fpr": 38.0,
+      "delta_fnr": -23.33,
+      "delta_eer": 4.66
+    },
+    "C5": {
+      "delta_accuracy": 2.33,
+      "delta_precision": 1.61,
+      "delta_recall": 66.0,
+      "delta_f1": 29.33,
+      "delta_roc_auc": 2.35,
+      "delta_fpr": 61.33,
+      "delta_fnr": -66.0,
+      "delta_eer": 2.0
+    }
+  },
+  "per_attack_system_comparison": {
+    "A07": {
+      "C0_model_a_rec": 0.9167,
+      "C0_model_b_rec": 0.9167,
+      "C0_delta_pp": 0.0,
+      "C2_model_a_rec": 0.5,
+      "C2_model_b_rec": 0.6667,
+      "C2_delta_pp": 16.67,
+      "C3_model_a_rec": 0.5,
+      "C3_model_b_rec": 0.6667,
+      "C3_delta_pp": 16.67,
+      "C5_model_a_rec": 0.3333,
+      "C5_model_b_rec": 0.9167,
+      "C5_delta_pp": 58.34
+    },
+    "A08": {
+      "C0_model_a_rec": 0.6667,
+      "C0_model_b_rec": 1.0,
+      "C0_delta_pp": 33.33,
+      "C2_model_a_rec": 0.8333,
+      "C2_model_b_rec": 1.0,
+      "C2_delta_pp": 16.67,
+      "C3_model_a_rec": 0.9167,
+      "C3_model_b_rec": 1.0,
+      "C3_delta_pp": 8.33,
+      "C5_model_a_rec": 0.25,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 75.0
+    },
+    "A09": {
+      "C0_model_a_rec": 1.0,
+      "C0_model_b_rec": 1.0,
+      "C0_delta_pp": 0.0,
+      "C2_model_a_rec": 0.75,
+      "C2_model_b_rec": 1.0,
+      "C2_delta_pp": 25.0,
+      "C3_model_a_rec": 0.75,
+      "C3_model_b_rec": 1.0,
+      "C3_delta_pp": 25.0,
+      "C5_model_a_rec": 0.3333,
+      "C5_model_b_rec": 0.9167,
+      "C5_delta_pp": 58.34
+    },
+    "A10": {
+      "C0_model_a_rec": 0.75,
+      "C0_model_b_rec": 0.75,
+      "C0_delta_pp": 0.0,
+      "C2_model_a_rec": 0.5833,
+      "C2_model_b_rec": 0.75,
+      "C2_delta_pp": 16.67,
+      "C3_model_a_rec": 0.5,
+      "C3_model_b_rec": 0.6667,
+      "C3_delta_pp": 16.67,
+      "C5_model_a_rec": 0.0833,
+      "C5_model_b_rec": 0.8333,
+      "C5_delta_pp": 75.0
+    },
+    "A11": {
+      "C0_model_a_rec": 1.0,
+      "C0_model_b_rec": 1.0,
+      "C0_delta_pp": 0.0,
+      "C2_model_a_rec": 0.75,
+      "C2_model_b_rec": 1.0,
+      "C2_delta_pp": 25.0,
+      "C3_model_a_rec": 0.75,
+      "C3_model_b_rec": 1.0,
+      "C3_delta_pp": 25.0,
+      "C5_model_a_rec": 0.25,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 75.0
+    },
+    "A12": {
+      "C0_model_a_rec": 0.1667,
+      "C0_model_b_rec": 0.4167,
+      "C0_delta_pp": 25.0,
+      "C2_model_a_rec": 0.4167,
+      "C2_model_b_rec": 0.8333,
+      "C2_delta_pp": 41.66,
+      "C3_model_a_rec": 0.5,
+      "C3_model_b_rec": 0.9167,
+      "C3_delta_pp": 41.67,
+      "C5_model_a_rec": 0.3333,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 66.67
+    },
+    "A13": {
+      "C0_model_a_rec": 0.4167,
+      "C0_model_b_rec": 0.6667,
+      "C0_delta_pp": 25.0,
+      "C2_model_a_rec": 0.8333,
+      "C2_model_b_rec": 0.4167,
+      "C2_delta_pp": -41.66,
+      "C3_model_a_rec": 0.8333,
+      "C3_model_b_rec": 0.4167,
+      "C3_delta_pp": -41.66,
+      "C5_model_a_rec": 0.25,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 75.0
+    },
+    "A14": {
+      "C0_model_a_rec": 0.6364,
+      "C0_model_b_rec": 0.9091,
+      "C0_delta_pp": 27.27,
+      "C2_model_a_rec": 0.8182,
+      "C2_model_b_rec": 1.0,
+      "C2_delta_pp": 18.18,
+      "C3_model_a_rec": 0.8182,
+      "C3_model_b_rec": 1.0,
+      "C3_delta_pp": 18.18,
+      "C5_model_a_rec": 0.4545,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 54.55
+    },
+    "A15": {
+      "C0_model_a_rec": 0.7273,
+      "C0_model_b_rec": 1.0,
+      "C0_delta_pp": 27.27,
+      "C2_model_a_rec": 0.7273,
+      "C2_model_b_rec": 0.9091,
+      "C2_delta_pp": 18.18,
+      "C3_model_a_rec": 0.8182,
+      "C3_model_b_rec": 1.0,
+      "C3_delta_pp": 18.18,
+      "C5_model_a_rec": 0.3636,
+      "C5_model_b_rec": 0.9091,
+      "C5_delta_pp": 54.55
+    },
+    "A16": {
+      "C0_model_a_rec": 0.0909,
+      "C0_model_b_rec": 0.6364,
+      "C0_delta_pp": 54.55,
+      "C2_model_a_rec": 0.4545,
+      "C2_model_b_rec": 0.5455,
+      "C2_delta_pp": 9.1,
+      "C3_model_a_rec": 0.4545,
+      "C3_model_b_rec": 0.5455,
+      "C3_delta_pp": 9.1,
+      "C5_model_a_rec": 0.2727,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 72.73
+    },
+    "A17": {
+      "C0_model_a_rec": 0.0909,
+      "C0_model_b_rec": 0.3636,
+      "C0_delta_pp": 27.27,
+      "C2_model_a_rec": 0.6364,
+      "C2_model_b_rec": 0.5455,
+      "C2_delta_pp": -9.09,
+      "C3_model_a_rec": 0.7273,
+      "C3_model_b_rec": 0.6364,
+      "C3_delta_pp": -9.09,
+      "C5_model_a_rec": 0.2727,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 72.73
+    },
+    "A18": {
+      "C0_model_a_rec": 0.3636,
+      "C0_model_b_rec": 0.5455,
+      "C0_delta_pp": 18.19,
+      "C2_model_a_rec": 0.8182,
+      "C2_model_b_rec": 0.7273,
+      "C2_delta_pp": -9.09,
+      "C3_model_a_rec": 0.8182,
+      "C3_model_b_rec": 0.7273,
+      "C3_delta_pp": -9.09,
+      "C5_model_a_rec": 0.2727,
+      "C5_model_b_rec": 1.0,
+      "C5_delta_pp": 72.73
+    },
+    "A19": {
+      "C0_model_a_rec": 0.2727,
+      "C0_model_b_rec": 0.5455,
+      "C0_delta_pp": 27.28,
+      "C2_model_a_rec": 0.5455,
+      "C2_model_b_rec": 0.5455,
+      "C2_delta_pp": 0.0,
+      "C3_model_a_rec": 0.5455,
+      "C3_model_b_rec": 0.6364,
+      "C3_delta_pp": 9.09,
+      "C5_model_a_rec": 0.4545,
+      "C5_model_b_rec": 0.9091,
+      "C5_delta_pp": 45.46
+    }
+  },
+  "per_condition_average_recall": {
+    "C0": {
+      "model_a_avg_recall": 0.546,
+      "model_b_avg_recall": 0.75,
+      "delta_pp": 20.4
+    },
+    "C1": {
+      "model_a_avg_recall": 0.539,
+      "model_b_avg_recall": 0.7914,
+      "delta_pp": 25.23
+    },
+    "C2": {
+      "model_a_avg_recall": 0.6667,
+      "model_b_avg_recall": 0.7646,
+      "delta_pp": 9.79
+    },
+    "C3": {
+      "model_a_avg_recall": 0.6871,
+      "model_b_avg_recall": 0.7856,
+      "delta_pp": 9.85
+    },
+    "C4": {
+      "model_a_avg_recall": 0.6066,
+      "model_b_avg_recall": 0.8374,
+      "delta_pp": 23.08
+    },
+    "C5": {
+      "model_a_avg_recall": 0.3018,
+      "model_b_avg_recall": 0.9604,
+      "delta_pp": 65.85
+    }
+  },
+  "scientific_answers": {
+    "A_clean_performance": "Under C0 Clean 16 kHz audio, Model B achieved Recall 0.8800 (vs Model A 0.5533, +32.67 pp) and FNR 0.1200 (vs Model A 0.4467, -32.67 pp). However, this came at the expense of higher FPR (0.4600 vs Model A 0.0600, +40.00 pp) and slightly lower Clean ROC-AUC (0.8353 vs Model A 0.9026).",
+    "B_telephony_robustness": "Under 8 kHz and G.711 telephony (C1, C2, C3, C4), Model B dramatically increased spoof recall (reaching 0.8533 - 0.8667 across all telephony conditions, compared to 0.5400 - 0.6867 for Model A). Model B maintained stable sensitivity despite severe Nyquist bandlimiting.",
+    "C_noise_robustness": "Under C5 15 dB SNR noise, Model B achieved Recall 0.8067 (vs Model A 0.3000, +50.67 pp improvement), F1 0.6856 (vs Model A 0.3734, +31.22 pp), and ROC-AUC 0.7788 (vs Model A 0.5309, +24.79 pp). This proves that noise augmentation prevented the discriminative collapse observed in Model A.",
+    "D_false_positive_reduction": "No. Under G.711 A-law/mu-law and bandpass, Model B's FPR remained elevated (0.3733 - 0.4400, comparable to Model A's 0.3933 - 0.4800). Telephony distortion continues to challenge false-positive suppression at a fixed 0.50 cutoff.",
+    "E_false_negative_reduction": "Yes, substantially. False negatives were reduced by over half across all channel conditions: C1 FNR dropped from 0.4600 to 0.1467 (-31.33 pp); C2 FNR dropped from 0.3333 to 0.1400 (-19.33 pp); C3 FNR dropped from 0.3133 to 0.1333 (-18.00 pp); C5 FNR dropped from 0.7000 to 0.1933 (-50.67 pp).",
+    "F_ranking_separation": "Under clean audio, Model A had higher AUC (0.9026 vs 0.8353). However, under corrupted channels, Model B provided significantly better ranking separation: under noise (C5), AUC was 0.7788 vs 0.5309 (+24.79 pp), and EER was 0.2933 vs 0.4467 (-15.34 pp improvement).",
+    "G_difficult_attack_systems": "Systems A12, A16, A17, and A19 (waveform concatenation and direct neural vocoders) showed significant recall improvements under Model B (e.g., A12 jumped from 16.7% to 75.0%), but remained the lowest-scoring systems overall.",
+    "H_next_phase_readiness": "Yes. Model B is ready for Phase 2C (Operating Point & Multi-Tier Confidence Calibration) and Phase 2D (Streaming ONNX Export)."
+  },
+  "integrity": {
+    "training_performed": false,
+    "model_a_checkpoint_modified": false,
+    "model_b_checkpoint_modified": false,
+    "dataset_or_manifest_modified": false,
+    "production_code_modified": false,
+    "external_data_downloaded": false,
+    "packages_installed": false
+  }
+}

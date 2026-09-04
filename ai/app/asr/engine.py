@@ -6,6 +6,7 @@ Generates partial and finalized transcript segments with timestamps, language id
 import os
 import time
 import logging
+import threading
 import numpy as np
 from typing import List, Tuple, Optional, Any
 
@@ -19,6 +20,7 @@ logger = logging.getLogger("voxshield.asr.engine")
 class StreamingASREngine:
     _cached_neural_model: Optional[Any] = None
     _neural_model_initialized: bool = False
+    _model_lock: threading.Lock = threading.Lock()
     _neural_model_path: str = os.path.join(
         os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
         "models", "asr", "faster-whisper-base"
@@ -35,13 +37,14 @@ class StreamingASREngine:
             self._custom_model_path = self._neural_model_path
 
         # Attempt lazy initialization on first instance
-        self._ensure_neural_model()
+        self._ensure_neural_model(self._custom_model_path)
 
     @classmethod
     def _ensure_neural_model(cls, custom_path: Optional[str] = None) -> Optional[Any]:
         """Lazily initializes and caches the Faster-Whisper CPU INT8 model instance."""
-        if cls._neural_model_initialized and cls._cached_neural_model is not None:
-            return cls._cached_neural_model
+        with cls._model_lock:
+            if cls._neural_model_initialized and cls._cached_neural_model is not None:
+                return cls._cached_neural_model
 
         target_path = custom_path or cls._neural_model_path
         if not os.path.exists(target_path) or not os.path.isdir(target_path):
@@ -66,6 +69,7 @@ class StreamingASREngine:
             return None
 
         try:
+            # pyrefly: ignore [missing-import]
             from faster_whisper import WhisperModel
             logger.info(f"[ASR] Loading Faster-Whisper CPU INT8 model from {target_path}...")
             start_t = time.perf_counter()
@@ -136,25 +140,26 @@ class StreamingASREngine:
                     route_pre = self.language_id.route_language(explicit_hint=language_hint, session_id=session_id)
                     neural_lang = route_pre.asr_language_hint if (language_hint and route_pre.detection_source == "explicit") else None
 
-                    segments_iter, info = self._cached_neural_model.transcribe(
-                        audio_float,
-                        beam_size=1,
-                        language=neural_lang,
-                        vad_filter=False,
-                        word_timestamps=False
-                    )
+                    with self._model_lock:
+                        segments_iter, info = self._cached_neural_model.transcribe(
+                            audio_float,
+                            beam_size=1,
+                            language=neural_lang,
+                            vad_filter=False,
+                            word_timestamps=False
+                        )
 
-                    text_parts = []
-                    for seg in segments_iter:
-                        seg_text = seg.text.strip()
-                        if seg_text:
-                            text_parts.append(seg_text)
+                        text_parts = []
+                        for seg in segments_iter:
+                            seg_text = seg.text.strip()
+                            if seg_text:
+                                text_parts.append(seg_text)
 
-                    raw_neural_text = " ".join(text_parts).strip()
-                    if raw_neural_text:
-                        transcript = raw_neural_text
-                        whisper_lang_raw = info.language if hasattr(info, "language") else None
-                        whisper_lang_prob = float(info.language_probability) if hasattr(info, "language_probability") else 0.92
+                        raw_neural_text = " ".join(text_parts).strip()
+                        if raw_neural_text:
+                            transcript = raw_neural_text
+                            whisper_lang_raw = info.language if hasattr(info, "language") else None
+                            whisper_lang_prob = float(info.language_probability) if hasattr(info, "language_probability") else 0.92
 
             except Exception as exc:
                 logger.warning(

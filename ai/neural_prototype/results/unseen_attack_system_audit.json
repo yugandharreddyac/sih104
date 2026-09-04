@@ -1,0 +1,363 @@
+{
+  "report_title": "VOXSHIELD Phase 1C.1 \u2014 Unseen Attack-System Data Audit",
+  "dataset_paths": {
+    "raw_asvspoof_root": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\datasets\\raw\\asvspoof",
+    "key_file": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\datasets\\raw\\asvspoof\\keys\\trial_metadata.txt",
+    "trial_file": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\datasets\\raw\\asvspoof\\ASVspoof2021_DF_eval_part00\\ASVspoof2021_DF_eval\\ASVspoof2021.DF.cm.eval.trl.txt",
+    "benchmark_parquet": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\datasets\\processed\\asvspoof_benchmark_2000.parquet",
+    "flac_parts": {
+      "part00": 152955,
+      "part01": 152958,
+      "part02": 152958,
+      "part03": 152958
+    },
+    "total_flacs_on_disk": 611829,
+    "official_asvspoof2019_train_present_locally": false,
+    "official_asvspoof2019_dev_present_locally": false,
+    "official_asvspoof2021_df_eval_present_locally": true
+  },
+  "attack_system_field": {
+    "field_name": "attack_system (Column 4 of trial_metadata.txt)",
+    "column_index": 4,
+    "example_values": [
+      "A07",
+      "A14",
+      "Task1-team20",
+      "Task2-team12",
+      "HUB-N12",
+      "SPO-B01",
+      "-"
+    ],
+    "meaning": "Identifier of the specific TTS/VC synthesis algorithm, team, or vocoder system that produced the spoof trial ('-' indicates bona-fide speech).",
+    "vocoder_category_field": "vocoder_type (Column 8 of trial_metadata.txt)",
+    "vocoder_categories": [
+      "traditional_vocoder",
+      "neural_vocoder_autoregressive",
+      "neural_vocoder_nonautoregressive",
+      "unknown",
+      "bonafide"
+    ],
+    "source_families": {
+      "asvspoof": "ASVspoof 2019 Logical Access algorithms (A07 - A19)",
+      "vcc2020": "Voice Conversion Challenge 2020 systems (Task1 / Task2 teams)",
+      "vcc2018": "Voice Conversion Challenge 2018 systems (HUB / SPO baseline & submitted models)"
+    }
+  },
+  "subsets_in_trial_metadata": {
+    "progress": {
+      "bonafide": 5768,
+      "spoof": 53557,
+      "total": 59325,
+      "unique_attack_systems_count": 13,
+      "unique_speakers_count": 67,
+      "attack_systems_sample": [
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16"
+      ]
+    },
+    "eval": {
+      "bonafide": 14869,
+      "spoof": 519059,
+      "total": 533928,
+      "unique_attack_systems_count": 110,
+      "unique_speakers_count": 93,
+      "attack_systems_sample": [
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16"
+      ]
+    },
+    "hidden": {
+      "bonafide": 1980,
+      "spoof": 16596,
+      "total": 18576,
+      "unique_attack_systems_count": 13,
+      "unique_speakers_count": 48,
+      "attack_systems_sample": [
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16"
+      ]
+    }
+  },
+  "sources_in_trial_metadata": {
+    "asvspoof": {
+      "bonafide": 15687,
+      "spoof": 144009,
+      "total": 159696,
+      "unique_attack_systems_count": 13,
+      "unique_speakers_count": 67,
+      "attack_systems_list": [
+        "A07",
+        "A08",
+        "A09",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "A16",
+        "A17",
+        "A18",
+        "A19"
+      ]
+    },
+    "vcc2020": {
+      "bonafide": 3150,
+      "spoof": 262800,
+      "total": 265950,
+      "unique_attack_systems_count": 59,
+      "unique_speakers_count": 14,
+      "attack_systems_list": [
+        "Task1-team01",
+        "Task1-team02",
+        "Task1-team03",
+        "Task1-team04",
+        "Task1-team06",
+        "Task1-team07",
+        "Task1-team08",
+        "Task1-team09",
+        "Task1-team10",
+        "Task1-team11",
+        "Task1-team12",
+        "Task1-team13",
+        "Task1-team14",
+        "Task1-team16",
+        "Task1-team17",
+        "Task1-team18",
+        "Task1-team19",
+        "Task1-team20",
+        "Task1-team21",
+        "Task1-team22",
+        "Task1-team23",
+        "Task1-team24",
+        "Task1-team25",
+        "Task1-team26",
+        "Task1-team27",
+        "Task1-team28",
+        "Task1-team29",
+        "Task1-team30",
+        "Task1-team31",
+        "Task1-team32",
+        "Task1-team33",
+        "Task2-team02",
+        "Task2-team03",
+        "Task2-team05",
+        "Task2-team06",
+        "Task2-team07",
+        "Task2-team08",
+        "Task2-team09",
+        "Task2-team10",
+        "Task2-team11",
+        "Task2-team12",
+        "Task2-team13",
+        "Task2-team15",
+        "Task2-team16",
+        "Task2-team18",
+        "Task2-team19",
+        "Task2-team20",
+        "Task2-team22",
+        "Task2-team23",
+        "Task2-team24",
+        "Task2-team25",
+        "Task2-team26",
+        "Task2-team27",
+        "Task2-team28",
+        "Task2-team29",
+        "Task2-team30",
+        "Task2-team31",
+        "Task2-team32",
+        "Task2-team33"
+      ]
+    },
+    "vcc2018": {
+      "bonafide": 3780,
+      "spoof": 182403,
+      "total": 186183,
+      "unique_attack_systems_count": 38,
+      "unique_speakers_count": 12,
+      "attack_systems_list": [
+        "HUB-B00",
+        "HUB-B01",
+        "HUB-D01",
+        "HUB-D02",
+        "HUB-D03",
+        "HUB-D04",
+        "HUB-D05",
+        "HUB-N03",
+        "HUB-N04",
+        "HUB-N05",
+        "HUB-N06",
+        "HUB-N07",
+        "HUB-N08",
+        "HUB-N09",
+        "HUB-N10",
+        "HUB-N11",
+        "HUB-N12",
+        "HUB-N13",
+        "HUB-N14",
+        "HUB-N15",
+        "HUB-N16",
+        "HUB-N17",
+        "HUB-N18",
+        "HUB-N19",
+        "HUB-N20",
+        "SPO-B00",
+        "SPO-B01",
+        "SPO-N03",
+        "SPO-N04",
+        "SPO-N05",
+        "SPO-N06",
+        "SPO-N10",
+        "SPO-N11",
+        "SPO-N12",
+        "SPO-N13",
+        "SPO-N16",
+        "SPO-N17",
+        "SPO-N18"
+      ]
+    }
+  },
+  "subset_overlap_matrix": {
+    "eval_count": 110,
+    "progress_count": 13,
+    "hidden_count": 13,
+    "eval_intersect_progress": {
+      "shared_count": 13,
+      "pct_of_progress": 100.0,
+      "progress_unique_systems": []
+    },
+    "eval_intersect_hidden": {
+      "shared_count": 13,
+      "pct_of_hidden": 100.0,
+      "hidden_unique_systems": []
+    },
+    "progress_intersect_hidden": {
+      "shared_count": 13,
+      "pct_of_hidden": 100.0
+    },
+    "three_way_intersection_count": 13
+  },
+  "source_overlap_matrix": {
+    "asvspoof_systems_count": 13,
+    "vcc2020_systems_count": 59,
+    "vcc2018_systems_count": 38,
+    "asvspoof_intersect_vcc2020": 0,
+    "asvspoof_intersect_vcc2018": 0,
+    "vcc2020_intersect_vcc2018": 0,
+    "all_three_sources_mutually_disjoint": true
+  },
+  "current_benchmark_audit": {
+    "total_samples": 2000,
+    "split_sample_counts": {
+      "train": 1400,
+      "val": 300,
+      "test": 300
+    },
+    "train_spoof_samples": 700,
+    "val_spoof_samples": 150,
+    "test_spoof_samples": 150,
+    "train_unique_attack_systems": 108,
+    "val_unique_attack_systems": 83,
+    "test_unique_attack_systems": 65,
+    "train_intersect_test_shared_systems": 65,
+    "test_attack_overlap_percentage": 100.0,
+    "train_intersect_val_shared_systems": 83,
+    "val_attack_overlap_percentage": 100.0,
+    "unseen_test_attack_systems_count": 0,
+    "is_unseen_generator_evaluation": false
+  },
+  "candidate_split_designs": [
+    {
+      "design_id": "Design_A_Source_Family_Holdout",
+      "description": "Train on VCC2020 + VCC2018 (97 attack systems); evaluate on ASVspoof 2019 algorithms (A07 - A19: 13 attack systems).",
+      "separation_rule": "Train/Val: source in ['vcc2020', 'vcc2018']; Test: source == 'asvspoof'. Zero attack overlap guaranteed.",
+      "train_available_spoofs": 445203,
+      "test_available_spoofs": 144009,
+      "train_attack_systems": 97,
+      "test_unseen_attack_systems": 13,
+      "feasible": true,
+      "sample_balance_note": "Ample samples available (153k spoofs and 5.9k bona-fide in test source)."
+    },
+    {
+      "design_id": "Design_B_Attack_System_Holdout_Scale_2000",
+      "description": "Balanced 2,000-sample benchmark with 20 attack systems strictly held out for test (0 attack overlap, 0 speaker overlap).",
+      "separation_rule": "Split 110 attack systems: 70 train, 20 val, 20 test. Split 92 speakers: 60 train, 16 val, 16 test disjointly.",
+      "target_samples": {
+        "train": 1400,
+        "val": 300,
+        "test": 300
+      },
+      "feasible": true,
+      "sample_balance_note": "Perfect 50/50 bona/spoof balance achievable in each split."
+    }
+  ],
+  "feasibility_assessment": {
+    "valid_unseen_system_evaluation_feasible": true,
+    "reason": "The local dataset contains all 611,829 FLAC files for ASVspoof 2021 DF on disk, containing 110 distinct attack systems and 22,617 bona-fide samples across 92 speakers. The 3 source families (asvspoof with 13 systems, vcc2020 with 59 systems, and vcc2018 with 38 systems) are 100% mutually disjoint. A strict unseen-generator split can be readily created with 0 attack overlap and 0 speaker overlap.",
+    "candidate_designs": [
+      {
+        "design_id": "Design_A_Source_Family_Holdout",
+        "description": "Train on VCC2020 + VCC2018 (97 attack systems); evaluate on ASVspoof 2019 algorithms (A07 - A19: 13 attack systems).",
+        "separation_rule": "Train/Val: source in ['vcc2020', 'vcc2018']; Test: source == 'asvspoof'. Zero attack overlap guaranteed.",
+        "train_available_spoofs": 445203,
+        "test_available_spoofs": 144009,
+        "train_attack_systems": 97,
+        "test_unseen_attack_systems": 13,
+        "feasible": true,
+        "sample_balance_note": "Ample samples available (153k spoofs and 5.9k bona-fide in test source)."
+      },
+      {
+        "design_id": "Design_B_Attack_System_Holdout_Scale_2000",
+        "description": "Balanced 2,000-sample benchmark with 20 attack systems strictly held out for test (0 attack overlap, 0 speaker overlap).",
+        "separation_rule": "Split 110 attack systems: 70 train, 20 val, 20 test. Split 92 speakers: 60 train, 16 val, 16 test disjointly.",
+        "target_samples": {
+          "train": 1400,
+          "val": 300,
+          "test": 300
+        },
+        "feasible": true,
+        "sample_balance_note": "Perfect 50/50 bona/spoof balance achievable in each split."
+      }
+    ]
+  },
+  "generalization_distinction": {
+    "unseen_speaker_generalization": "Evaluating on unseen human speakers using the same TTS/VC generators already seen in training. (Already achieved in Phase 1B).",
+    "unseen_attack_system_generalization": "Evaluating on synthetic speech generated by vocoders/algorithms strictly absent from training, but within the academic ASVspoof 2021 DF distribution (e.g., holding out systems A07-A19).",
+    "commercial_tts_generalization": "Evaluating on modern out-of-domain commercial voice cloning engines (ElevenLabs, OpenAI Voice, CosyVoice, XTTS-v2).",
+    "critical_caveat": "Even an unseen ASVspoof attack-system split does NOT prove robustness against commercial-grade diffusion or autoregressive zero-shot clone engines. It is an intermediate benchmark of architectural generalization across known academic vocoders."
+  },
+  "recommended_experiment": {
+    "experiment_name": "Phase 1C.2: Source-Disjoint Unseen-Generator Benchmark",
+    "training_data": "700 bona-fide, 700 spoof from VCC2020 & VCC2018 (97 attack systems)",
+    "validation_data": "150 bona-fide, 150 spoof from VCC2020 & VCC2018 (same 97 attack systems, disjoint speakers)",
+    "unseen_evaluation_data": "150 bona-fide, 150 spoof from ASVspoof (systems A07-A19: 13 completely unseen attack systems)",
+    "attack_system_separation_rule": "Train/Val systems \u2229 Test systems = \u2205 (Strict 0% attack-system overlap)",
+    "speaker_separation_rule": "Train speakers \u2229 Val speakers \u2229 Test speakers = \u2205 (Strict 0% speaker overlap)",
+    "approximate_sample_counts": "1,400 train / 300 val / 300 unseen-test",
+    "expected_limitations": "Measures transfer from VCC algorithms to ASVspoof 2019 algorithms; does not include external commercial TTS APIs."
+  }
+}

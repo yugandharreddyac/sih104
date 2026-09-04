@@ -1,0 +1,1013 @@
+{
+  "experiment_title": "VOXSHIELD Phase 2C.2 \u2014 Validation-Only Robust CNN Threshold Calibration",
+  "checkpoint_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\robust_training\\best_robust_mini_acoustic_cnn.pt",
+  "manifest_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\source_disjoint_train_val_manifest.parquet",
+  "split_used": "val",
+  "validation_sample_count": 300,
+  "sweep_parameters": {
+    "start": 0.01,
+    "end": 0.99,
+    "step": 0.005,
+    "steps_evaluated": 197
+  },
+  "per_condition_analysis": {
+    "C0": {
+      "condition_code": "C0",
+      "condition_name": "Clean 16 kHz",
+      "validation_samples": 300,
+      "roc_auc": 0.8684,
+      "eer": 0.2,
+      "eer_threshold": 0.728,
+      "f1_max_operating_point": {
+        "threshold": 0.685,
+        "accuracy": 0.7967,
+        "precision": 0.7633,
+        "recall": 0.86,
+        "f1": 0.8088,
+        "fpr": 0.2667,
+        "fnr": 0.14,
+        "tn": 110,
+        "fp": 40,
+        "fn": 21,
+        "tp": 129
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.83,
+          "accuracy": 0.7433,
+          "precision": 0.9195,
+          "recall": 0.5333,
+          "f1": 0.6751,
+          "fpr": 0.0467,
+          "fnr": 0.4667,
+          "tn": 143,
+          "fp": 7,
+          "fn": 70,
+          "tp": 80
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.795,
+          "accuracy": 0.7667,
+          "precision": 0.8636,
+          "recall": 0.6333,
+          "f1": 0.7308,
+          "fpr": 0.1,
+          "fnr": 0.3667,
+          "tn": 135,
+          "fp": 15,
+          "fn": 55,
+          "tp": 95
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.765,
+          "accuracy": 0.7733,
+          "precision": 0.8254,
+          "recall": 0.6933,
+          "f1": 0.7536,
+          "fpr": 0.1467,
+          "fnr": 0.3067,
+          "tn": 128,
+          "fp": 22,
+          "fn": 46,
+          "tp": 104
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.73,
+          "accuracy": 0.7933,
+          "precision": 0.7973,
+          "recall": 0.7867,
+          "f1": 0.7919,
+          "fpr": 0.2,
+          "fnr": 0.2133,
+          "tn": 120,
+          "fp": 30,
+          "fn": 32,
+          "tp": 118
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.83,
+          "accuracy": 0.7433,
+          "precision": 0.9195,
+          "recall": 0.5333,
+          "f1": 0.6751,
+          "fpr": 0.0467,
+          "fnr": 0.4667,
+          "tn": 143,
+          "fp": 7,
+          "fn": 70,
+          "tp": 80
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.795,
+          "accuracy": 0.7667,
+          "precision": 0.8636,
+          "recall": 0.6333,
+          "f1": 0.7308,
+          "fpr": 0.1,
+          "fnr": 0.3667,
+          "tn": 135,
+          "fp": 15,
+          "fn": 55,
+          "tp": 95
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.76,
+          "accuracy": 0.7733,
+          "precision": 0.8203,
+          "recall": 0.7,
+          "f1": 0.7554,
+          "fpr": 0.1533,
+          "fnr": 0.3,
+          "tn": 127,
+          "fp": 23,
+          "fn": 45,
+          "tp": 105
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.73,
+          "accuracy": 0.7933,
+          "precision": 0.7973,
+          "recall": 0.7867,
+          "f1": 0.7919,
+          "fpr": 0.2,
+          "fnr": 0.2133,
+          "tn": 120,
+          "fp": 30,
+          "fn": 32,
+          "tp": 118
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.5601,
+        "bonafide_median": 0.5795,
+        "bonafide_std": 0.1896,
+        "spoof_mean": 0.8131,
+        "spoof_median": 0.8426,
+        "spoof_std": 0.1371
+      }
+    },
+    "C1": {
+      "condition_code": "C1",
+      "condition_name": "8 kHz Round Trip",
+      "validation_samples": 300,
+      "roc_auc": 0.6881,
+      "eer": 0.3633,
+      "eer_threshold": 0.6541,
+      "f1_max_operating_point": {
+        "threshold": 0.455,
+        "accuracy": 0.6033,
+        "precision": 0.5622,
+        "recall": 0.9333,
+        "f1": 0.7018,
+        "fpr": 0.7267,
+        "fnr": 0.0667,
+        "tn": 41,
+        "fp": 109,
+        "fn": 10,
+        "tp": 140
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.81,
+          "accuracy": 0.5467,
+          "precision": 0.75,
+          "recall": 0.14,
+          "f1": 0.236,
+          "fpr": 0.0467,
+          "fnr": 0.86,
+          "tn": 143,
+          "fp": 7,
+          "fn": 129,
+          "tp": 21
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.755,
+          "accuracy": 0.5867,
+          "precision": 0.7321,
+          "recall": 0.2733,
+          "f1": 0.3981,
+          "fpr": 0.1,
+          "fnr": 0.7267,
+          "tn": 135,
+          "fp": 15,
+          "fn": 109,
+          "tp": 41
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.745,
+          "accuracy": 0.58,
+          "precision": 0.6875,
+          "recall": 0.2933,
+          "f1": 0.4112,
+          "fpr": 0.1333,
+          "fnr": 0.7067,
+          "tn": 130,
+          "fp": 20,
+          "fn": 106,
+          "tp": 44
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.725,
+          "accuracy": 0.6033,
+          "precision": 0.6824,
+          "recall": 0.3867,
+          "f1": 0.4936,
+          "fpr": 0.18,
+          "fnr": 0.6133,
+          "tn": 123,
+          "fp": 27,
+          "fn": 92,
+          "tp": 58
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.795,
+          "accuracy": 0.5633,
+          "precision": 0.7714,
+          "recall": 0.18,
+          "f1": 0.2919,
+          "fpr": 0.0533,
+          "fnr": 0.82,
+          "tn": 142,
+          "fp": 8,
+          "fn": 123,
+          "tp": 27
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.755,
+          "accuracy": 0.5867,
+          "precision": 0.7321,
+          "recall": 0.2733,
+          "f1": 0.3981,
+          "fpr": 0.1,
+          "fnr": 0.7267,
+          "tn": 135,
+          "fp": 15,
+          "fn": 109,
+          "tp": 41
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.735,
+          "accuracy": 0.58,
+          "precision": 0.6714,
+          "recall": 0.3133,
+          "f1": 0.4273,
+          "fpr": 0.1533,
+          "fnr": 0.6867,
+          "tn": 127,
+          "fp": 23,
+          "fn": 103,
+          "tp": 47
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.72,
+          "accuracy": 0.59,
+          "precision": 0.6517,
+          "recall": 0.3867,
+          "f1": 0.4854,
+          "fpr": 0.2067,
+          "fnr": 0.6133,
+          "tn": 119,
+          "fp": 31,
+          "fn": 92,
+          "tp": 58
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.5546,
+        "bonafide_median": 0.5683,
+        "bonafide_std": 0.1799,
+        "spoof_mean": 0.6713,
+        "spoof_median": 0.6943,
+        "spoof_std": 0.1335
+      }
+    },
+    "C2": {
+      "condition_code": "C2",
+      "condition_name": "G.711 mu-law (PCMU)",
+      "validation_samples": 300,
+      "roc_auc": 0.7523,
+      "eer": 0.3233,
+      "eer_threshold": 0.6217,
+      "f1_max_operating_point": {
+        "threshold": 0.59,
+        "accuracy": 0.7167,
+        "precision": 0.6923,
+        "recall": 0.78,
+        "f1": 0.7335,
+        "fpr": 0.3467,
+        "fnr": 0.22,
+        "tn": 98,
+        "fp": 52,
+        "fn": 33,
+        "tp": 117
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.77,
+          "accuracy": 0.59,
+          "precision": 0.8293,
+          "recall": 0.2267,
+          "f1": 0.356,
+          "fpr": 0.0467,
+          "fnr": 0.7733,
+          "tn": 143,
+          "fp": 7,
+          "fn": 116,
+          "tp": 34
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.735,
+          "accuracy": 0.6267,
+          "precision": 0.7794,
+          "recall": 0.3533,
+          "f1": 0.4862,
+          "fpr": 0.1,
+          "fnr": 0.6467,
+          "tn": 135,
+          "fp": 15,
+          "fn": 97,
+          "tp": 53
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.71,
+          "accuracy": 0.6433,
+          "precision": 0.7471,
+          "recall": 0.4333,
+          "f1": 0.5485,
+          "fpr": 0.1467,
+          "fnr": 0.5667,
+          "tn": 128,
+          "fp": 22,
+          "fn": 85,
+          "tp": 65
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.68,
+          "accuracy": 0.67,
+          "precision": 0.7297,
+          "recall": 0.54,
+          "f1": 0.6207,
+          "fpr": 0.2,
+          "fnr": 0.46,
+          "tn": 120,
+          "fp": 30,
+          "fn": 69,
+          "tp": 81
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.77,
+          "accuracy": 0.59,
+          "precision": 0.8293,
+          "recall": 0.2267,
+          "f1": 0.356,
+          "fpr": 0.0467,
+          "fnr": 0.7733,
+          "tn": 143,
+          "fp": 7,
+          "fn": 116,
+          "tp": 34
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.735,
+          "accuracy": 0.6267,
+          "precision": 0.7794,
+          "recall": 0.3533,
+          "f1": 0.4862,
+          "fpr": 0.1,
+          "fnr": 0.6467,
+          "tn": 135,
+          "fp": 15,
+          "fn": 97,
+          "tp": 53
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.71,
+          "accuracy": 0.6433,
+          "precision": 0.7471,
+          "recall": 0.4333,
+          "f1": 0.5485,
+          "fpr": 0.1467,
+          "fnr": 0.5667,
+          "tn": 128,
+          "fp": 22,
+          "fn": 85,
+          "tp": 65
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.68,
+          "accuracy": 0.67,
+          "precision": 0.7297,
+          "recall": 0.54,
+          "f1": 0.6207,
+          "fpr": 0.2,
+          "fnr": 0.46,
+          "tn": 120,
+          "fp": 30,
+          "fn": 69,
+          "tp": 81
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.5014,
+        "bonafide_median": 0.5186,
+        "bonafide_std": 0.1867,
+        "spoof_mean": 0.6647,
+        "spoof_median": 0.6929,
+        "spoof_std": 0.1538
+      }
+    },
+    "C3": {
+      "condition_code": "C3",
+      "condition_name": "G.711 A-law (PCMA)",
+      "validation_samples": 300,
+      "roc_auc": 0.7452,
+      "eer": 0.3333,
+      "eer_threshold": 0.6241,
+      "f1_max_operating_point": {
+        "threshold": 0.535,
+        "accuracy": 0.6933,
+        "precision": 0.6526,
+        "recall": 0.8267,
+        "f1": 0.7294,
+        "fpr": 0.44,
+        "fnr": 0.1733,
+        "tn": 84,
+        "fp": 66,
+        "fn": 26,
+        "tp": 124
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.77,
+          "accuracy": 0.5733,
+          "precision": 0.8056,
+          "recall": 0.1933,
+          "f1": 0.3118,
+          "fpr": 0.0467,
+          "fnr": 0.8067,
+          "tn": 143,
+          "fp": 7,
+          "fn": 121,
+          "tp": 29
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.745,
+          "accuracy": 0.59,
+          "precision": 0.7368,
+          "recall": 0.28,
+          "f1": 0.4058,
+          "fpr": 0.1,
+          "fnr": 0.72,
+          "tn": 135,
+          "fp": 15,
+          "fn": 108,
+          "tp": 42
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.725,
+          "accuracy": 0.6133,
+          "precision": 0.7237,
+          "recall": 0.3667,
+          "f1": 0.4867,
+          "fpr": 0.14,
+          "fnr": 0.6333,
+          "tn": 129,
+          "fp": 21,
+          "fn": 95,
+          "tp": 55
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.675,
+          "accuracy": 0.6733,
+          "precision": 0.7321,
+          "recall": 0.5467,
+          "f1": 0.626,
+          "fpr": 0.2,
+          "fnr": 0.4533,
+          "tn": 120,
+          "fp": 30,
+          "fn": 68,
+          "tp": 82
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.77,
+          "accuracy": 0.5733,
+          "precision": 0.8056,
+          "recall": 0.1933,
+          "f1": 0.3118,
+          "fpr": 0.0467,
+          "fnr": 0.8067,
+          "tn": 143,
+          "fp": 7,
+          "fn": 121,
+          "tp": 29
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.745,
+          "accuracy": 0.59,
+          "precision": 0.7368,
+          "recall": 0.28,
+          "f1": 0.4058,
+          "fpr": 0.1,
+          "fnr": 0.72,
+          "tn": 135,
+          "fp": 15,
+          "fn": 108,
+          "tp": 42
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.725,
+          "accuracy": 0.6133,
+          "precision": 0.7237,
+          "recall": 0.3667,
+          "f1": 0.4867,
+          "fpr": 0.14,
+          "fnr": 0.6333,
+          "tn": 129,
+          "fp": 21,
+          "fn": 95,
+          "tp": 55
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.675,
+          "accuracy": 0.6733,
+          "precision": 0.7321,
+          "recall": 0.5467,
+          "f1": 0.626,
+          "fpr": 0.2,
+          "fnr": 0.4533,
+          "tn": 120,
+          "fp": 30,
+          "fn": 68,
+          "tp": 82
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.495,
+        "bonafide_median": 0.5156,
+        "bonafide_std": 0.1926,
+        "spoof_mean": 0.6582,
+        "spoof_median": 0.6823,
+        "spoof_std": 0.1501
+      }
+    },
+    "C4": {
+      "condition_code": "C4",
+      "condition_name": "Telephone Bandpass (300-3400 Hz)",
+      "validation_samples": 300,
+      "roc_auc": 0.773,
+      "eer": 0.3267,
+      "eer_threshold": 0.758,
+      "f1_max_operating_point": {
+        "threshold": 0.71,
+        "accuracy": 0.6567,
+        "precision": 0.6193,
+        "recall": 0.8133,
+        "f1": 0.7032,
+        "fpr": 0.5,
+        "fnr": 0.1867,
+        "tn": 75,
+        "fp": 75,
+        "fn": 28,
+        "tp": 122
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.865,
+          "accuracy": 0.71,
+          "precision": 0.9091,
+          "recall": 0.4667,
+          "f1": 0.6167,
+          "fpr": 0.0467,
+          "fnr": 0.5333,
+          "tn": 143,
+          "fp": 7,
+          "fn": 80,
+          "tp": 70
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.845,
+          "accuracy": 0.7267,
+          "precision": 0.8469,
+          "recall": 0.5533,
+          "f1": 0.6694,
+          "fpr": 0.1,
+          "fnr": 0.4467,
+          "tn": 135,
+          "fp": 15,
+          "fn": 67,
+          "tp": 83
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.82,
+          "accuracy": 0.7233,
+          "precision": 0.8073,
+          "recall": 0.5867,
+          "f1": 0.6795,
+          "fpr": 0.14,
+          "fnr": 0.4133,
+          "tn": 129,
+          "fp": 21,
+          "fn": 62,
+          "tp": 88
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.805,
+          "accuracy": 0.7167,
+          "precision": 0.76,
+          "recall": 0.6333,
+          "f1": 0.6909,
+          "fpr": 0.2,
+          "fnr": 0.3667,
+          "tn": 120,
+          "fp": 30,
+          "fn": 55,
+          "tp": 95
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.865,
+          "accuracy": 0.71,
+          "precision": 0.9091,
+          "recall": 0.4667,
+          "f1": 0.6167,
+          "fpr": 0.0467,
+          "fnr": 0.5333,
+          "tn": 143,
+          "fp": 7,
+          "fn": 80,
+          "tp": 70
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.845,
+          "accuracy": 0.7267,
+          "precision": 0.8469,
+          "recall": 0.5533,
+          "f1": 0.6694,
+          "fpr": 0.1,
+          "fnr": 0.4467,
+          "tn": 135,
+          "fp": 15,
+          "fn": 67,
+          "tp": 83
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.815,
+          "accuracy": 0.7233,
+          "precision": 0.7965,
+          "recall": 0.6,
+          "f1": 0.6844,
+          "fpr": 0.1533,
+          "fnr": 0.4,
+          "tn": 127,
+          "fp": 23,
+          "fn": 60,
+          "tp": 90
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.805,
+          "accuracy": 0.7167,
+          "precision": 0.76,
+          "recall": 0.6333,
+          "f1": 0.6909,
+          "fpr": 0.2,
+          "fnr": 0.3667,
+          "tn": 120,
+          "fp": 30,
+          "fn": 55,
+          "tp": 95
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.6936,
+        "bonafide_median": 0.7105,
+        "bonafide_std": 0.1259,
+        "spoof_mean": 0.8194,
+        "spoof_median": 0.8592,
+        "spoof_std": 0.1252
+      }
+    },
+    "C5": {
+      "condition_code": "C5",
+      "condition_name": "Additive Noise (15 dB SNR)",
+      "validation_samples": 300,
+      "roc_auc": 0.5554,
+      "eer": 0.4733,
+      "eer_threshold": 0.7198,
+      "f1_max_operating_point": {
+        "threshold": 0.385,
+        "accuracy": 0.5167,
+        "precision": 0.5085,
+        "recall": 1.0,
+        "f1": 0.6742,
+        "fpr": 0.9667,
+        "fnr": 0.0,
+        "tn": 5,
+        "fp": 145,
+        "fn": 0,
+        "tp": 150
+      },
+      "operating_targets": {
+        "fpr_le_5pct": {
+          "threshold": 0.885,
+          "accuracy": 0.53,
+          "precision": 0.7647,
+          "recall": 0.0867,
+          "f1": 0.1557,
+          "fpr": 0.0267,
+          "fnr": 0.9133,
+          "tn": 146,
+          "fp": 4,
+          "fn": 137,
+          "tp": 13
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.845,
+          "accuracy": 0.5333,
+          "precision": 0.625,
+          "recall": 0.1667,
+          "f1": 0.2632,
+          "fpr": 0.1,
+          "fnr": 0.8333,
+          "tn": 135,
+          "fp": 15,
+          "fn": 125,
+          "tp": 25
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.835,
+          "accuracy": 0.5267,
+          "precision": 0.5833,
+          "recall": 0.1867,
+          "f1": 0.2828,
+          "fpr": 0.1333,
+          "fnr": 0.8133,
+          "tn": 130,
+          "fp": 20,
+          "fn": 122,
+          "tp": 28
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.82,
+          "accuracy": 0.5333,
+          "precision": 0.5806,
+          "recall": 0.24,
+          "f1": 0.3396,
+          "fpr": 0.1733,
+          "fnr": 0.76,
+          "tn": 124,
+          "fp": 26,
+          "fn": 114,
+          "tp": 36
+        }
+      },
+      "closest_operating_points": {
+        "closest_fpr_5pct": {
+          "threshold": 0.875,
+          "accuracy": 0.5233,
+          "precision": 0.64,
+          "recall": 0.1067,
+          "f1": 0.1829,
+          "fpr": 0.06,
+          "fnr": 0.8933,
+          "tn": 141,
+          "fp": 9,
+          "fn": 134,
+          "tp": 16
+        },
+        "closest_fpr_10pct": {
+          "threshold": 0.845,
+          "accuracy": 0.5333,
+          "precision": 0.625,
+          "recall": 0.1667,
+          "f1": 0.2632,
+          "fpr": 0.1,
+          "fnr": 0.8333,
+          "tn": 135,
+          "fp": 15,
+          "fn": 125,
+          "tp": 25
+        },
+        "closest_fpr_15pct": {
+          "threshold": 0.83,
+          "accuracy": 0.52,
+          "precision": 0.5577,
+          "recall": 0.1933,
+          "f1": 0.2871,
+          "fpr": 0.1533,
+          "fnr": 0.8067,
+          "tn": 127,
+          "fp": 23,
+          "fn": 121,
+          "tp": 29
+        },
+        "closest_fpr_20pct": {
+          "threshold": 0.815,
+          "accuracy": 0.52,
+          "precision": 0.5455,
+          "recall": 0.24,
+          "f1": 0.3333,
+          "fpr": 0.2,
+          "fnr": 0.76,
+          "tn": 120,
+          "fp": 30,
+          "fn": 114,
+          "tp": 36
+        }
+      },
+      "score_distribution": {
+        "bonafide_mean": 0.692,
+        "bonafide_median": 0.7088,
+        "bonafide_std": 0.1347,
+        "spoof_mean": 0.7186,
+        "spoof_median": 0.7266,
+        "spoof_std": 0.1254
+      }
+    }
+  },
+  "policy_analysis": {
+    "policy_a_high_security": {
+      "description": "Condition-specific thresholds satisfying validation FPR <= 5%",
+      "thresholds": {
+        "C0": 0.83,
+        "C1": 0.81,
+        "C2": 0.77,
+        "C3": 0.77,
+        "C4": 0.865,
+        "C5": 0.885
+      }
+    },
+    "policy_b_balanced": {
+      "description": "Condition-specific thresholds satisfying validation FPR <= 10%",
+      "thresholds": {
+        "C0": 0.795,
+        "C1": 0.755,
+        "C2": 0.735,
+        "C3": 0.745,
+        "C4": 0.845,
+        "C5": 0.845
+      }
+    },
+    "policy_c_maximum_f1": {
+      "description": "Condition-specific thresholds maximizing validation F1",
+      "thresholds": {
+        "C0": 0.685,
+        "C1": 0.455,
+        "C2": 0.59,
+        "C3": 0.535,
+        "C4": 0.71,
+        "C5": 0.385
+      }
+    },
+    "policy_d_dual_mode": {
+      "description": "Dual-mode: C0 independent wideband threshold + pooled C1-C4 common telephony threshold",
+      "c0_clean_wideband": {
+        "fpr_le_5pct": {
+          "threshold": 0.83,
+          "accuracy": 0.7433,
+          "precision": 0.9195,
+          "recall": 0.5333,
+          "f1": 0.6751,
+          "fpr": 0.0467,
+          "fnr": 0.4667,
+          "tn": 143,
+          "fp": 7,
+          "fn": 70,
+          "tp": 80
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.795,
+          "accuracy": 0.7667,
+          "precision": 0.8636,
+          "recall": 0.6333,
+          "f1": 0.7308,
+          "fpr": 0.1,
+          "fnr": 0.3667,
+          "tn": 135,
+          "fp": 15,
+          "fn": 55,
+          "tp": 95
+        },
+        "f1_max": {
+          "threshold": 0.685,
+          "accuracy": 0.7967,
+          "precision": 0.7633,
+          "recall": 0.86,
+          "f1": 0.8088,
+          "fpr": 0.2667,
+          "fnr": 0.14,
+          "tn": 110,
+          "fp": 40,
+          "fn": 21,
+          "tp": 129
+        },
+        "eer_threshold": 0.728
+      },
+      "c1_c4_pooled_telephony": {
+        "total_samples": 1200,
+        "roc_auc": 0.7121,
+        "eer": 0.3508,
+        "eer_threshold": 0.6689,
+        "fpr_le_5pct": {
+          "threshold": 0.83,
+          "accuracy": 0.5817,
+          "precision": 0.8141,
+          "recall": 0.2117,
+          "f1": 0.336,
+          "fpr": 0.0483,
+          "fnr": 0.7883,
+          "tn": 571,
+          "fp": 29,
+          "fn": 473,
+          "tp": 127
+        },
+        "fpr_le_10pct": {
+          "threshold": 0.78,
+          "accuracy": 0.6133,
+          "precision": 0.7656,
+          "recall": 0.3267,
+          "f1": 0.4579,
+          "fpr": 0.1,
+          "fnr": 0.6733,
+          "tn": 540,
+          "fp": 60,
+          "fn": 404,
+          "tp": 196
+        },
+        "fpr_le_15pct": {
+          "threshold": 0.755,
+          "accuracy": 0.6125,
+          "precision": 0.7157,
+          "recall": 0.3733,
+          "f1": 0.4907,
+          "fpr": 0.1483,
+          "fnr": 0.6267,
+          "tn": 511,
+          "fp": 89,
+          "fn": 376,
+          "tp": 224
+        },
+        "fpr_le_20pct": {
+          "threshold": 0.735,
+          "accuracy": 0.6183,
+          "precision": 0.6859,
+          "recall": 0.4367,
+          "f1": 0.5336,
+          "fpr": 0.2,
+          "fnr": 0.5633,
+          "tn": 480,
+          "fp": 120,
+          "fn": 338,
+          "tp": 262
+        },
+        "f1_max": {
+          "threshold": 0.525,
+          "accuracy": 0.6333,
+          "precision": 0.5897,
+          "recall": 0.8767,
+          "f1": 0.7051,
+          "fpr": 0.61,
+          "fnr": 0.1233,
+          "tn": 234,
+          "fp": 366,
+          "fn": 74,
+          "tp": 526
+        }
+      },
+      "recommended_dual_thresholds": {
+        "high_security_fpr5": {
+          "theta_clean": 0.83,
+          "theta_telephony": 0.83
+        },
+        "balanced_fpr10": {
+          "theta_clean": 0.795,
+          "theta_telephony": 0.78
+        },
+        "maximum_f1": {
+          "theta_clean": 0.685,
+          "theta_telephony": 0.525
+        }
+      }
+    }
+  },
+  "integrity_verification": {
+    "training_performed": false,
+    "model_checkpoint_modified": false,
+    "existing_datasets_modified": false,
+    "existing_manifests_modified": false,
+    "production_code_modified": false,
+    "existing_scripts_modified": false,
+    "unseen_test_manifest_accessed": false,
+    "external_data_downloaded": false,
+    "packages_installed": false
+  }
+}

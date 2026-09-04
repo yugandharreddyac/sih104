@@ -695,3 +695,182 @@ describe('Phase 2: Step 2.1 WebSocket Input Validation & RBAC Integration Tests'
     });
   });
 });
+
+describe('Priority 5: Acoustic Sequence Guard & Deduplication Unit Tests', () => {
+  it('Scenario A: should accept normal consecutive packets (0 -> 1 -> 2)', () => {
+    const buffer = new StreamBuffer('call-p5-a', 'stream-p5-a');
+
+    const res0 = buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    expect(res0.accepted).toBe(true);
+    expect(res0.sequenceError).toBe(false);
+    expect(res0.isDuplicate).toBe(false);
+    expect(res0.isStale).toBe(false);
+
+    const res1 = buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    expect(res1.accepted).toBe(true);
+    expect(res1.sequenceError).toBe(false);
+    expect(res1.isDuplicate).toBe(false);
+    expect(res1.isStale).toBe(false);
+
+    const res2 = buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+    expect(res2.accepted).toBe(true);
+    expect(res2.sequenceError).toBe(false);
+    expect(res2.isDuplicate).toBe(false);
+    expect(res2.isStale).toBe(false);
+
+    expect(buffer.getLastCommittedSeq()).toBe(2);
+    expect(buffer.getMetrics().duplicatesIgnored).toBe(0);
+    expect(buffer.getMetrics().staleChunksIgnored).toBe(0);
+  });
+
+  it('Scenario B: should accept single forward gap (0 -> 2) and flag sequenceError for gap handling', () => {
+    const buffer = new StreamBuffer('call-p5-b', 'stream-p5-b');
+
+    buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+
+    // Forward gap: chunk 1 dropped, chunk 2 arrives
+    const res2 = buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+    expect(res2.accepted).toBe(true);
+    expect(res2.sequenceError).toBe(true); // Must remain true so sequenceGap propagates
+    expect(res2.isDuplicate).toBe(false);
+    expect(res2.isStale).toBe(false);
+    expect(buffer.getLastCommittedSeq()).toBe(2);
+  });
+
+  it('Scenario C: should reject duplicate packets (0 -> 1 -> 1 -> 2)', () => {
+    const buffer = new StreamBuffer('call-p5-c', 'stream-p5-c');
+
+    buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    const res1 = buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    expect(res1.accepted).toBe(true);
+
+    // Duplicate packet 1 arrives
+    const res1Dup = buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    expect(res1Dup.accepted).toBe(false);
+    expect(res1Dup.isDuplicate).toBe(true);
+    expect(res1Dup.isStale).toBe(false);
+
+    // Subsequent chunk 2 proceeds normally
+    const res2 = buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+    expect(res2.accepted).toBe(true);
+    expect(res2.isDuplicate).toBe(false);
+    expect(buffer.getMetrics().duplicatesIgnored).toBe(1);
+  });
+
+  it('Scenario D: should reject out-of-order stale packets (0 -> 2 -> 1 -> 3)', () => {
+    const buffer = new StreamBuffer('call-p5-d', 'stream-p5-d');
+
+    buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    // Chunk 2 arrives first (forward gap)
+    const res2 = buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+    expect(res2.accepted).toBe(true);
+    expect(res2.sequenceError).toBe(true);
+
+    // Out-of-order chunk 1 arrives late after 2 has already committed
+    const res1 = buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    expect(res1.accepted).toBe(false);
+    expect(res1.isStale).toBe(true);
+    expect(res1.isDuplicate).toBe(false);
+
+    // Next forward chunk 3 proceeds normally
+    const res3 = buffer.push({ sequenceNumber: 3, data: Buffer.alloc(100) });
+    expect(res3.accepted).toBe(true);
+    expect(res3.isStale).toBe(false);
+    expect(buffer.getMetrics().staleChunksIgnored).toBe(1);
+  });
+
+  it('Scenario E: should reject delayed stale packet (0 -> 1 -> 2 -> 4 -> 3)', () => {
+    const buffer = new StreamBuffer('call-p5-e', 'stream-p5-e');
+
+    buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+    buffer.push({ sequenceNumber: 4, data: Buffer.alloc(100) }); // committed up to 4
+
+    // Delayed chunk 3 arrives late
+    const res3 = buffer.push({ sequenceNumber: 3, data: Buffer.alloc(100) });
+    expect(res3.accepted).toBe(false);
+    expect(res3.isStale).toBe(true);
+    expect(buffer.getLastCommittedSeq()).toBe(4);
+    expect(buffer.getMetrics().staleChunksIgnored).toBe(1);
+  });
+
+  it('Scenario F: should isolate sequence state across different call sessions', () => {
+    const callAId = 'call-p5-iso-a';
+    const callBId = 'call-p5-iso-b';
+
+    const bufferA = StreamBufferManager.getOrCreate(callAId);
+    const bufferB = StreamBufferManager.getOrCreate(callBId);
+
+    // Call A processes sequence 0, 1, 2
+    bufferA.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    bufferA.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+    bufferA.push({ sequenceNumber: 2, data: Buffer.alloc(100) });
+
+    // Call B can process sequence 0, 1 independently without being flagged duplicate/stale
+    const resB0 = bufferB.push({ sequenceNumber: 0, data: Buffer.alloc(100) });
+    const resB1 = bufferB.push({ sequenceNumber: 1, data: Buffer.alloc(100) });
+
+    expect(resB0.accepted).toBe(true);
+    expect(resB0.isDuplicate).toBe(false);
+    expect(resB1.accepted).toBe(true);
+    expect(resB1.isDuplicate).toBe(false);
+
+    expect(bufferA.getLastCommittedSeq()).toBe(2);
+    expect(bufferB.getLastCommittedSeq()).toBe(1);
+
+    // Cleanup
+    StreamBufferManager.remove(callAId);
+    StreamBufferManager.remove(callBId);
+  });
+});
+
+describe('Priority 5: Live Codec Safety Guard Unit Tests', () => {
+  const dummyPcm = Buffer.alloc(3200);
+
+  // A. Reject explicit compressed telephony codecs
+  it('should reject explicit compressed telephony codecs with UNSUPPORTED_CODEC_REQUIRES_PCM', () => {
+    const telephonyCodecs = ['g711', 'pcmu', 'pcma', 'amr', 'gsm', 'g729'];
+    for (const codec of telephonyCodecs) {
+      const res = AudioNormalizer.normalize(dummyPcm, 16000, 1, codec);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('UNSUPPORTED_CODEC_REQUIRES_PCM');
+    }
+  });
+
+  // B. Reject explicit compressed wideband codecs
+  it('should reject explicit compressed wideband codecs with UNSUPPORTED_CODEC_REQUIRES_PCM', () => {
+    const widebandCodecs = ['opus', 'mp3', 'aac'];
+    for (const codec of widebandCodecs) {
+      const res = AudioNormalizer.normalize(dummyPcm, 16000, 1, codec);
+      expect(res.isValid).toBe(false);
+      expect(res.error).toContain('UNSUPPORTED_CODEC_REQUIRES_PCM');
+    }
+  });
+
+  // C. Accept canonical PCM formats
+  it('should accept canonical PCM formats', () => {
+    const pcmFormats = ['pcm_s16le', 'wav'];
+    for (const fmt of pcmFormats) {
+      const res = AudioNormalizer.normalize(dummyPcm, 16000, 1, fmt);
+      expect(res.isValid).toBe(true);
+      expect(res.error).toBeUndefined();
+    }
+  });
+
+  // D. Accept TELEPHONY channel type when format is linear PCM
+  it('should accept TELEPHONY channel type when format is linear PCM', () => {
+    // Valid PCM input with format = 'pcm_s16le'
+    const res = AudioNormalizer.normalize(dummyPcm, 16000, 1, 'pcm_s16le');
+    expect(res.isValid).toBe(true);
+    expect(res.format).toBe('pcm_s16le');
+  });
+
+  // E. Accept absent codec/format metadata
+  it('should accept absent codec/format metadata using existing three-argument form', () => {
+    const res = AudioNormalizer.normalize(dummyPcm, 16000, 1);
+    expect(res.isValid).toBe(true);
+    expect(res.format).toBe('pcm_s16le');
+    expect(res.sampleCount).toBe(1600);
+  });
+});

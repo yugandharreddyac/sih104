@@ -550,11 +550,15 @@ export class WebSocketGateway {
 
               if (speechBuf.markProcessingComplete(speechSegment.turnIndex)) {
                 if (asyncConv.asr?.transcript) {
+                  const sanitized = PrivacyFirewall.sanitize(asyncConv.asr.transcript).sanitizedText;
                   this.broadcast({
                     type: 'ASR_FINAL',
                     callId,
                     sequenceNumber: speechSegment.turnIndex,
-                    payload: asyncConv.asr,
+                    payload: {
+                      ...asyncConv.asr,
+                      transcript: sanitized,
+                    },
                     timestamp: new Date().toISOString(),
                   });
                 }
@@ -651,11 +655,15 @@ export class WebSocketGateway {
       this.broadcast(telemetry);
 
       if (convResult.asr?.transcript) {
+        const sanitized = PrivacyFirewall.sanitize(convResult.asr.transcript).sanitizedText;
         this.broadcast({
           type: 'ASR_FINAL',
           callId,
           sequenceNumber,
-          payload: convResult.asr,
+          payload: {
+            ...convResult.asr,
+            transcript: sanitized,
+          },
           timestamp: new Date().toISOString(),
         });
       }
@@ -799,8 +807,31 @@ export class WebSocketGateway {
 
   public static broadcast(msg: WSMessage): void {
     const payload = JSON.stringify(msg);
-    for (const [ws] of this.clientStates) {
+    for (const [ws, state] of this.clientStates) {
       if (ws.readyState === WebSocket.OPEN) {
+        // Enforce: only authenticated clients receive security risk/telemetry events
+        if (
+          !state.authenticated &&
+          msg.type !== 'CONNECTED' &&
+          msg.type !== 'ERROR' &&
+          msg.type !== 'PONG'
+        ) {
+          continue;
+        }
+
+        // Enforce multi-tenant organization isolation
+        if (msg.callId) {
+          const call = CallsService.getCallById(msg.callId);
+          if (call) {
+            const isGlobalAdmin =
+              state.user?.role === RoleName.ADMIN ||
+              state.user?.permissions.includes(Permission.ALL);
+            if (!isGlobalAdmin && state.user?.organizationId !== call.organizationId) {
+              continue; // Cross-organization isolation
+            }
+          }
+        }
+
         ws.send(payload);
       }
     }

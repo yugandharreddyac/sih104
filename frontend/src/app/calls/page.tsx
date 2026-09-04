@@ -191,6 +191,13 @@ export default function CallsPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const audioStreamerRef = useRef<BrowserAudioStreamer | null>(null);
   const audioIntervalRef = useRef<any>(null);
+  const selectedCallRef = useRef<CallSession | null>(null);
+  const latestRiskSeqRef = useRef<number>(-1);
+
+  useEffect(() => {
+    selectedCallRef.current = selectedCall;
+    latestRiskSeqRef.current = -1;
+  }, [selectedCall]);
 
   useEffect(() => {
     fetchCalls();
@@ -253,11 +260,11 @@ export default function CallsPage() {
     ws.onopen = () => {
       const token = localStorage.getItem('voxshield_token') || '';
       ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
-      if (selectedCall) {
+      if (selectedCallRef.current) {
         ws.send(
           JSON.stringify({
             type: 'START_STREAM',
-            callId: selectedCall.id,
+            callId: selectedCallRef.current.id,
             streamId: `stream-${Date.now()}`,
           })
         );
@@ -268,24 +275,41 @@ export default function CallsPage() {
       try {
         const msg = JSON.parse(event.data);
 
+        // Strict Session Isolation: Drop events destined for other call sessions
+        if (msg.callId && selectedCallRef.current && msg.callId !== selectedCallRef.current.id) {
+          return;
+        }
+
         // Phase 5 Unified Risk Assessment Broadcast
         if (msg.type === 'UNIFIED_RISK_ASSESSMENT' && msg.payload) {
+          // Reject stale out-of-order sequence risk frames
+          if (typeof msg.sequenceNumber === 'number') {
+            if (msg.sequenceNumber < latestRiskSeqRef.current) {
+              return;
+            }
+            latestRiskSeqRef.current = msg.sequenceNumber;
+          }
+
           const r = msg.payload;
+          const validScore = typeof r.overall_risk_score === 'number' && Number.isFinite(r.overall_risk_score)
+            ? r.overall_risk_score
+            : null;
+
           setUnifiedRisk((prev) => ({
             ...prev,
-            overallRiskScore: r.overall_risk_score ?? prev.overallRiskScore,
+            overallRiskScore: validScore !== null ? validScore : (r.overall_risk_score === null ? null : prev.overallRiskScore),
             riskLevel: r.risk_level || prev.riskLevel,
-            confidence: r.confidence ?? prev.confidence,
-            uncertainty: r.uncertainty ?? prev.uncertainty,
+            confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
+            uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
             dimensions: r.dimensions || prev.dimensions,
-            riskVelocity: r.risk_velocity ?? prev.riskVelocity,
+            riskVelocity: typeof r.risk_velocity === 'number' && Number.isFinite(r.risk_velocity) ? r.risk_velocity : prev.riskVelocity,
             riskTrajectoryTrend: r.risk_trajectory_trend || prev.riskTrajectoryTrend,
-            primaryDrivers: r.primary_drivers || prev.primaryDrivers,
-            contradictingSignals: r.contradicting_signals || prev.contradictingSignals,
+            primaryDrivers: Array.isArray(r.primary_drivers) ? r.primary_drivers : prev.primaryDrivers,
+            contradictingSignals: Array.isArray(r.contradicting_signals) ? r.contradicting_signals : prev.contradictingSignals,
             evidenceGraph: r.evidence_graph || prev.evidenceGraph,
             policyRecommendation: r.policy_recommendation || prev.policyRecommendation,
             humanWorkflowState: r.human_workflow_state || prev.humanWorkflowState,
-            fusionLatencyMs: r.fusion_latency_ms || prev.fusionLatencyMs,
+            fusionLatencyMs: typeof r.fusion_latency_ms === 'number' && Number.isFinite(r.fusion_latency_ms) ? r.fusion_latency_ms : prev.fusionLatencyMs,
           }));
         }
 

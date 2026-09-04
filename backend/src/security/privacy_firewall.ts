@@ -39,10 +39,10 @@ export class PrivacyFirewall {
     pattern: RegExp;
     replacement: string;
   }> = [
-    // 1. One-Time Passwords (OTP) e.g. "otp is 482913", "one-time passcode 938472"
+    // 1. One-Time Passwords (OTP) e.g. "otp is 482913", "otp code 839201", "one-time passcode 938472"
     {
       category: RedactionCategory.OTP,
-      pattern: /\b(?:otp|one[- ]time (?:password|passcode|code)|verification code)\s*(?:is|:|=)?\s*([0-9]{4,8})\b/gi,
+      pattern: /\b(?:otp(?: code)?|one[- ]time (?:password|passcode|code)|verification code)\s*(?:is|:|=)?\s*([0-9]{4,8})\b/gi,
       replacement: '[AUTHENTICATION_CODE_REDACTED]',
     },
     // 2. MFA Tokens e.g. "mfa code 582910", "authenticator code 847291"

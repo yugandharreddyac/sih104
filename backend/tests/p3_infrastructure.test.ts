@@ -14,6 +14,7 @@ describe('Phase 3 Infrastructure (Prometheus & Redis)', () => {
   beforeAll(async () => {
     // Start the local instance (Instance A) for testing metrics and WebSocket on port 4001
     await new Promise<void>((resolve) => server.listen(4001, () => resolve()));
+    await WebSocketGateway.initialize(server);
   });
 
   afterAll(async () => {

@@ -144,7 +144,6 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 
 // Server Initialization
 export const server = http.createServer(app);
-WebSocketGateway.initialize(server).catch(err => console.error('WS Init failed:', err));
 
 // Ensure WebSocket connections and intervals are cleaned up when the HTTP server closes
 server.on('close', async () => {
@@ -152,8 +151,10 @@ server.on('close', async () => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
+  WebSocketGateway.initialize(server).catch(err => console.error('WS Init failed:', err));
   server.listen(env.PORT, () => {
     console.info(`🛡️ VOXSHIELD Core Backend listening on port ${env.PORT}`);
     console.info(`🛡️ Phase 1 Foundation Active. Ready for SOC requests.`);
   });
 }
+

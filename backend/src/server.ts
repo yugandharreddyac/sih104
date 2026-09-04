@@ -12,6 +12,7 @@ import { verificationRoutes } from './verification/verification.routes';
 import { riskRoutes } from './risk/risk.routes';
 import { auditRoutes } from './audit/audit.routes';
 import { healthRoutes } from './health/health.routes';
+import { MetricsController, httpRequestsTotal, httpRequestDurationMs } from './health/metrics.controller';
 import { WebSocketGateway } from './websocket/ws_server';
 import { AuthService } from './auth/auth.service';
 import { PoliciesService } from './policies/policies.service';
@@ -26,15 +27,21 @@ import interventionRoutes from './interventions/intervention.routes';
 
 export const app = express();
 
-
 // Security Middlewares
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled for API
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+    },
+  },
 }));
+app.disable('x-powered-by');
+
 app.use(cors({
-  origin: '*',
+  origin: env.CORS_ORIGIN || '*',
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+  credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -48,6 +55,22 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Prometheus HTTP Metrics Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === '/metrics') {
+    return next();
+  }
+  const start = process.hrtime();
+  res.on('finish', () => {
+    const diff = process.hrtime(start);
+    const durationMs = (diff[0] * 1e3) + (diff[1] * 1e-6);
+    const route = req.path;
+    httpRequestsTotal.inc({ method: req.method, route, status_code: res.statusCode });
+    httpRequestDurationMs.observe({ method: req.method, route, status_code: res.statusCode }, durationMs);
+  });
+  next();
+});
+
 // Initialize in-memory seed stores
 AuthService.initializeDefaultUsers();
 PoliciesService.initializeDefaultPolicies();
@@ -55,6 +78,7 @@ CallsService.seedSampleCallsIfEmpty();
 
 // Mount API Namespaces
 app.use('/api/health', healthRoutes);
+app.get('/metrics', MetricsController.getMetrics);
 app.use('/api/auth', authRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/incidents', incidentRoutes);
@@ -77,6 +101,7 @@ app.get('/', (req: Request, res: Response) => {
     phase: 'PHASE_1_FOUNDATION',
     endpoints: {
       health: '/api/health',
+      metrics: '/metrics',
       auth: '/api/auth',
       calls: '/api/calls',
       incidents: '/api/incidents',
@@ -116,6 +141,10 @@ WebSocketGateway.initialize(server);
 export const rtpServer = new RtpServer({
   host: env.RTP_UDP_HOST,
   port: env.RTP_UDP_PORT,
+});
+
+server.on('close', async () => {
+  await WebSocketGateway.close();
 });
 
 if (process.env.NODE_ENV !== 'test') {

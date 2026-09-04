@@ -4,6 +4,7 @@ import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { WebhookDispatcher } from './webhook_dispatcher';
 import { db } from '../database/db';
+import { policyActionsTotal } from '../health/metrics.controller';
 
 export class InterventionService {
   private static interventions: Map<string, InterventionRecord> = new Map();
@@ -39,6 +40,10 @@ export class InterventionService {
     };
 
     this.interventions.set(id, record);
+
+    try {
+      policyActionsTotal.inc({ action: 'alert' });
+    } catch {}
 
     // Persist to PostgreSQL if available
     try {

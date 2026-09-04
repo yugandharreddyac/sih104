@@ -12,7 +12,11 @@ import { AcousticService } from '../acoustic/acoustic.service';
 import { ConversationService } from '../conversation/conversation.service';
 import { RiskService } from '../risk/risk.service';
 import { IncidentsService } from '../incidents/incidents.service';
-import { env } from '../config/env';
+import { RedisPubSubService } from '../infrastructure/redis_pubsub';
+import {
+  activeWsConnections,
+  wsErrorsTotal,
+} from '../health/metrics.controller';
 
 export interface WSClientState {
   ws: WebSocket;
@@ -56,6 +60,9 @@ export interface WSMessage {
   requiresAuth?: boolean;
   canonicalFormat?: string;
   format?: string;
+  protocol?: string;
+  mediaSource?: string;
+  organizationId?: string;
   user?: { email: string; role: string };
   metrics?: any;
 }
@@ -82,8 +89,11 @@ export interface CallAsrState {
 
 export class WebSocketGateway {
   private static wss: WebSocketServer | null = null;
+  private static serverInstance: http.Server | null = null;
   private static clientStates: Map<WebSocket, WSClientState> = new Map();
   private static callAsrStates: Map<string, CallAsrState> = new Map();
+  private static pingInterval: NodeJS.Timeout | null = null;
+  private static initPromise: Promise<void> | null = null;
 
   private static getOrCreateAsrState(callId: string): CallAsrState {
     let asrState = this.callAsrStates.get(callId);
@@ -107,17 +117,70 @@ export class WebSocketGateway {
     return false;
   }
 
+  public static async close(): Promise<void> {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+    for (const [ws] of this.clientStates) {
+      try {
+        ws.terminate();
+      } catch {}
+    }
+    this.clientStates.clear();
+    this.callAsrStates.clear();
+    if (this.wss) {
+      await new Promise<void>((resolve) => {
+        this.wss!.close(() => resolve());
+      });
+      this.wss = null;
+    }
+    this.serverInstance = null;
+    this.initPromise = null;
+    await RedisPubSubService.close();
+  }
+
   public static initialize(server: http.Server): void {
     // Ensure sample calls exist for valid stream validation in standalone mode
     CallsService.seedSampleCallsIfEmpty();
 
+    if (this.wss && this.serverInstance === server) {
+      return;
+    }
+
+    if (this.wss && this.serverInstance !== server) {
+      try {
+        this.wss.close();
+      } catch {}
+      this.wss = null;
+    }
+
+    this.serverInstance = server;
     this.wss = new WebSocketServer({
       server,
       path: '/ws',
       maxPayload: 1024 * 1024, // 1 MB hard max per frame
     });
 
+    RedisPubSubService.initialize().catch(() => {});
+    RedisPubSubService.subscribe((msg) => this.broadcastLocal(msg));
+
+    this.pingInterval = setInterval(() => {
+      this.wss?.clients.forEach((ws) => {
+        if ((ws as any).isAlive === false) return ws.terminate();
+        (ws as any).isAlive = false;
+        ws.ping();
+      });
+    }, 30000);
+    this.pingInterval.unref();
+
     this.wss.on('connection', (ws: WebSocket, req) => {
+      activeWsConnections.inc();
+      (ws as any).isAlive = true;
+      ws.on('pong', () => {
+        (ws as any).isAlive = true;
+      });
+
       const ipAddress = req.socket.remoteAddress;
       const state: WSClientState = {
         ws,
@@ -136,6 +199,7 @@ export class WebSocketGateway {
           try {
             parsed = JSON.parse(msgStr);
           } catch (jsonErr: any) {
+            wsErrorsTotal.inc({ error_type: 'INVALID_JSON' });
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
@@ -148,6 +212,7 @@ export class WebSocketGateway {
           }
 
           if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
+            wsErrorsTotal.inc({ error_type: 'MALFORMED_MESSAGE' });
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
@@ -161,6 +226,7 @@ export class WebSocketGateway {
 
           await this.handleClientMessage(state, parsed);
         } catch (e: any) {
+          wsErrorsTotal.inc({ error_type: 'INTERNAL_ERROR' });
           ws.send(
             JSON.stringify({
               type: 'ERROR',
@@ -173,6 +239,7 @@ export class WebSocketGateway {
       });
 
       ws.on('close', () => {
+        activeWsConnections.dec();
         if (state.activeCallId) {
           StreamBufferManager.remove(state.activeCallId);
           SpeechBufferManager.remove(state.activeCallId);
@@ -192,21 +259,6 @@ export class WebSocketGateway {
         })
       );
     });
-  }
-
-  public static async close(): Promise<void> {
-    for (const [ws] of this.clientStates) {
-      try {
-        ws.terminate();
-      } catch {}
-    }
-    this.clientStates.clear();
-    if (this.wss) {
-      await new Promise<void>((resolve) => {
-        this.wss!.close(() => resolve());
-      });
-      this.wss = null;
-    }
   }
 
   private static hasPermission(user?: AuthUser, requiredPermission: Permission = Permission.CALLS_STREAM): boolean {
@@ -350,7 +402,10 @@ export class WebSocketGateway {
       state.activeCallId = callId;
       state.activeStreamId = streamId;
 
-      StreamBufferManager.getOrCreate(callId, streamId);
+      const protocol = msg.protocol || msg.payload?.protocol || 'WEBRTC';
+      const mediaSource = msg.mediaSource || msg.payload?.mediaSource;
+
+      StreamBufferManager.getOrCreate(callId, streamId, protocol, mediaSource);
 
       await AuditService.record({
         actorUserId: state.user?.id,
@@ -866,6 +921,11 @@ export class WebSocketGateway {
   }
 
   public static broadcast(msg: WSMessage): void {
+    this.broadcastLocal(msg);
+    RedisPubSubService.publish(msg).catch(() => {});
+  }
+
+  public static broadcastLocal(msg: WSMessage): void {
     const payload = JSON.stringify(msg);
     for (const [ws, state] of this.clientStates) {
       if (ws.readyState === WebSocket.OPEN) {
@@ -889,6 +949,14 @@ export class WebSocketGateway {
             if (!isGlobalAdmin && state.user?.organizationId !== call.organizationId) {
               continue; // Cross-organization isolation
             }
+          } else if (msg.organizationId) {
+            if (state.user?.organizationId !== msg.organizationId) {
+              continue;
+            }
+          }
+        } else if (msg.organizationId) {
+          if (state.user?.organizationId !== msg.organizationId) {
+            continue;
           }
         }
 
@@ -902,11 +970,13 @@ export class WebSocketGateway {
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     message: string;
     action: string;
+    organizationId?: string;
   }): void {
     const sanitizedMsg = PrivacyFirewall.sanitize(alert.message).sanitizedText;
     const msg: WSMessage = {
       type: 'SOC_ALERT',
       callId: alert.callId,
+      organizationId: alert.organizationId,
       payload: {
         severity: alert.severity,
         message: sanitizedMsg,
@@ -969,13 +1039,18 @@ export class WebSocketGateway {
         asrState.lastCommittedSeq = sequenceNumber;
         asrState.latestConvResult = convResult;
 
-        // Broadcast ASR_FINAL if transcript is available
+        // Broadcast ASR_FINAL with PrivacyFirewall sanitization
         if (convResult.asr?.transcript) {
+          const sanitizedText = PrivacyFirewall.sanitize(convResult.asr.transcript).sanitizedText;
+          const sanitizedAsr = {
+            ...convResult.asr,
+            transcript: sanitizedText,
+          };
           this.broadcast({
             type: 'ASR_FINAL',
             callId,
             sequenceNumber,
-            payload: convResult.asr,
+            payload: sanitizedAsr,
             timestamp: new Date().toISOString(),
           });
         }

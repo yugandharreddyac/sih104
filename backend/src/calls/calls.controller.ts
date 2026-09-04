@@ -37,8 +37,7 @@ export class CallsController {
       return;
     }
 
-    const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
-    if (!isGlobalAdmin && req.user?.organizationId && call.organizationId !== req.user.organizationId) {
+    if (req.user?.organizationId && call.organizationId !== req.user.organizationId) {
       res.status(403).json({
         success: false,
         error: 'FORBIDDEN',

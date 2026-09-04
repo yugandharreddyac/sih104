@@ -123,8 +123,18 @@ export class CallsService {
       metadata: { reason },
     });
 
+    try {
+      await db.query(
+        `UPDATE calls SET status = $1, ended_at = $2, duration_seconds = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4`,
+        [call.status, call.endedAt || null, call.durationSeconds, call.id]
+      );
+    } catch {
+      // Standalone mode support
+    }
+
     return call;
   }
+
 
   public static seedSampleCallsIfEmpty(): void {
     if (this.calls.size > 0) return;

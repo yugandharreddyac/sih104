@@ -49,11 +49,24 @@ describe('Phase 3: Async ASR / VAD / Streaming Concurrency Validation', () => {
         const callId = `call-async-delay-${delay}`;
         const streamId = `stream-delay-${delay}`;
         const speechBuf = SpeechBufferManager.getOrCreate(callId, streamId);
+        const activeTimers: NodeJS.Timeout[] = [];
+        const activePromises: Promise<any>[] = [];
 
-        // Mock ASR service with deterministic delay
-        jest.spyOn(global, 'fetch').mockImplementation(async () => {
+        // Mock ASR service with deterministic delay, signal cancellation, and timer tracking
+        jest.spyOn(global, 'fetch').mockImplementation(async (_url: any, init?: any) => {
           if (delay > 0) {
-            await new Promise((resolve) => setTimeout(resolve, delay));
+            await new Promise<void>((resolve, reject) => {
+              const timer = setTimeout(() => resolve(), delay);
+              activeTimers.push(timer);
+              if (init?.signal) {
+                init.signal.addEventListener('abort', () => {
+                  clearTimeout(timer);
+                  const err = new Error('The operation was aborted');
+                  err.name = 'AbortError';
+                  reject(err);
+                });
+              }
+            });
           }
           return {
             ok: true,
@@ -76,7 +89,7 @@ describe('Phase 3: Async ASR / VAD / Streaming Concurrency Validation', () => {
           const segment = speechBuf.push(pcm256ms, 256, true);
           if (segment) {
             // Asynchronous non-blocking dispatch (identical to ws_server.ts)
-            (async () => {
+            const p = (async () => {
               try {
                 await ConversationService.analyzeTurn({
                   callId,
@@ -89,6 +102,7 @@ describe('Phase 3: Async ASR / VAD / Streaming Concurrency Validation', () => {
                 speechBuf.markProcessingComplete(segment.turnIndex);
               }
             })();
+            activePromises.push(p);
           }
 
           const elapsed = Date.now() - t0;
@@ -109,6 +123,12 @@ describe('Phase 3: Async ASR / VAD / Streaming Concurrency Validation', () => {
         }
 
         SpeechBufferManager.remove(callId);
+
+        // Clean up any remaining background timers and wait for active promises
+        for (const timer of activeTimers) {
+          clearTimeout(timer);
+        }
+        await Promise.allSettled(activePromises);
       });
     });
 

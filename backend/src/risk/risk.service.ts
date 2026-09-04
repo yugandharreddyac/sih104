@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { RiskAssessment } from './risk.model';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { AuditService } from '../security/audit.service';
+import { db } from '../database/db';
+import { WebhookDispatcher } from '../interventions/webhook_dispatcher';
 
 export interface UnifiedRiskEvaluationPayload {
   callId: string;
@@ -15,11 +17,24 @@ export interface UnifiedRiskEvaluationPayload {
   metadata?: Record<string, any>;
 }
 
+export interface TransactionContextPayload {
+  callId: string;
+  transactionId: string;
+  amount: number;
+  currency: string;
+  transactionType: 'FUND_TRANSFER' | 'BENEFICIARY_UPDATE' | 'CREDENTIAL_RESET' | 'CARD_MANAGEMENT' | string;
+  beneficiaryChange?: boolean;
+  otpRequested?: boolean;
+  metadata?: Record<string, any>;
+}
+
 export class RiskService {
   public static readonly AI_TIMEOUT_MS = 1200;
   private static assessments: Map<string, any> = new Map();
   private static timelineHistory: Map<string, any[]> = new Map();
+  private static transactionContexts: Map<string, TransactionContextPayload> = new Map();
   private static aiBaseUrl = process.env.AI_SERVICE_URL || 'http://localhost:8000';
+
 
   private static readonly VALID_RISK_LEVELS = new Set([
     'SAFE',
@@ -305,4 +320,134 @@ export class RiskService {
       this.assessments.set(callId, assessment);
     }
   }
+
+  /**
+   * Ingests external core banking / fraud transaction context, persists it,
+   * recalculates unified risk score dynamically, and emits live alerts.
+   */
+  public static async submitTransactionContext(
+    payload: TransactionContextPayload,
+    actorUserId?: string
+  ): Promise<any> {
+    const sanitizedMetadata = PrivacyFirewall.sanitizeObject(payload.metadata || {});
+
+    const contextRecord: TransactionContextPayload = {
+      callId: payload.callId,
+      transactionId: payload.transactionId,
+      amount: payload.amount,
+      currency: payload.currency || 'INR',
+      transactionType: payload.transactionType,
+      beneficiaryChange: payload.beneficiaryChange ?? false,
+      otpRequested: payload.otpRequested ?? false,
+      metadata: sanitizedMetadata,
+    };
+
+    // Store in-memory cache
+    this.transactionContexts.set(payload.callId, contextRecord);
+
+    // Persist to PostgreSQL if available
+    try {
+      await db.query(
+        `INSERT INTO transaction_contexts (id, call_id, transaction_id, amount, currency, transaction_type, beneficiary_change, otp_requested, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+         ON CONFLICT (call_id) DO UPDATE
+         SET transaction_id = EXCLUDED.transaction_id,
+             amount = EXCLUDED.amount,
+             currency = EXCLUDED.currency,
+             transaction_type = EXCLUDED.transaction_type,
+             beneficiary_change = EXCLUDED.beneficiary_change,
+             otp_requested = EXCLUDED.otp_requested,
+             metadata = EXCLUDED.metadata,
+             updated_at = CURRENT_TIMESTAMP`,
+        [
+          uuidv4(),
+          contextRecord.callId,
+          contextRecord.transactionId,
+          contextRecord.amount,
+          contextRecord.currency,
+          contextRecord.transactionType,
+          contextRecord.beneficiaryChange,
+          contextRecord.otpRequested,
+          JSON.stringify(contextRecord.metadata),
+        ]
+      );
+    } catch {
+      // Standalone mode support
+    }
+
+    // Build synthetic context indicators to elevate financial fraud and credential theft dimensions
+    const contextSignals: string[] = [];
+    if (contextRecord.beneficiaryChange) {
+      contextSignals.push('New or modified payment beneficiary detected on active call session.');
+    }
+    if (contextRecord.otpRequested) {
+      contextSignals.push('One-time password (OTP) verification requested during high-value transaction.');
+    }
+    if (contextRecord.amount >= 50000) {
+      contextSignals.push(`High-value financial transaction in progress (${contextRecord.currency} ${contextRecord.amount}).`);
+    }
+
+    // Recalculate unified risk score with injected transaction context
+    const existingAssessment = this.assessments.get(payload.callId);
+    const updatedRisk = await this.evaluateUnifiedRisk({
+      callId: payload.callId,
+      chunkIndex: (existingAssessment?.turn_index || 0) + 1,
+      metadata: {
+        transaction: contextRecord,
+        contextSignals,
+      },
+    }, actorUserId);
+
+    // If transaction creates high risk or triggers policy, dispatch outbound signed intervention webhook
+    if (updatedRisk.overall_risk_score >= 70.0 || updatedRisk.policy_recommendation?.is_triggered) {
+      const action = updatedRisk.policy_recommendation?.recommended_action || 'REQUIRE_STEP_UP_VERIFICATION';
+      const reasons = [
+        ...contextSignals,
+        ...(updatedRisk.primary_drivers || []),
+      ];
+
+      WebhookDispatcher.dispatch({
+        event: 'TRANSACTION_RISK_ELEVATED',
+        callId: payload.callId,
+        riskScore: updatedRisk.overall_risk_score,
+        riskLevel: updatedRisk.risk_level,
+        action,
+        reasons,
+        correlationId: `tx-corr-${contextRecord.transactionId}`,
+        metadata: {
+          transactionId: contextRecord.transactionId,
+          amount: contextRecord.amount,
+          currency: contextRecord.currency,
+        },
+      }).catch(() => {});
+    }
+
+    await AuditService.record({
+      actorUserId,
+      organizationId: '00000000-0000-0000-0000-000000000001',
+      action: 'TRANSACTION_CONTEXT_INGESTED',
+      resourceType: 'TRANSACTION',
+      resourceId: payload.transactionId,
+      result: 'SUCCESS',
+      metadata: {
+        callId: payload.callId,
+        amount: payload.amount,
+        currency: payload.currency,
+        type: payload.transactionType,
+        riskScore: updatedRisk.overall_risk_score,
+        riskLevel: updatedRisk.risk_level,
+      },
+    }).catch(() => {});
+
+    return {
+      success: true,
+      transaction: contextRecord,
+      riskAssessment: updatedRisk,
+    };
+  }
+
+  public static getTransactionContext(callId: string): TransactionContextPayload | null {
+    return this.transactionContexts.get(callId) || null;
+  }
 }
+

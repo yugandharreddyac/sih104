@@ -14,7 +14,13 @@ const envSchema = z.object({
   AI_SERVICE_URL: z.string().default('http://localhost:8000'),
   ENCRYPTION_KEY: z.string().min(32).default('0123456789abcdef0123456789abcdef'), // 32 bytes for AES-256
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
+  RTP_UDP_HOST: z.string().default('0.0.0.0'),
+  RTP_UDP_PORT: z.string().transform((val) => parseInt(val, 10)).default('10000'),
+  INTERVENTION_WEBHOOK_URL: z.string().optional(),
+  WEBHOOK_SECRET: z.string().min(16).default('voxshield_default_dev_webhook_secret_2026'),
+  TELEPHONY_ENABLED: z.string().transform((val) => val === 'true' || val === '1').default('true'),
 });
+
 
 const parsed = envSchema.safeParse(process.env);
 

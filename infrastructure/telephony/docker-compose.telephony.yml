@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  asterisk-testbed:
+    image: andrius/asterisk:20-alpine
+    container_name: voxshield-asterisk
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      - "10000-10100:10000-10100/udp"
+    volumes:
+      - ./asterisk/pjsip.conf:/etc/asterisk/pjsip.conf:ro
+      - ./asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ./asterisk/rtp.conf:/etc/asterisk/rtp.conf:ro
+    environment:
+      - ASTERISK_UID=1000
+      - ASTERISK_GID=1000

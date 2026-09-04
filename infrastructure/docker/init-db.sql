@@ -216,6 +216,55 @@ CREATE TABLE IF NOT EXISTS system_configurations (
     CONSTRAINT uq_org_config UNIQUE (organization_id, config_key)
 );
 
+-- 18. Transaction Contexts
+CREATE TABLE IF NOT EXISTS transaction_contexts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    call_id VARCHAR(255) NOT NULL UNIQUE,
+    transaction_id VARCHAR(255) NOT NULL,
+    amount NUMERIC(15,2) NOT NULL,
+    currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+    transaction_type VARCHAR(100) NOT NULL,
+    beneficiary_change BOOLEAN NOT NULL DEFAULT false,
+    otp_requested BOOLEAN NOT NULL DEFAULT false,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 19. Interventions
+CREATE TABLE IF NOT EXISTS interventions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    call_id VARCHAR(255) NOT NULL,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    policy_id VARCHAR(100),
+    risk_assessment_id VARCHAR(100),
+    level VARCHAR(100) NOT NULL,
+    action_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'AWAITING_HUMAN',
+    requested_by VARCHAR(100) NOT NULL,
+    approved_by VARCHAR(100),
+    human_decision VARCHAR(50),
+    decision_reason TEXT,
+    evidence_summary JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 20. Webhook Deliveries
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id VARCHAR(255) NOT NULL UNIQUE,
+    event_type VARCHAR(100) NOT NULL,
+    call_id VARCHAR(255) NOT NULL,
+    status_code INTEGER,
+    attempts INTEGER NOT NULL DEFAULT 1,
+    success BOOLEAN NOT NULL,
+    error TEXT,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    delivered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_org ON users(organization_id);
@@ -228,6 +277,10 @@ CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_user_id);
 CREATE INDEX IF NOT EXISTS idx_verification_call ON verification_requests(call_id);
+CREATE INDEX IF NOT EXISTS idx_tx_context_call ON transaction_contexts(call_id);
+CREATE INDEX IF NOT EXISTS idx_interventions_call ON interventions(call_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_event ON webhook_deliveries(event_id);
+
 
 -- Seed Default Roles
 INSERT INTO roles (id, name, description, permissions)

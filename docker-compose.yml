@@ -66,14 +66,19 @@ services:
     environment:
       - PORT=4000
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://voxshield_user:voxshield_secure_pass@postgres:5432/voxshield_db
+      - DATABASE_URL=postgresql://voxshield_user:${POSTGRES_PASSWORD:-voxshield_secure_pass}@postgres:5432/voxshield_db
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
-      - JWT_SECRET=voxshield_super_secure_jwt_secret_dev_key_2026!
-      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+      - JWT_SECRET=${JWT_SECRET:-voxshield_super_secure_jwt_secret_dev_key_2026!}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-voxshield_default_dev_webhook_secret_2026}
+      - INTERVENTION_WEBHOOK_URL=${INTERVENTION_WEBHOOK_URL:-}
+      - RTP_UDP_PORT=10000
     ports:
       - "4000:4000"
+      - "10000:10000/udp"
     healthcheck:
+
       test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
       interval: 10s
       timeout: 5s

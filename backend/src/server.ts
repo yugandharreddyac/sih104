@@ -16,6 +16,7 @@ import { WebSocketGateway } from './websocket/ws_server';
 import { AuthService } from './auth/auth.service';
 import { PoliciesService } from './policies/policies.service';
 import { CallsService } from './calls/calls.service';
+import { RtpServer } from './telephony/rtp/rtp_server';
 
 import acousticRoutes from './acoustic/acoustic.routes';
 import speakerRoutes from './speaker/speaker.routes';
@@ -24,6 +25,7 @@ import conversationRoutes from './conversation/conversation.routes';
 import interventionRoutes from './interventions/intervention.routes';
 
 export const app = express();
+
 
 // Security Middlewares
 app.use(helmet({
@@ -107,13 +109,25 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-// Server Initialization
+// Server & Telephony Initialization
 export const server = http.createServer(app);
 WebSocketGateway.initialize(server);
+
+export const rtpServer = new RtpServer({
+  host: env.RTP_UDP_HOST,
+  port: env.RTP_UDP_PORT,
+});
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(env.PORT, () => {
     console.info(`🛡️ VOXSHIELD Core Backend listening on port ${env.PORT}`);
     console.info(`🛡️ Phase 1 Foundation Active. Ready for SOC requests.`);
   });
+
+  if (env.TELEPHONY_ENABLED) {
+    rtpServer.start().catch((err) => {
+      console.warn('⚠️ [RTP Server] Startup notice (telephony socket unavailable):', err.message);
+    });
+  }
 }
+

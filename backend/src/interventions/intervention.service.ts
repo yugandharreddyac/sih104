@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { InterventionRecord, InterventionLevel, HumanDecision, InterventionStatus } from './types';
 import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
+import { WebhookDispatcher } from './webhook_dispatcher';
+import { db } from '../database/db';
 
 export class InterventionService {
   private static interventions: Map<string, InterventionRecord> = new Map();
@@ -38,6 +40,30 @@ export class InterventionService {
 
     this.interventions.set(id, record);
 
+    // Persist to PostgreSQL if available
+    try {
+      await db.query(
+        `INSERT INTO interventions (id, call_id, organization_id, policy_id, risk_assessment_id, level, action_type, status, requested_by, evidence_summary, metadata, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+        [
+          record.id,
+          record.callId,
+          record.organizationId,
+          record.policyId || null,
+          record.riskAssessmentId || null,
+          record.level,
+          record.actionType,
+          record.status,
+          record.requestedBy,
+          JSON.stringify(record.evidenceSummary),
+          JSON.stringify(record.metadata),
+          record.createdAt,
+        ]
+      );
+    } catch {
+      // Standalone mode support
+    }
+
     await AuditService.record({
       actorUserId: params.requestedBy,
       organizationId: params.organizationId,
@@ -48,8 +74,25 @@ export class InterventionService {
       metadata: { callId: params.callId, level: params.level, actionType: params.actionType },
     });
 
+    // Dispatch outbound webhook for high-priority policy interventions
+    WebhookDispatcher.dispatch({
+      event: 'POLICY_INTERVENTION_TRIGGERED',
+      callId: params.callId,
+      riskScore: null,
+      riskLevel: params.level,
+      action: params.actionType,
+      reasons: sanitizedEvidence,
+      correlationId: `int-${id}`,
+      metadata: {
+        interventionId: id,
+        policyId: params.policyId,
+        level: params.level,
+      },
+    }).catch(() => {});
+
     return record;
   }
+
 
   public static listInterventions(organizationId?: string): InterventionRecord[] {
     const all = Array.from(this.interventions.values());

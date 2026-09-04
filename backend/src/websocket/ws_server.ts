@@ -21,6 +21,8 @@ export interface WSClientState {
   authenticated: boolean;
   activeCallId?: string;
   activeStreamId?: string;
+  activeProtocol?: string;
+  activeMediaSource?: string;
   connectedAt: Date;
   ipAddress?: string;
 }
@@ -50,6 +52,9 @@ export interface WSMessage {
   callId?: string;
   streamId?: string;
   sequenceNumber?: number;
+  protocol?: string;
+  mediaSource?: string;
+  timestampMs?: number;
   payload?: any;
   timestamp?: string;
   error?: string;
@@ -366,10 +371,24 @@ export class WebSocketGateway {
           ? rawStreamId.trim().slice(0, 100)
           : `stream-${Date.now()}`;
 
+      const rawProtocol = msg.payload?.protocol ?? msg.protocol;
+      const protocol =
+        typeof rawProtocol === 'string' && rawProtocol.trim().length > 0
+          ? rawProtocol.trim().toUpperCase()
+          : 'WEBRTC';
+
+      const rawMediaSource = msg.payload?.mediaSource ?? msg.payload?.source ?? msg.mediaSource;
+      const mediaSource =
+        typeof rawMediaSource === 'string' && rawMediaSource.trim().length > 0
+          ? rawMediaSource.trim()
+          : 'WEBSOCKET_GATEWAY';
+
       state.activeCallId = callId;
       state.activeStreamId = streamId;
+      state.activeProtocol = protocol;
+      state.activeMediaSource = mediaSource;
 
-      StreamBufferManager.getOrCreate(callId, streamId);
+      StreamBufferManager.getOrCreate(callId, streamId, protocol, mediaSource);
 
       await AuditService.record({
         actorUserId: state.user?.id,
@@ -379,7 +398,7 @@ export class WebSocketGateway {
         resourceId: callId,
         result: 'SUCCESS',
         ipAddress: state.ipAddress,
-        metadata: { streamId },
+        metadata: { streamId, protocol, mediaSource },
       });
 
       ws.send(
@@ -388,6 +407,8 @@ export class WebSocketGateway {
           callId,
           streamId,
           format: 'PCM_16K_MONO',
+          protocol,
+          mediaSource,
           timestamp: new Date().toISOString(),
         })
       );
@@ -552,13 +573,23 @@ export class WebSocketGateway {
           ? msg.payload.speakerChannel
           : 0;
 
+      const rawTs = msg.timestampMs ?? msg.payload?.timestampMs ?? msg.payload?.timestamp ?? msg.timestamp;
+      let timestampMs: number;
+      if (typeof rawTs === 'number' && Number.isFinite(rawTs) && rawTs > 0) {
+        timestampMs = Math.round(rawTs);
+      } else if (typeof rawTs === 'string' && !isNaN(Number(rawTs)) && Number(rawTs) > 0) {
+        timestampMs = Math.round(Number(rawTs));
+      } else {
+        timestampMs = Date.now();
+      }
+
       // Buffer audio
       const streamId = state.activeStreamId || `stream-${Date.now()}`;
-      const buffer = StreamBufferManager.getOrCreate(callId, streamId);
+      const buffer = StreamBufferManager.getOrCreate(callId, streamId, state.activeProtocol, state.activeMediaSource);
       buffer.push({
         sequenceNumber,
         data: normalized.pcmBuffer,
-        timestampMs: Date.now(),
+        timestampMs,
         durationMs: normalized.durationMs,
       });
 

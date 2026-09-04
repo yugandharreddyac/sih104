@@ -7,6 +7,7 @@ export interface CallStreamMetadata {
   callerIdentifier: string;
   destinationIdentifier: string;
   protocol: 'WEBRTC' | 'SIP' | 'PSTN' | 'TEST_STREAM';
+  mediaSource?: string;
   sampleRate: number;
   channels: number;
   startedAt: Date;
@@ -45,7 +46,7 @@ export class TestAudioAdapter extends EventEmitter implements CommunicationAdapt
 
   public async startCallSession(metadata: CallStreamMetadata): Promise<string> {
     this.activeSessions.set(metadata.callId, metadata);
-    StreamBufferManager.getOrCreate(metadata.callId);
+    StreamBufferManager.getOrCreate(metadata.callId, undefined, metadata.protocol, metadata.mediaSource || 'TEST_AUDIO_ADAPTER');
     this.emit('call_started', metadata);
     return metadata.callId;
   }

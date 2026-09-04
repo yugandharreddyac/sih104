@@ -301,6 +301,66 @@ describe('Phase 2: Stream Buffer & Memory Bounds Unit Tests', () => {
     StreamBufferManager.remove(callId);
     expect(StreamBufferManager.get(callId)).toBeUndefined();
   });
+
+  describe('Phase 4C: Telephony/Media Adapter Out-of-Order & Metadata Unit Tests', () => {
+    it('should correctly reorder out-of-order packet arrival in StreamBuffer', () => {
+      const buffer = new StreamBuffer('call-reorder-001', 'stream-reorder-001');
+
+      // Push out-of-order chunks: 0, 3, 1, 2
+      buffer.push({ sequenceNumber: 0, data: Buffer.from('chunk0'), timestampMs: 1000 });
+      buffer.push({ sequenceNumber: 3, data: Buffer.from('chunk3'), timestampMs: 4000 });
+      buffer.push({ sequenceNumber: 1, data: Buffer.from('chunk1'), timestampMs: 2000 });
+      buffer.push({ sequenceNumber: 2, data: Buffer.from('chunk2'), timestampMs: 3000 });
+
+      const queue = buffer.getQueue();
+      expect(queue.length).toBe(4);
+      expect(queue[0].sequenceNumber).toBe(0);
+      expect(queue[1].sequenceNumber).toBe(1);
+      expect(queue[2].sequenceNumber).toBe(2);
+      expect(queue[3].sequenceNumber).toBe(3);
+
+      // Verify sequential pop returns sorted chunks
+      expect(buffer.pop()?.sequenceNumber).toBe(0);
+      expect(buffer.pop()?.sequenceNumber).toBe(1);
+      expect(buffer.pop()?.sequenceNumber).toBe(2);
+      expect(buffer.pop()?.sequenceNumber).toBe(3);
+    });
+
+    it('should ignore duplicate sequence numbers gracefully', () => {
+      const buffer = new StreamBuffer('call-dup-001', 'stream-dup-001');
+
+      buffer.push({ sequenceNumber: 0, data: Buffer.from('chunk0') });
+      buffer.push({ sequenceNumber: 1, data: Buffer.from('chunk1') });
+      buffer.push({ sequenceNumber: 1, data: Buffer.from('chunk1-duplicate') });
+
+      expect(buffer.getQueue().length).toBe(2);
+      expect(buffer.getMetrics().currentBufferChunkCount).toBe(2);
+    });
+
+    it('should preserve custom timestamps, edge future timestamps, and fallback to Date.now() when missing', () => {
+      const buffer = new StreamBuffer('call-ts-001', 'stream-ts-001');
+
+      const customTs = 1710000000000;
+      const futureTs = 1800000000000;
+
+      buffer.push({ sequenceNumber: 0, data: Buffer.alloc(100), timestampMs: customTs });
+      buffer.push({ sequenceNumber: 1, data: Buffer.alloc(100), timestampMs: futureTs });
+      buffer.push({ sequenceNumber: 2, data: Buffer.alloc(100) }); // missing ts
+
+      const queue = buffer.getQueue();
+      expect(queue[0].timestampMs).toBe(customTs);
+      expect(queue[1].timestampMs).toBe(futureTs);
+      expect(queue[2].timestampMs).toBeGreaterThan(0);
+    });
+
+    it('should propagate protocol and mediaSource metadata in StreamBuffer metrics', () => {
+      const buffer = new StreamBuffer('call-meta-001', 'stream-meta-001', 'SIP', 'TWILIO_TRUNK');
+      const metrics = buffer.getMetrics();
+
+      expect(metrics.protocol).toBe('SIP');
+      expect(metrics.mediaSource).toBe('TWILIO_TRUNK');
+    });
+  });
 });
 
 describe('Phase 2: Step 2.1 WebSocket Input Validation & RBAC Integration Tests', () => {
@@ -642,6 +702,55 @@ describe('Phase 2: Step 2.1 WebSocket Input Validation & RBAC Integration Tests'
     const res2 = await client.receiveNext();
     expect(res2.type).toBe('ERROR');
     expect(res2.error).toBe('INVALID_CHANNELS');
+
+    await client.close();
+  });
+
+  it('should accept and propagate custom protocol, mediaSource, and timestampMs in WebSocket stream', async () => {
+    const client = await createWsClient();
+    await client.receiveNext(); // consume CONNECTED
+
+    const token = TokenService.generateToken({
+      userId: 'u-op-08',
+      email: 'operator8@voxshield.local',
+      role: RoleName.OPERATOR,
+      organizationId: validOrgId,
+    });
+
+    client.ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
+    await client.receiveNext(); // AUTHENTICATED
+
+    client.ws.send(
+      JSON.stringify({
+        type: 'START_STREAM',
+        callId: validCallId,
+        payload: { protocol: 'SIP', mediaSource: 'TWILIO_VOICE' },
+      })
+    );
+    const startRes = await client.receiveNext();
+    expect(startRes.type).toBe('STREAM_STARTED');
+    expect(startRes.protocol).toBe('SIP');
+    expect(startRes.mediaSource).toBe('TWILIO_VOICE');
+
+    const customTs = 1712345678900;
+    client.ws.send(
+      JSON.stringify({
+        type: 'AUDIO_CHUNK',
+        callId: validCallId,
+        sequenceNumber: 0,
+        payload: {
+          audio_base64: Buffer.alloc(320).toString('base64'),
+          timestampMs: customTs,
+        },
+      })
+    );
+
+    // Request stream status metrics
+    client.ws.send(JSON.stringify({ type: 'STREAM_STATUS', callId: validCallId }));
+    const statusRes = await client.receiveNext();
+    expect(statusRes.type).toBe('STREAM_STATUS');
+    expect(statusRes.metrics.protocol).toBe('SIP');
+    expect(statusRes.metrics.mediaSource).toBe('TWILIO_VOICE');
 
     await client.close();
   });

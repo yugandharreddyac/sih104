@@ -22,6 +22,8 @@ export interface StreamBufferMetrics {
   maxBufferSizeBytes: number;
   maxBufferChunkCount: number;
   bufferUtilizationRatio: number;
+  protocol: string;
+  mediaSource: string;
 }
 
 export class StreamBuffer {
@@ -35,11 +37,17 @@ export class StreamBuffer {
   private totalDropped = 0;
   private sequenceErrors = 0;
 
-  constructor(public readonly callId: string, public readonly streamId: string) {}
+  constructor(
+    public readonly callId: string,
+    public readonly streamId: string,
+    public readonly protocol: string = 'WEBRTC',
+    public readonly mediaSource: string = 'WEBSOCKET'
+  ) {}
 
   /**
    * Pushes a new normalized chunk into the bounded buffer.
-   * Drops oldest chunks or rejects if buffer limit exceeded (backpressure).
+   * Inserts in sorted sequence order to handle out-of-order packet arrival.
+   * Drops oldest chunks if capacity limit exceeded (backpressure).
    */
   public push(chunk: {
     sequenceNumber: number;
@@ -51,12 +59,12 @@ export class StreamBuffer {
     let sequenceError = false;
     let droppedOldest = false;
 
-    // Sequence continuity check
+    // Sequence continuity check (out-of-order arrival or gap)
     if (chunk.sequenceNumber !== this.expectedSequence) {
       this.sequenceErrors++;
       sequenceError = true;
     }
-    this.expectedSequence = chunk.sequenceNumber + 1;
+    this.expectedSequence = Math.max(this.expectedSequence, chunk.sequenceNumber + 1);
 
     const chunkSize = chunk.data.length;
 
@@ -74,17 +82,32 @@ export class StreamBuffer {
       }
     }
 
-    // Push new chunk
+    const timestampMs =
+      typeof chunk.timestampMs === 'number' && Number.isFinite(chunk.timestampMs) && chunk.timestampMs > 0
+        ? Math.round(chunk.timestampMs)
+        : Date.now();
+
     const buffered: BufferedChunk = {
       sequenceNumber: chunk.sequenceNumber,
       data: chunk.data,
-      timestampMs: chunk.timestampMs || Date.now(),
+      timestampMs,
       durationMs: chunk.durationMs || 0,
       sizeBytes: chunkSize,
       receivedAt: new Date(),
     };
 
-    this.queue.push(buffered);
+    // Sorted insertion by sequenceNumber to handle out-of-order arrival
+    let insertIdx = 0;
+    while (insertIdx < this.queue.length && this.queue[insertIdx].sequenceNumber < buffered.sequenceNumber) {
+      insertIdx++;
+    }
+
+    // Ignore duplicate sequence numbers
+    if (insertIdx < this.queue.length && this.queue[insertIdx].sequenceNumber === buffered.sequenceNumber) {
+      return { accepted: true, sequenceError, droppedOldest };
+    }
+
+    this.queue.splice(insertIdx, 0, buffered);
     this.currentBytes += chunkSize;
 
     return {
@@ -102,6 +125,10 @@ export class StreamBuffer {
     return chunk;
   }
 
+  public getQueue(): readonly BufferedChunk[] {
+    return this.queue;
+  }
+
   public getMetrics(): StreamBufferMetrics {
     const utilization = this.currentBytes / StreamBuffer.MAX_BUFFER_BYTES;
     return {
@@ -114,6 +141,8 @@ export class StreamBuffer {
       maxBufferSizeBytes: StreamBuffer.MAX_BUFFER_BYTES,
       maxBufferChunkCount: StreamBuffer.MAX_BUFFER_CHUNKS,
       bufferUtilizationRatio: Math.round(utilization * 1000) / 1000,
+      protocol: this.protocol,
+      mediaSource: this.mediaSource,
     };
   }
 
@@ -126,9 +155,17 @@ export class StreamBuffer {
 export class StreamBufferManager {
   private static buffers: Map<string, StreamBuffer> = new Map();
 
-  public static getOrCreate(callId: string, streamId?: string): StreamBuffer {
+  public static getOrCreate(
+    callId: string,
+    streamId?: string,
+    protocol: string = 'WEBRTC',
+    mediaSource: string = 'WEBSOCKET'
+  ): StreamBuffer {
     if (!this.buffers.has(callId)) {
-      this.buffers.set(callId, new StreamBuffer(callId, streamId || `stream-${Date.now()}`));
+      this.buffers.set(
+        callId,
+        new StreamBuffer(callId, streamId || `stream-${Date.now()}`, protocol, mediaSource)
+      );
     }
     return this.buffers.get(callId)!;
   }

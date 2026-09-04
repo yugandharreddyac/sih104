@@ -65,6 +65,7 @@ export interface WSMessage {
 export class WebSocketGateway {
   private static wss: WebSocketServer | null = null;
   private static clientStates: Map<WebSocket, WSClientState> = new Map();
+  private static initPromise: Promise<void> | null = null;
 
   private static pingInterval: NodeJS.Timeout | null = null;
 
@@ -72,6 +73,9 @@ export class WebSocketGateway {
 
   public static async initialize(server: http.Server): Promise<void> {
     if (this.wss) return;
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = (async () => {
 
     // Ensure sample calls exist for valid stream validation in standalone mode
     CallsService.seedSampleCallsIfEmpty();
@@ -199,6 +203,9 @@ export class WebSocketGateway {
       });
     }, 30000);
     this.pingInterval.unref();
+    })();
+
+    await this.initPromise;
   }
 
   public static async close(): Promise<void> {
@@ -218,6 +225,7 @@ export class WebSocketGateway {
       });
       this.wss = null;
     }
+    this.initPromise = null;
     await RedisPubSubService.close();
   }
 

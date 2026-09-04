@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { AuditService } from '../security/audit.service';
 import { db } from '../database/db';
+import { isStrictMode } from '../config/env';
 
 export type CallStatus = 'INITIALIZING' | 'ACTIVE' | 'VERIFYING' | 'TERMINATED' | 'FLAGGED' | 'BLOCKED';
 
@@ -21,6 +22,25 @@ export interface CallRecord {
 
 export class CallsService {
   private static calls: Map<string, CallRecord> = new Map();
+
+  /**
+   * Maps a PostgreSQL row to the CallRecord interface.
+   */
+  private static rowToCallRecord(row: any): CallRecord {
+    return {
+      id: row.id,
+      externalCallId: row.external_call_id || undefined,
+      organizationId: row.organization_id,
+      callerIdentifier: row.caller_identifier,
+      destinationIdentifier: row.destination_identifier,
+      status: row.status as CallStatus,
+      startedAt: new Date(row.started_at),
+      endedAt: row.ended_at ? new Date(row.ended_at) : undefined,
+      durationSeconds: row.duration_seconds || 0,
+      metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
+      events: [], // Events are stored in call_events table; not loaded inline for list/get
+    };
+  }
 
   public static async createCall(params: {
     organizationId: string;
@@ -45,6 +65,7 @@ export class CallsService {
       events: [{ type: 'CALL_STARTED', payload: { startedAt: new Date() }, timestamp: new Date() }],
     };
 
+    // Always keep the in-memory map updated (used by fallback mode and seeded data)
     this.calls.set(callId, call);
 
     await AuditService.record({
@@ -72,17 +93,38 @@ export class CallsService {
         ]
       );
     } catch (err) {
-      // Standalone mode support
+      if (isStrictMode()) {
+        // Remove from in-memory since the DB write failed
+        this.calls.delete(callId);
+        throw err;
+      }
+      // Standalone mode support — silently proceed with in-memory only
     }
 
     return call;
   }
 
-  public static getCallById(callId: string): CallRecord | null {
+  public static async getCallById(callId: string): Promise<CallRecord | null> {
+    if (isStrictMode()) {
+      const result = await db.query('SELECT * FROM calls WHERE id = $1', [callId]);
+      if (result.rows.length === 0) return null;
+      return this.rowToCallRecord(result.rows[0]);
+    }
     return this.calls.get(callId) || null;
   }
 
-  public static listActiveCalls(organizationId?: string): CallRecord[] {
+  public static async listActiveCalls(organizationId?: string): Promise<CallRecord[]> {
+    if (isStrictMode()) {
+      if (organizationId) {
+        const result = await db.query(
+          'SELECT * FROM calls WHERE organization_id = $1 ORDER BY created_at DESC',
+          [organizationId]
+        );
+        return result.rows.map(this.rowToCallRecord);
+      }
+      const result = await db.query('SELECT * FROM calls ORDER BY created_at DESC');
+      return result.rows.map(this.rowToCallRecord);
+    }
     const all = Array.from(this.calls.values());
     if (organizationId) {
       return all.filter((c) => c.organizationId === organizationId);
@@ -95,6 +137,35 @@ export class CallsService {
     status: CallStatus,
     reason?: string
   ): Promise<CallRecord> {
+    if (isStrictMode()) {
+      const existing = await this.getCallById(callId);
+      if (!existing) {
+        throw new Error(`Call ${callId} not found`);
+      }
+
+      const endedAt = (status === 'TERMINATED' || status === 'BLOCKED') ? new Date() : null;
+      const durationSeconds = endedAt
+        ? Math.floor((endedAt.getTime() - existing.startedAt.getTime()) / 1000)
+        : existing.durationSeconds;
+
+      await db.query(
+        'UPDATE calls SET status = $1, ended_at = $2, duration_seconds = $3, updated_at = NOW() WHERE id = $4',
+        [status, endedAt, durationSeconds, callId]
+      );
+
+      await AuditService.record({
+        organizationId: existing.organizationId,
+        action: `CALL_STATUS_${status}`,
+        resourceType: 'CALL',
+        resourceId: callId,
+        result: 'SUCCESS',
+        metadata: { reason },
+      });
+
+      return { ...existing, status, endedAt: endedAt || existing.endedAt, durationSeconds };
+    }
+
+    // Fallback mode — in-memory
     const call = this.calls.get(callId);
     if (!call) {
       throw new Error(`Call ${callId} not found`);

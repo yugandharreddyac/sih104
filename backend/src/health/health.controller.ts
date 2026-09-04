@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { db } from '../database/db';
-import { env } from '../config/env';
+import { env, isStrictMode } from '../config/env';
 
 export class HealthController {
   public static async check(req: Request, res: Response): Promise<void> {
@@ -23,12 +23,20 @@ export class HealthController {
       aiServiceStatus = 'OFFLINE_OR_PENDING';
     }
 
-    const isHealthy = true; // Phase 1 core backend is healthy
+    // Determine health based on actual component states
+    const dbIsDown = dbHealth.status === 'DISCONNECTED';
+    const isStrictAndDbDown = isStrictMode() && dbIsDown;
 
-    res.status(200).json({
-      status: isHealthy ? 'HEALTHY' : 'DEGRADED',
+    // In strict mode, DB being down means the system cannot serve requests reliably
+    const isHealthy = !isStrictAndDbDown;
+    const status = isHealthy ? (dbIsDown ? 'DEGRADED' : 'HEALTHY') : 'UNHEALTHY';
+    const httpStatus = isHealthy ? 200 : 503;
+
+    res.status(httpStatus).json({
+      status,
       timestamp: new Date().toISOString(),
       version: '1.0.0-phase1',
+      persistenceMode: env.PERSISTENCE_MODE,
       components: {
         backend: { status: 'HEALTHY', uptimeSeconds: process.uptime() },
         database: dbHealth,

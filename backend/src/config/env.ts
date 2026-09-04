@@ -24,3 +24,7 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
+export function isStrictMode(): boolean {
+  return env.PERSISTENCE_MODE === 'strict';
+}

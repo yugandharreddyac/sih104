@@ -1,8 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
-import { Policy, PolicyEvaluationContext, PolicyEvaluationResult } from './policy.types';
+import { Policy, PolicyEvaluationContext, PolicyEvaluationResult, PolicyRule } from './policy.types';
 import { PolicyEngine } from './policy_engine';
 import { AuditService } from '../security/audit.service';
 import { db } from '../database/db';
+import { isStrictMode } from '../config/env';
 
 export class PoliciesService {
   private static policies: Map<string, Policy> = new Map();
@@ -95,7 +96,62 @@ export class PoliciesService {
     }
   }
 
-  public static listPolicies(organizationId?: string): Policy[] {
+  /**
+   * Maps a policy row + its rules rows into the Policy domain object.
+   */
+  private static rowsToPolicyWithRules(policyRow: any, ruleRows: any[]): Policy {
+    const rules: PolicyRule[] = ruleRows.map((r) => {
+      const condExpr = typeof r.condition_expression === 'string'
+        ? JSON.parse(r.condition_expression)
+        : r.condition_expression;
+      const params = typeof r.parameters === 'string' ? JSON.parse(r.parameters) : (r.parameters || {});
+
+      return {
+        id: r.id,
+        name: condExpr.name || r.action,
+        description: condExpr.description || '',
+        conditions: condExpr.conditions || [],
+        action: r.action,
+        priority: r.priority,
+        parameters: params,
+      };
+    });
+
+    return {
+      id: policyRow.id,
+      organizationId: policyRow.organization_id,
+      name: policyRow.name,
+      description: policyRow.description || '',
+      isActive: policyRow.is_active,
+      rules,
+      createdAt: new Date(policyRow.created_at),
+      updatedAt: new Date(policyRow.updated_at),
+    };
+  }
+
+  public static async listPolicies(organizationId?: string): Promise<Policy[]> {
+    if (isStrictMode()) {
+      let policyResult;
+      if (organizationId) {
+        policyResult = await db.query(
+          'SELECT * FROM policies WHERE organization_id = $1 ORDER BY created_at DESC',
+          [organizationId]
+        );
+      } else {
+        policyResult = await db.query('SELECT * FROM policies ORDER BY created_at DESC');
+      }
+
+      const policies: Policy[] = [];
+      for (const pRow of policyResult.rows) {
+        const rulesResult = await db.query(
+          'SELECT * FROM policy_rules WHERE policy_id = $1 ORDER BY priority ASC',
+          [pRow.id]
+        );
+        policies.push(this.rowsToPolicyWithRules(pRow, rulesResult.rows));
+      }
+      return policies;
+    }
+
     this.initializeDefaultPolicies();
     const all = Array.from(this.policies.values());
     if (organizationId) {
@@ -104,7 +160,18 @@ export class PoliciesService {
     return all;
   }
 
-  public static getPolicyById(id: string): Policy | null {
+  public static async getPolicyById(id: string): Promise<Policy | null> {
+    if (isStrictMode()) {
+      const policyResult = await db.query('SELECT * FROM policies WHERE id = $1', [id]);
+      if (policyResult.rows.length === 0) return null;
+
+      const rulesResult = await db.query(
+        'SELECT * FROM policy_rules WHERE policy_id = $1 ORDER BY priority ASC',
+        [id]
+      );
+      return this.rowsToPolicyWithRules(policyResult.rows[0], rulesResult.rows);
+    }
+
     this.initializeDefaultPolicies();
     return this.policies.get(id) || null;
   }
@@ -128,6 +195,52 @@ export class PoliciesService {
 
     this.policies.set(id, policy);
 
+    try {
+      // Insert policy header
+      await db.query(
+        `INSERT INTO policies (id, organization_id, name, description, is_active, severity_threshold, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          policy.id,
+          policy.organizationId,
+          policy.name,
+          policy.description,
+          policy.isActive,
+          'HIGH', // default severity_threshold
+          policy.createdAt,
+          policy.updatedAt,
+        ]
+      );
+
+      // Insert each rule into policy_rules
+      for (const rule of policy.rules) {
+        const ruleId = rule.id || uuidv4();
+        const conditionExpression = JSON.stringify({
+          name: rule.name,
+          description: rule.description,
+          conditions: rule.conditions,
+        });
+        await db.query(
+          `INSERT INTO policy_rules (id, policy_id, condition_expression, action, parameters, priority)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            ruleId,
+            policy.id,
+            conditionExpression,
+            rule.action,
+            JSON.stringify(rule.parameters || {}),
+            rule.priority,
+          ]
+        );
+      }
+    } catch (err) {
+      if (isStrictMode()) {
+        this.policies.delete(id);
+        throw err;
+      }
+      // Standalone mode — silently proceed with in-memory only
+    }
+
     await AuditService.record({
       organizationId: orgId,
       action: 'POLICY_CREATED',
@@ -140,12 +253,11 @@ export class PoliciesService {
     return policy;
   }
 
-  public static evaluateContext(
+  public static async evaluateContext(
     organizationId: string,
     context: PolicyEvaluationContext
-  ): PolicyEvaluationResult {
-    this.initializeDefaultPolicies();
-    const activePolicies = this.listPolicies(organizationId).filter((p) => p.isActive);
+  ): Promise<PolicyEvaluationResult> {
+    const activePolicies = (await this.listPolicies(organizationId)).filter((p) => p.isActive);
     return PolicyEngine.evaluate(activePolicies, context);
   }
 }

@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { db } from '../database/db';
+import { isStrictMode } from '../config/env';
 
 export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type IncidentStatus = 'OPEN' | 'INVESTIGATING' | 'CONTAINED' | 'RESOLVED' | 'FALSE_POSITIVE';
@@ -28,6 +29,32 @@ export interface IncidentRecord {
 export class IncidentsService {
   private static incidents: Map<string, IncidentRecord> = new Map();
   private static sequence = 1001;
+
+  /**
+   * Maps a PostgreSQL row to the IncidentRecord interface.
+   */
+  private static rowToIncidentRecord(row: any): IncidentRecord {
+    const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+    return {
+      id: row.id,
+      incidentNumber: row.incident_number,
+      callId: row.call_id || undefined,
+      organizationId: row.organization_id,
+      severity: row.severity as IncidentSeverity,
+      attackClassification: row.attack_classification,
+      status: row.status as IncidentStatus,
+      detectedAt: new Date(row.detected_at),
+      resolvedAt: row.resolved_at ? new Date(row.resolved_at) : undefined,
+      summary: row.summary,
+      assignedToUserId: row.assigned_to_user_id || undefined,
+      // These fields are stored in the metadata JSONB column
+      triggeredPolicies: meta.triggeredPolicies || [],
+      actionsTaken: meta.actionsTaken || [],
+      evidenceReferences: meta.evidenceReferences || [],
+      events: meta.events || [],
+      metadata: meta.extra || {},
+    };
+  }
 
   public static async createIncident(params: {
     organizationId: string;
@@ -81,6 +108,41 @@ export class IncidentsService {
       metadata: { incidentNumber, severity: params.severity, classification: params.attackClassification },
     });
 
+    try {
+      // Store sub-domain arrays in the metadata JSONB column
+      const dbMetadata = JSON.stringify({
+        triggeredPolicies: incident.triggeredPolicies,
+        actionsTaken: incident.actionsTaken,
+        evidenceReferences: incident.evidenceReferences,
+        events: incident.events,
+        extra: incident.metadata,
+      });
+
+      await db.query(
+        `INSERT INTO incidents (id, call_id, organization_id, incident_number, severity, attack_classification, status, assigned_to_user_id, detected_at, summary, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          incident.id,
+          incident.callId || null,
+          incident.organizationId,
+          incident.incidentNumber,
+          incident.severity,
+          incident.attackClassification,
+          incident.status,
+          incident.assignedToUserId || null,
+          incident.detectedAt,
+          incident.summary,
+          dbMetadata,
+        ]
+      );
+    } catch (err) {
+      if (isStrictMode()) {
+        this.incidents.delete(id);
+        throw err;
+      }
+      // Standalone mode — silently proceed with in-memory only
+    }
+
     return incident;
   }
 
@@ -96,6 +158,7 @@ export class IncidentsService {
     assignedToUserId?: string;
     metadata?: Record<string, any>;
   }): Promise<{ incident: IncidentRecord; isNew: boolean }> {
+    // For correlation, use in-memory for both modes (correlation is a transient real-time operation)
     const existing = Array.from(this.incidents.values()).find(
       (i) =>
         i.callId === params.callId &&
@@ -126,7 +189,18 @@ export class IncidentsService {
     return { incident: newInc, isNew: true };
   }
 
-  public static listIncidents(organizationId?: string): IncidentRecord[] {
+  public static async listIncidents(organizationId?: string): Promise<IncidentRecord[]> {
+    if (isStrictMode()) {
+      if (organizationId) {
+        const result = await db.query(
+          'SELECT * FROM incidents WHERE organization_id = $1 ORDER BY detected_at DESC',
+          [organizationId]
+        );
+        return result.rows.map(this.rowToIncidentRecord);
+      }
+      const result = await db.query('SELECT * FROM incidents ORDER BY detected_at DESC');
+      return result.rows.map(this.rowToIncidentRecord);
+    }
     this.seedSampleIncidentsIfEmpty();
     const all = Array.from(this.incidents.values());
     if (organizationId) {
@@ -135,7 +209,12 @@ export class IncidentsService {
     return all;
   }
 
-  public static getIncidentById(id: string): IncidentRecord | null {
+  public static async getIncidentById(id: string): Promise<IncidentRecord | null> {
+    if (isStrictMode()) {
+      const result = await db.query('SELECT * FROM incidents WHERE id = $1', [id]);
+      if (result.rows.length === 0) return null;
+      return this.rowToIncidentRecord(result.rows[0]);
+    }
     this.seedSampleIncidentsIfEmpty();
     return this.incidents.get(id) || null;
   }
@@ -146,6 +225,33 @@ export class IncidentsService {
     actorUserId?: string,
     notes?: string
   ): Promise<IncidentRecord> {
+    if (isStrictMode()) {
+      const existing = await this.getIncidentById(id);
+      if (!existing) {
+        throw new Error(`Incident ${id} not found`);
+      }
+
+      const resolvedAt = (status === 'RESOLVED' || status === 'FALSE_POSITIVE') ? new Date() : null;
+
+      await db.query(
+        'UPDATE incidents SET status = $1, resolved_at = $2 WHERE id = $3',
+        [status, resolvedAt, id]
+      );
+
+      await AuditService.record({
+        actorUserId,
+        organizationId: existing.organizationId,
+        action: `INCIDENT_STATUS_${status}`,
+        resourceType: 'INCIDENT',
+        resourceId: id,
+        result: 'SUCCESS',
+        metadata: { status, notes },
+      });
+
+      return { ...existing, status, resolvedAt: resolvedAt || existing.resolvedAt };
+    }
+
+    // Fallback mode
     const incident = this.incidents.get(id);
     if (!incident) {
       throw new Error(`Incident ${id} not found`);

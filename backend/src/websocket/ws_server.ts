@@ -270,7 +270,7 @@ export class WebSocketGateway {
       const callId = rawCallId.trim();
 
       // Validate Call Existence & Tenant Isolation
-      const call = CallsService.getCallById(callId);
+      const call = await CallsService.getCallById(callId);
       if (!call) {
         ws.send(
           JSON.stringify({
@@ -361,7 +361,7 @@ export class WebSocketGateway {
       const callId = rawCallId.trim();
 
       // Validate Call Existence & Tenant Isolation
-      const call = CallsService.getCallById(callId);
+      const call = await CallsService.getCallById(callId);
       if (!call) {
         ws.send(
           JSON.stringify({

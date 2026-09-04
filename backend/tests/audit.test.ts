@@ -27,8 +27,8 @@ describe('Audit Trail & Logging Tests', () => {
 
     expect(typeof logId).toBe('string');
 
-    const logs = AuditService.getRecentLogs(10);
-    const found = logs.find((l) => l.action === 'TEST_AUDIT_ACTION');
+    const logs = await AuditService.getRecentLogs(10);
+    const found = logs.find((l: any) => l.action === 'TEST_AUDIT_ACTION');
     expect(found).toBeDefined();
     expect(found.metadata.otp).toBe('[AUTHENTICATION_CODE_REDACTED]');
     expect(found.metadata.password).toBe('[AUTHENTICATION_CODE_REDACTED]');

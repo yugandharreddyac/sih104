@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { CallsService } from './calls.service';
+import { DatabaseError } from '../database/db';
 
 const createCallSchema = z.object({
   callerIdentifier: z.string().min(3),
@@ -16,29 +17,64 @@ const updateStatusSchema = z.object({
 
 export class CallsController {
   public static async listCalls(req: Request, res: Response): Promise<void> {
-    CallsService.seedSampleCallsIfEmpty();
-    const calls = CallsService.listActiveCalls(req.user?.organizationId);
-    res.status(200).json({
-      success: true,
-      data: calls,
-      count: calls.length,
-    });
+    try {
+      CallsService.seedSampleCallsIfEmpty();
+      const calls = await CallsService.listActiveCalls(req.user?.organizationId);
+      res.status(200).json({
+        success: true,
+        data: calls,
+        count: calls.length,
+      });
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
+    }
   }
 
   public static async getCall(req: Request, res: Response): Promise<void> {
-    const call = CallsService.getCallById(req.params.id);
-    if (!call) {
-      res.status(404).json({
-        success: false,
-        error: 'CALL_NOT_FOUND',
-        message: `Call ${req.params.id} does not exist`,
+    try {
+      const call = await CallsService.getCallById(req.params.id);
+      if (!call) {
+        res.status(404).json({
+          success: false,
+          error: 'CALL_NOT_FOUND',
+          message: `Call ${req.params.id} does not exist`,
+        });
+        return;
+      }
+
+      // Tenant isolation — no cross-tenant access for any role
+      if (call.organizationId !== req.user?.organizationId) {
+        res.status(403).json({
+          success: false,
+          error: 'TENANT_ACCESS_DENIED',
+          message: 'You do not have access to this resource',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: call,
       });
-      return;
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
     }
-    res.status(200).json({
-      success: true,
-      data: call,
-    });
   }
 
   public static async createCall(req: Request, res: Response): Promise<void> {
@@ -52,16 +88,28 @@ export class CallsController {
       return;
     }
 
-    const orgId = req.user?.organizationId || '00000000-0000-0000-0000-000000000001';
-    const call = await CallsService.createCall({
-      organizationId: orgId,
-      ...parsed.data,
-    });
+    try {
+      const orgId = req.user?.organizationId || '00000000-0000-0000-0000-000000000001';
+      const call = await CallsService.createCall({
+        organizationId: orgId,
+        ...parsed.data,
+      });
 
-    res.status(201).json({
-      success: true,
-      data: call,
-    });
+      res.status(201).json({
+        success: true,
+        data: call,
+      });
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
+    }
   }
 
   public static async updateStatus(req: Request, res: Response): Promise<void> {
@@ -86,6 +134,14 @@ export class CallsController {
         data: updated,
       });
     } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
       res.status(404).json({
         success: false,
         error: 'UPDATE_FAILED',

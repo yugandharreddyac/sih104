@@ -1,10 +1,24 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { env } from '../config/env';
 
+/**
+ * Typed error class for database failures.
+ * Controllers use `instanceof DatabaseError` to reliably return 503.
+ */
+export class DatabaseError extends Error {
+  public readonly originalError: any;
+
+  constructor(message: string, originalError?: any) {
+    super(message);
+    this.name = 'DatabaseError';
+    this.originalError = originalError;
+  }
+}
+
 export class DatabaseService {
   private static instance: DatabaseService;
   private pool: Pool | null = null;
-  private isConnected = false;
+  private connected = false;
 
   private constructor() {
     if (env.NODE_ENV !== 'test') {
@@ -17,6 +31,7 @@ export class DatabaseService {
         });
 
         this.pool.on('error', (err) => {
+          this.connected = false;
           console.warn('⚠️ PostgreSQL pool notice:', err.message);
         });
       } catch (err) {
@@ -35,12 +50,15 @@ export class DatabaseService {
   public async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
     if (this.pool) {
       try {
-        return await this.pool.query<T>(text, params);
-      } catch (error) {
-        throw error;
+        const result = await this.pool.query<T>(text, params);
+        this.connected = true;
+        return result;
+      } catch (error: any) {
+        this.connected = false;
+        throw new DatabaseError(`Database query failed: ${error.message}`, error);
       }
     }
-    throw new Error('Database pool not initialized');
+    throw new DatabaseError('Database pool not initialized');
   }
 
   public async checkHealth(): Promise<{ status: string; latencyMs?: number; error?: string }> {
@@ -50,10 +68,36 @@ export class DatabaseService {
     const start = Date.now();
     try {
       await this.pool.query('SELECT 1');
+      this.connected = true;
       return { status: 'CONNECTED', latencyMs: Date.now() - start };
     } catch (err: any) {
+      this.connected = false;
       return { status: 'DISCONNECTED', error: err.message };
     }
+  }
+
+  /**
+   * Lightweight probe for readiness checks. Returns true if the pool
+   * can successfully execute a trivial query.
+   */
+  public async probeConnection(): Promise<boolean> {
+    if (!this.pool) return false;
+    try {
+      await this.pool.query('SELECT 1');
+      this.connected = true;
+      return true;
+    } catch {
+      this.connected = false;
+      return false;
+    }
+  }
+
+  /**
+   * Returns the last known connection state.
+   * Does NOT perform a live probe — use probeConnection() for that.
+   */
+  public isAvailable(): boolean {
+    return this.connected;
   }
 
   public async close(): Promise<void> {

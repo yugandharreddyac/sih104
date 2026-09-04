@@ -1,13 +1,22 @@
 import { Request, Response } from 'express';
 import { InterventionService } from './intervention.service';
+import { DatabaseError } from '../database/db';
 
 export class InterventionController {
   public static async list(req: Request, res: Response): Promise<void> {
     try {
       const orgId = req.user?.organizationId;
-      const list = InterventionService.listInterventions(orgId);
+      const list = await InterventionService.listInterventions(orgId);
       res.json({ success: true, data: list });
     } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
       res.status(500).json({ success: false, error: err.message });
     }
   }
@@ -37,6 +46,14 @@ export class InterventionController {
 
       res.status(201).json({ success: true, data: created });
     } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
       res.status(500).json({ success: false, error: err.message });
     }
   }
@@ -60,6 +77,14 @@ export class InterventionController {
 
       res.json({ success: true, data: updated });
     } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
       res.status(400).json({ success: false, error: err.message });
     }
   }

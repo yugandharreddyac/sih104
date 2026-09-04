@@ -178,7 +178,27 @@ CREATE TABLE IF NOT EXISTS evidence (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 15. Audit Logs
+-- 15. Interventions
+CREATE TABLE IF NOT EXISTS interventions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    call_id UUID NOT NULL REFERENCES calls(id) ON DELETE CASCADE,
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    policy_id UUID REFERENCES policies(id) ON DELETE SET NULL,
+    risk_assessment_id UUID REFERENCES risk_assessments(id) ON DELETE SET NULL,
+    level VARCHAR(50) NOT NULL,
+    action_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'AWAITING_HUMAN',
+    requested_by VARCHAR(255) NOT NULL,
+    approved_by VARCHAR(255),
+    human_decision VARCHAR(50),
+    decision_reason TEXT,
+    evidence_summary JSONB NOT NULL DEFAULT '[]'::jsonb,
+    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 16. Audit Logs
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -228,6 +248,8 @@ CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor_user_id);
 CREATE INDEX IF NOT EXISTS idx_verification_call ON verification_requests(call_id);
+CREATE INDEX IF NOT EXISTS idx_interventions_call ON interventions(call_id);
+CREATE INDEX IF NOT EXISTS idx_interventions_org ON interventions(organization_id);
 
 -- Seed Default Roles
 INSERT INTO roles (id, name, description, permissions)

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db';
 import { PrivacyFirewall } from './privacy_firewall';
+import { isStrictMode } from '../config/env';
 
 export interface AuditLogEntry {
   actorUserId?: string;
@@ -75,6 +76,10 @@ export class AuditService {
         ]
       );
     } catch (err) {
+      if (isStrictMode()) {
+        // In strict mode, audit persistence failure must propagate
+        throw err;
+      }
       // Graceful fallback to memory log when standalone db is not connected
       console.info(`[AUDIT] ${entry.action} by ${entry.actorUserId || 'ANON'} [${entry.result}]`);
     }
@@ -82,7 +87,18 @@ export class AuditService {
     return logId;
   }
 
-  public static getRecentLogs(limit: number = 50): Array<any> {
+  public static async getRecentLogs(limit: number = 50): Promise<Array<any>> {
+    if (isStrictMode()) {
+      try {
+        const result = await db.query(
+          'SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT $1',
+          [limit]
+        );
+        return result.rows;
+      } catch (err) {
+        throw err;
+      }
+    }
     return this.inMemoryLogs.slice(0, limit);
   }
 }

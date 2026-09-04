@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { IncidentsService, IncidentSeverity, IncidentStatus } from './incidents.service';
+import { DatabaseError } from '../database/db';
 
 const createIncidentSchema = z.object({
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
@@ -19,28 +20,63 @@ const updateStatusSchema = z.object({
 
 export class IncidentsController {
   public static async list(req: Request, res: Response): Promise<void> {
-    const list = IncidentsService.listIncidents(req.user?.organizationId);
-    res.status(200).json({
-      success: true,
-      data: list,
-      count: list.length,
-    });
+    try {
+      const list = await IncidentsService.listIncidents(req.user?.organizationId);
+      res.status(200).json({
+        success: true,
+        data: list,
+        count: list.length,
+      });
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
+    }
   }
 
   public static async getById(req: Request, res: Response): Promise<void> {
-    const incident = IncidentsService.getIncidentById(req.params.id);
-    if (!incident) {
-      res.status(404).json({
-        success: false,
-        error: 'INCIDENT_NOT_FOUND',
-        message: `Incident ${req.params.id} does not exist`,
+    try {
+      const incident = await IncidentsService.getIncidentById(req.params.id);
+      if (!incident) {
+        res.status(404).json({
+          success: false,
+          error: 'INCIDENT_NOT_FOUND',
+          message: `Incident ${req.params.id} does not exist`,
+        });
+        return;
+      }
+
+      // Tenant isolation — no cross-tenant access for any role
+      if (incident.organizationId !== req.user?.organizationId) {
+        res.status(403).json({
+          success: false,
+          error: 'TENANT_ACCESS_DENIED',
+          message: 'You do not have access to this resource',
+        });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        data: incident,
       });
-      return;
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
     }
-    res.status(200).json({
-      success: true,
-      data: incident,
-    });
   }
 
   public static async create(req: Request, res: Response): Promise<void> {
@@ -54,18 +90,30 @@ export class IncidentsController {
       return;
     }
 
-    const orgId = req.user?.organizationId || '00000000-0000-0000-0000-000000000001';
-    const incident = await IncidentsService.createIncident({
-      organizationId: orgId,
-      assignedToUserId: req.user?.id,
-      ...parsed.data,
-      severity: parsed.data.severity as IncidentSeverity,
-    });
+    try {
+      const orgId = req.user?.organizationId || '00000000-0000-0000-0000-000000000001';
+      const incident = await IncidentsService.createIncident({
+        organizationId: orgId,
+        assignedToUserId: req.user?.id,
+        ...parsed.data,
+        severity: parsed.data.severity as IncidentSeverity,
+      });
 
-    res.status(201).json({
-      success: true,
-      data: incident,
-    });
+      res.status(201).json({
+        success: true,
+        data: incident,
+      });
+    } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
+      res.status(500).json({ success: false, error: 'INTERNAL_ERROR', message: err.message });
+    }
   }
 
   public static async updateStatus(req: Request, res: Response): Promise<void> {
@@ -91,6 +139,14 @@ export class IncidentsController {
         data: updated,
       });
     } catch (err: any) {
+      if (err instanceof DatabaseError) {
+        res.status(503).json({
+          success: false,
+          error: 'SERVICE_UNAVAILABLE',
+          message: 'The database is currently unavailable.',
+        });
+        return;
+      }
       res.status(404).json({
         success: false,
         error: 'NOT_FOUND',

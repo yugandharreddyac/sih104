@@ -1,69 +1,50 @@
-# SIH104 — DATABASE PERSISTENCE & MIGRATION GUIDE
+# Database Architecture & Persistence Report
 
-## 1. Relational Database Overview
+## Overview
+VOXSHIELD utilizes a multi-tenant PostgreSQL relational schema for storing calls, incidents, interventions, policies, audit logs, and speaker metadata, backed by an automatic in-memory fallback layer for local testing and degraded operation.
 
-VOXSHIELD utilizes a multi-tenant PostgreSQL relational schema to store structured security events, calls, incidents, interventions, policies, and audit logs.
+---
 
-### Primary Entities & Schema (13 Tables)
+## Status Matrix
 
-| Table Name | Primary Responsibility | Retention Policy |
+| Capability / Subsystem | Status | Description |
 | :--- | :--- | :--- |
-| `organizations` | Multi-tenant boundaries and subscription tiers | Permanent |
-| `users` | RBAC credentials (bcrypt hash, 10 rounds), roles (`ADMIN`, `OPERATOR`, `VIEWER`) | Permanent |
-| `calls` | Active and historical call session metadata, caller/dest IDs, duration | 90 Days |
-| `incidents` | Correlated security incidents with severity, attack taxonomy, and status | 1 Year |
-| `incident_events` | Granular timeline events correlated under parent incident ID | 1 Year |
-| `interventions` | SOC recommendations, analyst decisions (`APPROVED` / `OVERRIDDEN`), justifications | 1 Year |
-| `policy_definitions` | Deterministic policy rules (`POL-CRED-001`, `POL-WIRE-002`), priority, action mapping | Versioned |
-| `audit_logs` | Immutable audit trail with actor ID, organization ID, action, redacted metadata | Permanent / 7 Years |
-| `speaker_profiles` | Biometric voice embeddings metadata (zero raw audio stored) | Permanent / Revocable |
-| `model_registry` | Machine learning model versions, checksums, framework metadata | Versioned |
+| **Relational Schema Definition** | `IMPLEMENTED` | SQL tables defined in `infrastructure/docker/init-db.sql` with foreign keys and `organizationId` multi-tenancy. |
+| **Connection Pooling** | `IMPLEMENTED` | `pg.Pool` client configured in `backend/src/database/index.ts` with connection retry logic. |
+| **Tenant Isolation (`organizationId`)** | `LIVE VERIFIED` | All database queries partition data by `organizationId`; cross-tenant access returns HTTP 403. |
+| **Fallback Store** | `LIVE VERIFIED` | Seamless fallback to in-memory store when PostgreSQL is offline, preventing service crashes. |
+| **Strict Mode (`PERSISTENCE_MODE=strict`)** | `TESTED` | Rejects write mutations with HTTP 503 when DB is offline instead of using volatile RAM store. |
+| **Restart Durability & Outage Recovery** | `TESTED` | Tested database reconnection and recovery in automated integration suite (`p0_persistence_security.test.ts`). |
+| **Database Indexes** | `IMPLEMENTED` | B-tree indexes defined on `organization_id`, `call_id`, and `created_at` fields in SQL schema. |
+| **Production PostgreSQL Instance** | `NOT VERIFIED` | Tested against local PostgreSQL container / in-memory mock; managed production DB not connected in test env. |
 
 ---
 
-## 2. Migration & Schema Initialization Workflow
+## Primary Tables & Schema Architecture
 
-The schema is maintained in `infrastructure/docker/init-db.sql`.
-
-### Clean Initialization Procedure
-```bash
-# 1. Start PostgreSQL 16
-docker compose up -d postgres
-
-# 2. Execute database initialization
-psql -h localhost -p 5432 -U postgres -d voxshield -f infrastructure/docker/init-db.sql
-```
-
-### Migration Ordering & Schema Version Tracking
-To execute incremental schema migrations, run the migration runner:
-```bash
-npm run migrate:up
-```
+| Table Name | Description | Multi-Tenant Index |
+| :--- | :--- | :--- |
+| `organizations` | Tenant organization accounts and metadata | `id` (PK) |
+| `users` | User accounts, hashed passwords (bcrypt), roles | `organization_id` |
+| `calls` | Call session records, duration, status, metadata | `organization_id`, `call_id` |
+| `incidents` | Correlated security incidents and severity levels | `organization_id` |
+| `incident_events` | Granular timeline events bound to parent incident | `incident_id` |
+| `interventions` | SOC human decision records (`APPROVED` / `OVERRIDDEN`) | `organization_id` |
+| `policy_definitions` | Deterministic security policies (`POL-CRED-001`) | `organization_id` |
+| `audit_logs` | Immutable audit trail with redacted metadata | `organization_id`, `created_at` |
+| `speaker_profiles` | Biometric voice profile metadata (zero raw audio stored) | `organization_id` |
 
 ---
 
-## 3. Strict Persistence Mode (`PERSISTENCE_MODE=strict`)
+## Behavior Under Database Outage & Recovery
 
-* **Development Default**: `PERSISTENCE_MODE=fallback` allows local development with in-memory maps when PostgreSQL is not running.
-* **Production Invariant**: `PERSISTENCE_MODE=strict` must be set in production environments. When PostgreSQL is disconnected:
-  - Mutation endpoints (`POST /api/calls`, `POST /api/incidents`, `POST /api/interventions/*`) fail safely with HTTP `503 SERVICE UNAVAILABLE`.
-  - The health endpoint (`/api/health`) reports `"database": { "status": "DISCONNECTED" }`.
-  - No dynamic data is silently dropped or lost in volatile RAM.
+1. **Fallback Mode (`PERSISTENCE_MODE=fallback` - Default)**:
+   - When PostgreSQL connection fails, the application logs a warning (`⚠️ Database connection unavailable. Operating in fallback mode.`) and routes queries to in-memory seed stores (`AuthService`, `CallsService`, `PoliciesService`).
+   - System remains fully operational for streaming and REST requests without crashing.
 
----
+2. **Strict Mode (`PERSISTENCE_MODE=strict`)**:
+   - Write mutations return `503 SERVICE UNAVAILABLE` with structured JSON error response when PostgreSQL is offline.
+   - Prevents silent data loss or unpersisted mutations in production environments.
 
-## 4. Verification Queries
-
-```sql
--- Verify Call Ingestion
-SELECT id, call_id, caller_id, destination_id, status, created_at FROM calls ORDER BY created_at DESC LIMIT 5;
-
--- Verify Incident Timeline Correlation
-SELECT i.incident_number, i.severity, i.attack_classification, count(e.id) as timeline_events
-FROM incidents i
-LEFT JOIN incident_events e ON e.incident_id = i.id
-GROUP BY i.id, i.incident_number, i.severity, i.attack_classification;
-
--- Verify Privacy Redaction in Audit Log
-SELECT action, result, metadata FROM audit_logs WHERE metadata::text ILIKE '%[REDACTED]%' LIMIT 10;
-```
+3. **Reconnection & Recovery**:
+   - Connection pool automatically retries connection. Once database connectivity is restored, system resumes executing queries against PostgreSQL.

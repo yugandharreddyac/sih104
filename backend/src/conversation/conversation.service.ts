@@ -24,13 +24,50 @@ export class ConversationService {
   public static readonly AI_TIMEOUT_MS = 1200;
 
   /**
-   * Validates that the AI service returned a valid object containing required sub-objects.
+   * Validates that the AI service returned a valid object containing required sub-objects and finite values.
    */
   private static isValidConversationResponse(data: any): boolean {
     if (!data || typeof data !== 'object') return false;
     if (!data.asr || typeof data.asr !== 'object' || typeof data.asr.status !== 'string') return false;
     if (!data.intent || typeof data.intent !== 'object') return false;
     if (!data.social_engineering || typeof data.social_engineering !== 'object' || typeof data.social_engineering.status !== 'string') return false;
+
+    // Validate ASR confidence/uncertainty bounds
+    const asrConf = data.asr.confidence;
+    if (asrConf !== null && asrConf !== undefined) {
+      if (typeof asrConf !== 'number' || !Number.isFinite(asrConf) || asrConf < 0 || asrConf > 1.0) {
+        return false;
+      }
+    }
+    const asrUnc = data.asr.uncertainty;
+    if (asrUnc !== null && asrUnc !== undefined) {
+      if (typeof asrUnc !== 'number' || !Number.isFinite(asrUnc) || asrUnc < 0 || asrUnc > 1.0) {
+        return false;
+      }
+    }
+
+    // Validate Intent confidence
+    const intentConf = data.intent.confidence;
+    if (intentConf !== null && intentConf !== undefined) {
+      if (typeof intentConf !== 'number' || !Number.isFinite(intentConf) || intentConf < 0 || intentConf > 1.0) {
+        return false;
+      }
+    }
+
+    // Validate Social Engineering attack score
+    const seScore = data.social_engineering.attack_sequence_score;
+    if (seScore !== null && seScore !== undefined) {
+      if (typeof seScore !== 'number' || !Number.isFinite(seScore) || seScore < 0 || seScore > 1.0) {
+        return false;
+      }
+    }
+    const seConf = data.social_engineering.confidence;
+    if (seConf !== null && seConf !== undefined) {
+      if (typeof seConf !== 'number' || !Number.isFinite(seConf) || seConf < 0 || seConf > 1.0) {
+        return false;
+      }
+    }
+
     return true;
   }
 

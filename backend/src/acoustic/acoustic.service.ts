@@ -23,13 +23,56 @@ export class AcousticService {
   public static readonly AI_TIMEOUT_MS = 1200;
 
   /**
-   * Validates that the AI service returned a valid object containing required sub-objects.
+   * Validates that the AI service returned a valid object containing required sub-objects and finite values.
    */
   private static isValidAcousticResponse(data: any): boolean {
     if (!data || typeof data !== 'object') return false;
     if (!data.deepfake || typeof data.deepfake !== 'object' || typeof data.deepfake.status !== 'string') return false;
     if (!data.speaker || typeof data.speaker !== 'object' || typeof data.speaker.status !== 'string') return false;
     if (!data.replay || typeof data.replay !== 'object' || typeof data.replay.status !== 'string') return false;
+
+    // Numerical and probability validation for deepfake
+    const dfScore = data.deepfake.spoof_score;
+    if (dfScore !== null && dfScore !== undefined) {
+      if (typeof dfScore !== 'number' || !Number.isFinite(dfScore) || dfScore < 0 || dfScore > 1.0) {
+        return false;
+      }
+    }
+    const dfConf = data.deepfake.confidence;
+    if (dfConf !== null && dfConf !== undefined) {
+      if (typeof dfConf !== 'number' || !Number.isFinite(dfConf) || dfConf < 0 || dfConf > 1.0) {
+        return false;
+      }
+    }
+
+    // Numerical validation for speaker verification
+    const spkSim = data.speaker.similarity_score;
+    if (spkSim !== null && spkSim !== undefined) {
+      if (typeof spkSim !== 'number' || !Number.isFinite(spkSim) || spkSim < -1.0 || spkSim > 1.0) {
+        return false;
+      }
+    }
+    const spkConf = data.speaker.confidence;
+    if (spkConf !== null && spkConf !== undefined) {
+      if (typeof spkConf !== 'number' || !Number.isFinite(spkConf) || spkConf < 0 || spkConf > 1.0) {
+        return false;
+      }
+    }
+
+    // Numerical validation for replay
+    const rpProb = data.replay.replay_probability;
+    if (rpProb !== null && rpProb !== undefined) {
+      if (typeof rpProb !== 'number' || !Number.isFinite(rpProb) || rpProb < 0 || rpProb > 1.0) {
+        return false;
+      }
+    }
+    const rpConf = data.replay.confidence;
+    if (rpConf !== null && rpConf !== undefined) {
+      if (typeof rpConf !== 'number' || !Number.isFinite(rpConf) || rpConf < 0 || rpConf > 1.0) {
+        return false;
+      }
+    }
+
     return true;
   }
 

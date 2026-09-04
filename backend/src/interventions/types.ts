@@ -25,6 +25,8 @@ export interface InterventionRecord {
   policyId?: string;
   level: InterventionLevel;
   actionType: string;
+  originalActionType?: string;
+  overrideAction?: string;
   status: InterventionStatus;
   requestedBy: string; // e.g. "AI_POLICY_ENGINE" or user ID
   approvedBy?: string;

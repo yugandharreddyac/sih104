@@ -59,6 +59,10 @@ export class InterventionService {
     return all;
   }
 
+  public static clearInterventions(): void {
+    this.interventions.clear();
+  }
+
   public static getInterventionById(id: string): InterventionRecord | null {
     return this.interventions.get(id) || null;
   }
@@ -68,14 +72,30 @@ export class InterventionService {
     actorUserId: string;
     decision: HumanDecision;
     reason: string;
+    overrideAction?: string;
+    organizationId?: string;
+    isGlobalAdmin?: boolean;
   }): Promise<InterventionRecord> {
     const item = this.interventions.get(params.interventionId);
     if (!item) {
-      throw new Error(`Intervention ${params.interventionId} not found`);
+      const err: any = new Error(`Intervention ${params.interventionId} not found`);
+      err.statusCode = 404;
+      err.code = 'NOT_FOUND';
+      throw err;
     }
 
-    if (item.status === 'EXECUTED' || item.status === 'REJECTED') {
-      throw new Error(`Intervention ${params.interventionId} has already been resolved (${item.status})`);
+    if (params.organizationId && !params.isGlobalAdmin && item.organizationId !== params.organizationId) {
+      const err: any = new Error('Access to intervention from another organization is denied');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    if (item.status === 'EXECUTED' || item.status === 'REJECTED' || item.status === 'OVERRIDDEN') {
+      const err: any = new Error(`Intervention ${params.interventionId} has already been resolved (${item.status})`);
+      err.statusCode = 409;
+      err.code = 'ALREADY_RESOLVED';
+      throw err;
     }
 
     item.approvedBy = params.actorUserId;
@@ -87,6 +107,8 @@ export class InterventionService {
       item.status = 'EXECUTED';
     } else if (params.decision === 'OVERRIDDEN') {
       item.status = 'OVERRIDDEN';
+      item.originalActionType = item.originalActionType || item.actionType;
+      item.overrideAction = params.overrideAction || 'ALLOW';
     } else {
       item.status = 'REJECTED';
     }
@@ -97,8 +119,15 @@ export class InterventionService {
       action: `INTERVENTION_DECISION_${params.decision}`,
       resourceType: 'INTERVENTION',
       resourceId: params.interventionId,
-      result: params.decision === 'APPROVED' ? 'SUCCESS' : 'DENIED',
-      metadata: { callId: item.callId, decision: params.decision, reason: item.decisionReason },
+      result: params.decision === 'APPROVED' || params.decision === 'OVERRIDDEN' ? 'SUCCESS' : 'DENIED',
+      metadata: {
+        callId: item.callId,
+        decision: params.decision,
+        originalAction: item.originalActionType || item.actionType,
+        overrideAction: item.overrideAction,
+        reason: item.decisionReason,
+        analystId: params.actorUserId,
+      },
     });
 
     return item;

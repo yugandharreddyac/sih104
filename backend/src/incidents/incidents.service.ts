@@ -126,6 +126,10 @@ export class IncidentsService {
     return { incident: newInc, isNew: true };
   }
 
+  public static clearIncidents(): void {
+    this.incidents.clear();
+  }
+
   public static listIncidents(organizationId?: string): IncidentRecord[] {
     this.seedSampleIncidentsIfEmpty();
     const all = Array.from(this.incidents.values());
@@ -144,22 +148,53 @@ export class IncidentsService {
     id: string,
     status: IncidentStatus,
     actorUserId?: string,
-    notes?: string
+    notes?: string,
+    organizationId?: string,
+    isGlobalAdmin?: boolean
   ): Promise<IncidentRecord> {
     const incident = this.incidents.get(id);
     if (!incident) {
-      throw new Error(`Incident ${id} not found`);
+      const err: any = new Error(`Incident ${id} not found`);
+      err.statusCode = 404;
+      err.code = 'NOT_FOUND';
+      throw err;
     }
 
+    if (organizationId && !isGlobalAdmin && incident.organizationId !== organizationId) {
+      const err: any = new Error('Access to incident from another organization is denied');
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
+
+    const validStatuses: IncidentStatus[] = ['OPEN', 'INVESTIGATING', 'CONTAINED', 'RESOLVED', 'FALSE_POSITIVE'];
+    if (!validStatuses.includes(status)) {
+      const err: any = new Error(`Invalid status: ${status}`);
+      err.statusCode = 400;
+      err.code = 'INVALID_STATUS';
+      throw err;
+    }
+
+    // Disallow reopening resolved incident back to OPEN without explicit workflow
+    if ((incident.status === 'RESOLVED' || incident.status === 'FALSE_POSITIVE') && status === 'OPEN') {
+      const err: any = new Error(`Cannot transition directly from ${incident.status} to OPEN`);
+      err.statusCode = 400;
+      err.code = 'INVALID_TRANSITION';
+      throw err;
+    }
+
+    const previousStatus = incident.status;
     incident.status = status;
     if (status === 'RESOLVED' || status === 'FALSE_POSITIVE') {
-      incident.resolvedAt = new Date();
+      incident.resolvedAt = incident.resolvedAt || new Date();
     }
+
+    const sanitizedNotes = notes ? PrivacyFirewall.sanitize(notes).sanitizedText : `Status updated from ${previousStatus} to ${status}`;
 
     incident.events.push({
       type: `STATUS_CHANGED_${status}`,
       actorUserId,
-      description: notes || `Status updated to ${status}`,
+      description: sanitizedNotes,
       timestamp: new Date(),
     });
 
@@ -170,7 +205,7 @@ export class IncidentsService {
       resourceType: 'INCIDENT',
       resourceId: id,
       result: 'SUCCESS',
-      metadata: { status, notes },
+      metadata: { previousStatus, status, notes: sanitizedNotes },
     });
 
     return incident;

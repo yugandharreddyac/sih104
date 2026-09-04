@@ -82,7 +82,14 @@ export class AuditService {
     return logId;
   }
 
-  public static getRecentLogs(limit: number = 50): Array<any> {
+  public static clearLogs(): void {
+    this.inMemoryLogs = [];
+  }
+
+  public static getRecentLogs(limit: number = 50, organizationId?: string): Array<any> {
+    if (organizationId) {
+      return this.inMemoryLogs.filter((l) => l.organizationId === organizationId).slice(0, limit);
+    }
     return this.inMemoryLogs.slice(0, limit);
   }
 }

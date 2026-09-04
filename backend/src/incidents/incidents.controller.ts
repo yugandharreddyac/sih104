@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { IncidentsService, IncidentSeverity, IncidentStatus } from './incidents.service';
+import { RoleName, Permission } from '../auth/types';
 
 const createIncidentSchema = z.object({
   severity: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
   attackClassification: z.string().min(2),
-  callId: z.string().uuid().optional(),
+  callId: z.string().optional(),
   summary: z.string().min(5),
   triggeredPolicies: z.array(z.string()).optional(),
   actionsTaken: z.array(z.string()).optional(),
@@ -19,7 +20,8 @@ const updateStatusSchema = z.object({
 
 export class IncidentsController {
   public static async list(req: Request, res: Response): Promise<void> {
-    const list = IncidentsService.listIncidents(req.user?.organizationId);
+    const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
+    const list = IncidentsService.listIncidents(isGlobalAdmin ? undefined : req.user?.organizationId);
     res.status(200).json({
       success: true,
       data: list,
@@ -37,6 +39,17 @@ export class IncidentsController {
       });
       return;
     }
+
+    const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
+    if (!isGlobalAdmin && req.user?.organizationId && incident.organizationId !== req.user.organizationId) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access to incident from another organization is denied',
+      });
+      return;
+    }
+
     res.status(200).json({
       success: true,
       data: incident,
@@ -80,20 +93,24 @@ export class IncidentsController {
     }
 
     try {
+      const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
       const updated = await IncidentsService.updateStatus(
         req.params.id,
         parsed.data.status as IncidentStatus,
         req.user?.id,
-        parsed.data.notes
+        parsed.data.notes,
+        req.user?.organizationId,
+        isGlobalAdmin
       );
       res.status(200).json({
         success: true,
         data: updated,
       });
     } catch (err: any) {
-      res.status(404).json({
+      const status = err.statusCode || 400;
+      res.status(status).json({
         success: false,
-        error: 'NOT_FOUND',
+        error: err.code || 'ERROR',
         message: err.message,
       });
     }

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { InterventionService } from './intervention.service';
+import { RoleName, Permission } from '../auth/types';
 
 export class InterventionController {
   public static async list(req: Request, res: Response): Promise<void> {
@@ -43,11 +44,17 @@ export class InterventionController {
 
   public static async recordDecision(req: Request, res: Response): Promise<void> {
     try {
-      const { interventionId, decision, reason } = req.body;
+      const { interventionId, decision, reason, overrideAction } = req.body;
       const actorUserId = req.user?.id || 'unknown-user';
+      const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
 
       if (!interventionId || !decision) {
         res.status(400).json({ success: false, error: 'interventionId and decision are required.' });
+        return;
+      }
+
+      if (!['APPROVED', 'OVERRIDDEN', 'REJECTED'].includes(decision)) {
+        res.status(400).json({ success: false, error: 'Invalid decision. Must be APPROVED, OVERRIDDEN, or REJECTED.' });
         return;
       }
 
@@ -56,11 +63,15 @@ export class InterventionController {
         actorUserId,
         decision,
         reason: reason || 'SOC operator review action',
+        overrideAction,
+        organizationId: req.user?.organizationId,
+        isGlobalAdmin,
       });
 
-      res.json({ success: true, data: updated });
+      res.status(200).json({ success: true, data: updated });
     } catch (err: any) {
-      res.status(400).json({ success: false, error: err.message });
+      const status = err.statusCode || 400;
+      res.status(status).json({ success: false, error: err.code || 'BAD_REQUEST', message: err.message });
     }
   }
 }

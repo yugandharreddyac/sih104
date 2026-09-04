@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { CallsService } from './calls.service';
+import { RoleName, Permission } from '../auth/types';
 
 const createCallSchema = z.object({
   callerIdentifier: z.string().min(3),
@@ -35,6 +36,17 @@ export class CallsController {
       });
       return;
     }
+
+    const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
+    if (!isGlobalAdmin && req.user?.organizationId && call.organizationId !== req.user.organizationId) {
+      res.status(403).json({
+        success: false,
+        error: 'FORBIDDEN',
+        message: 'Access to call from another organization is denied',
+      });
+      return;
+    }
+
     res.status(200).json({
       success: true,
       data: call,

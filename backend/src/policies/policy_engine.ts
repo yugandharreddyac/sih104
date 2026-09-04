@@ -6,6 +6,7 @@ import {
   PolicyRule,
   RuleCondition,
 } from './policy.types';
+import { policyActionsTotal } from '../health/metrics.controller';
 
 export class PolicyEngine {
   /**
@@ -86,6 +87,12 @@ export class PolicyEngine {
     const hasBlockAction = actionsTriggered.some((a) =>
       ['BLOCK_DISCLOSURE', 'BLOCK_PROTECTED_WORKFLOW', 'TERMINATE_CALL'].includes(a)
     );
+
+    if (hasBlockAction) {
+      try {
+        policyActionsTotal.inc({ action: 'block' });
+      } catch {}
+    }
 
     return {
       allowed: !hasBlockAction,

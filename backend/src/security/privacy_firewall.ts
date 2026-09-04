@@ -4,6 +4,8 @@
  * Ensures zero leakage of authentication secrets, OTPs, CVVs, PINs, or credentials.
  */
 
+import { policyActionsTotal } from '../health/metrics.controller';
+
 export enum RedactionCategory {
   OTP = 'OTP',
   MFA = 'MFA',
@@ -121,6 +123,12 @@ export class PrivacyFirewall {
         });
         return rule.replacement;
       });
+    }
+
+    if (findings.length > 0) {
+      try {
+        policyActionsTotal.inc({ action: 'redact' }, findings.length);
+      } catch {}
     }
 
     return {

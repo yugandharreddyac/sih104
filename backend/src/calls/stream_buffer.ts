@@ -1,7 +1,4 @@
-/**
- * VOXSHIELD Bounded Audio Stream Buffer Manager
- * Enforces per-call memory bounds, tracks sequence gaps, and handles backpressure.
- */
+import { audioErrorsTotal, streamBufferQueueDepth } from '../health/metrics.controller';
 
 export interface BufferedChunk {
   sequenceNumber: number;
@@ -25,6 +22,8 @@ export interface StreamBufferMetrics {
   maxBufferSizeBytes: number;
   maxBufferChunkCount: number;
   bufferUtilizationRatio: number;
+  protocol?: string;
+  mediaSource?: string;
 }
 
 export class StreamBuffer {
@@ -43,7 +42,12 @@ export class StreamBuffer {
   private duplicatesIgnored = 0;
   private staleChunksIgnored = 0;
 
-  constructor(public readonly callId: string, public readonly streamId: string) {}
+  constructor(
+    public readonly callId: string,
+    public readonly streamId: string,
+    public readonly protocol: string = 'WEBRTC',
+    public readonly mediaSource: string = 'WEBSOCKET'
+  ) {}
 
   /**
    * Pushes a new normalized chunk into the bounded buffer.
@@ -64,9 +68,28 @@ export class StreamBuffer {
   } {
     this.totalReceived++;
 
+    // Check for malformed chunk data
+    if (
+      !chunk ||
+      !Buffer.isBuffer(chunk.data) ||
+      chunk.data.length === 0 ||
+      typeof chunk.sequenceNumber !== 'number' ||
+      !Number.isFinite(chunk.sequenceNumber)
+    ) {
+      audioErrorsTotal.inc({ type: 'malformed' });
+      return {
+        accepted: false,
+        sequenceError: false,
+        droppedOldest: false,
+        isDuplicate: false,
+        isStale: false,
+      };
+    }
+
     // 1. Duplicate check: sequence number has already been seen and committed
     if (this.seenSequences.has(chunk.sequenceNumber)) {
       this.duplicatesIgnored++;
+      audioErrorsTotal.inc({ type: 'duplicate' });
       return {
         accepted: false,
         sequenceError: false,
@@ -79,6 +102,7 @@ export class StreamBuffer {
     // 2. Stale / out-of-order check: arrived after a newer sequence was already committed
     if (this.lastCommittedAcousticSeq >= 0 && chunk.sequenceNumber < this.lastCommittedAcousticSeq) {
       this.staleChunksIgnored++;
+      audioErrorsTotal.inc({ type: 'out_of_order' });
       return {
         accepted: false,
         sequenceError: true,
@@ -96,6 +120,7 @@ export class StreamBuffer {
     if (chunk.sequenceNumber !== this.expectedSequence) {
       this.sequenceErrors++;
       sequenceError = true;
+      audioErrorsTotal.inc({ type: 'gap' });
     }
     this.expectedSequence = chunk.sequenceNumber + 1;
     this.lastCommittedAcousticSeq = chunk.sequenceNumber;
@@ -123,14 +148,20 @@ export class StreamBuffer {
         this.currentBytes -= dropped.sizeBytes;
         this.totalDropped++;
         droppedOldest = true;
+        streamBufferQueueDepth.dec({ protocol: this.protocol });
       }
     }
+
+    const timestampMs =
+      typeof chunk.timestampMs === 'number' && Number.isFinite(chunk.timestampMs) && chunk.timestampMs > 0
+        ? Math.round(chunk.timestampMs)
+        : Date.now();
 
     // Push new chunk
     const buffered: BufferedChunk = {
       sequenceNumber: chunk.sequenceNumber,
       data: chunk.data,
-      timestampMs: chunk.timestampMs || Date.now(),
+      timestampMs,
       durationMs: chunk.durationMs || 0,
       sizeBytes: chunkSize,
       receivedAt: new Date(),
@@ -138,6 +169,7 @@ export class StreamBuffer {
 
     this.queue.push(buffered);
     this.currentBytes += chunkSize;
+    streamBufferQueueDepth.inc({ protocol: this.protocol });
 
     return {
       accepted: true,
@@ -152,6 +184,7 @@ export class StreamBuffer {
     const chunk = this.queue.shift();
     if (chunk) {
       this.currentBytes -= chunk.sizeBytes;
+      streamBufferQueueDepth.dec({ protocol: this.protocol });
     }
     return chunk;
   }
@@ -162,6 +195,10 @@ export class StreamBuffer {
 
   public isSequenceSeen(seq: number): boolean {
     return this.seenSequences.has(seq);
+  }
+
+  public getQueue(): readonly BufferedChunk[] {
+    return this.queue;
   }
 
   public getMetrics(): StreamBufferMetrics {
@@ -179,10 +216,15 @@ export class StreamBuffer {
       maxBufferSizeBytes: StreamBuffer.MAX_BUFFER_BYTES,
       maxBufferChunkCount: StreamBuffer.MAX_BUFFER_CHUNKS,
       bufferUtilizationRatio: Math.round(utilization * 1000) / 1000,
+      protocol: this.protocol,
+      mediaSource: this.mediaSource,
     };
   }
 
   public clear(): void {
+    if (this.queue.length > 0) {
+      streamBufferQueueDepth.dec({ protocol: this.protocol }, this.queue.length);
+    }
     this.queue = [];
     this.currentBytes = 0;
     this.expectedSequence = 0;
@@ -196,9 +238,17 @@ export class StreamBuffer {
 export class StreamBufferManager {
   private static buffers: Map<string, StreamBuffer> = new Map();
 
-  public static getOrCreate(callId: string, streamId?: string): StreamBuffer {
+  public static getOrCreate(
+    callId: string,
+    streamId?: string,
+    protocol: string = 'WEBRTC',
+    mediaSource: string = 'WEBSOCKET'
+  ): StreamBuffer {
     if (!this.buffers.has(callId)) {
-      this.buffers.set(callId, new StreamBuffer(callId, streamId || `stream-${Date.now()}`));
+      this.buffers.set(
+        callId,
+        new StreamBuffer(callId, streamId || `stream-${Date.now()}`, protocol, mediaSource)
+      );
     }
     return this.buffers.get(callId)!;
   }

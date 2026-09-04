@@ -69,8 +69,8 @@ services:
       - DATABASE_URL=postgresql://voxshield_user:voxshield_secure_pass@postgres:5432/voxshield_db
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
-      - JWT_SECRET=voxshield_super_secure_jwt_secret_dev_key_2026!
-      - ENCRYPTION_KEY=0123456789abcdef0123456789abcdef
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
     ports:
       - "4000:4000"
     healthcheck:

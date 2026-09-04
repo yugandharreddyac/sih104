@@ -48,3 +48,13 @@ VOXSHIELD utilizes a multi-tenant PostgreSQL relational schema for storing calls
 
 3. **Reconnection & Recovery**:
    - Connection pool automatically retries connection. Once database connectivity is restored, system resumes executing queries against PostgreSQL.
+
+---
+
+## Database Schema Migration & Initialization
+
+Schema initialization and migrations are executed by loading `infrastructure/docker/init-db.sql` directly into PostgreSQL (or automatically mounted on container startup via `docker-compose`):
+
+```bash
+docker exec -i voxshield-postgres psql -U voxshield_user -d voxshield_db < infrastructure/docker/init-db.sql
+```

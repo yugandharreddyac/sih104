@@ -1,5 +1,6 @@
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { env } from '../config/env';
+import { dbQueryDurationSeconds } from '../health/metrics.controller';
 
 /**
  * Typed error class for database failures.
@@ -48,13 +49,21 @@ export class DatabaseService {
   }
 
   public async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
+    const startTime = Date.now();
+    const firstWord = (text || '').trim().split(/\s+/)[0]?.toLowerCase() || 'other';
+    const operation = ['select', 'insert', 'update', 'delete'].includes(firstWord) ? firstWord : 'other';
+
     if (this.pool) {
       try {
         const result = await this.pool.query<T>(text, params);
         this.connected = true;
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        dbQueryDurationSeconds.observe({ operation }, durationSeconds);
         return result;
       } catch (error: any) {
         this.connected = false;
+        const durationSeconds = (Date.now() - startTime) / 1000;
+        dbQueryDurationSeconds.observe({ operation }, durationSeconds);
         throw new DatabaseError(`Database query failed: ${error.message}`, error);
       }
     }

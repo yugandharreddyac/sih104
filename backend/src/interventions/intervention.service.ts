@@ -4,6 +4,7 @@ import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { db } from '../database/db';
 import { isStrictMode } from '../config/env';
+import { policyActionsTotal } from '../health/metrics.controller';
 
 export class InterventionService {
   private static interventions: Map<string, InterventionRecord> = new Map();
@@ -70,6 +71,7 @@ export class InterventionService {
     };
 
     this.interventions.set(id, record);
+    policyActionsTotal.inc({ action: 'alert' });
 
     try {
       await db.query(

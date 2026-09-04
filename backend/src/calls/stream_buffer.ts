@@ -3,6 +3,8 @@
  * Enforces per-call memory bounds, tracks sequence gaps, and handles backpressure.
  */
 
+import { audioErrorsTotal, streamBufferQueueDepth } from '../health/metrics.controller';
+
 export interface BufferedChunk {
   sequenceNumber: number;
   data: Buffer;
@@ -59,10 +61,27 @@ export class StreamBuffer {
     let sequenceError = false;
     let droppedOldest = false;
 
+    // Check for malformed chunk data
+    if (
+      !chunk ||
+      !Buffer.isBuffer(chunk.data) ||
+      chunk.data.length === 0 ||
+      typeof chunk.sequenceNumber !== 'number' ||
+      !Number.isFinite(chunk.sequenceNumber)
+    ) {
+      audioErrorsTotal.inc({ type: 'malformed' });
+      return { accepted: false, sequenceError: false, droppedOldest: false };
+    }
+
     // Sequence continuity check (out-of-order arrival or gap)
     if (chunk.sequenceNumber !== this.expectedSequence) {
       this.sequenceErrors++;
       sequenceError = true;
+      if (chunk.sequenceNumber < this.expectedSequence) {
+        audioErrorsTotal.inc({ type: 'out_of_order' });
+      } else {
+        audioErrorsTotal.inc({ type: 'gap' });
+      }
     }
     this.expectedSequence = Math.max(this.expectedSequence, chunk.sequenceNumber + 1);
 
@@ -79,6 +98,7 @@ export class StreamBuffer {
         this.currentBytes -= dropped.sizeBytes;
         this.totalDropped++;
         droppedOldest = true;
+        streamBufferQueueDepth.dec({ protocol: this.protocol });
       }
     }
 
@@ -104,11 +124,13 @@ export class StreamBuffer {
 
     // Ignore duplicate sequence numbers
     if (insertIdx < this.queue.length && this.queue[insertIdx].sequenceNumber === buffered.sequenceNumber) {
+      audioErrorsTotal.inc({ type: 'duplicate' });
       return { accepted: true, sequenceError, droppedOldest };
     }
 
     this.queue.splice(insertIdx, 0, buffered);
     this.currentBytes += chunkSize;
+    streamBufferQueueDepth.inc({ protocol: this.protocol });
 
     return {
       accepted: true,
@@ -121,6 +143,7 @@ export class StreamBuffer {
     const chunk = this.queue.shift();
     if (chunk) {
       this.currentBytes -= chunk.sizeBytes;
+      streamBufferQueueDepth.dec({ protocol: this.protocol });
     }
     return chunk;
   }
@@ -147,6 +170,9 @@ export class StreamBuffer {
   }
 
   public clear(): void {
+    if (this.queue.length > 0) {
+      streamBufferQueueDepth.dec({ protocol: this.protocol }, this.queue.length);
+    }
     this.queue = [];
     this.currentBytes = 0;
   }

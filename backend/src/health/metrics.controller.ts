@@ -51,6 +51,37 @@ export const dbConnectionFailuresTotal = new client.Counter({
 });
 register.registerMetric(dbConnectionFailuresTotal);
 
+// --- Phase 5 Custom Metrics ---
+
+export const audioErrorsTotal = new client.Counter({
+  name: 'audio_errors_total',
+  help: 'Total number of telephony audio processing errors',
+  labelNames: ['type'],
+});
+register.registerMetric(audioErrorsTotal);
+
+export const streamBufferQueueDepth = new client.Gauge({
+  name: 'stream_buffer_queue_depth',
+  help: 'Current total queued chunks across active telephony stream buffers',
+  labelNames: ['protocol'],
+});
+register.registerMetric(streamBufferQueueDepth);
+
+export const policyActionsTotal = new client.Counter({
+  name: 'policy_actions_total',
+  help: 'Total number of policy and privacy firewall enforcement actions',
+  labelNames: ['action'],
+});
+register.registerMetric(policyActionsTotal);
+
+export const dbQueryDurationSeconds = new client.Histogram({
+  name: 'db_query_duration_seconds',
+  help: 'Database query execution duration in seconds',
+  labelNames: ['operation'],
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+});
+register.registerMetric(dbQueryDurationSeconds);
+
 export class MetricsController {
   public static async getMetrics(req: Request, res: Response): Promise<void> {
     try {

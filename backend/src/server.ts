@@ -27,12 +27,27 @@ export const app = express();
 
 // Security Middlewares
 app.use(helmet({
-  contentSecurityPolicy: false, // Disabled for API
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'"],
+      imgSrc: ["'self'", "data:"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      baseUri: ["'self'"],
+      formAction: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+  crossOriginEmbedderPolicy: false, // May interfere with API
 }));
+app.disable('x-powered-by');
+
 app.use(cors({
-  origin: '*',
+  origin: env.CORS_ORIGIN,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
+  credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -110,6 +125,11 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 // Server Initialization
 export const server = http.createServer(app);
 WebSocketGateway.initialize(server);
+
+// Ensure WebSocket connections and intervals are cleaned up when the HTTP server closes
+server.on('close', async () => {
+  await WebSocketGateway.close();
+});
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(env.PORT, () => {

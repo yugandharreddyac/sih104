@@ -63,6 +63,8 @@ export class WebSocketGateway {
   private static wss: WebSocketServer | null = null;
   private static clientStates: Map<WebSocket, WSClientState> = new Map();
 
+  private static pingInterval: NodeJS.Timeout | null = null;
+
   public static initialize(server: http.Server): void {
     // Ensure sample calls exist for valid stream validation in standalone mode
     CallsService.seedSampleCallsIfEmpty();
@@ -70,7 +72,16 @@ export class WebSocketGateway {
     this.wss = new WebSocketServer({
       server,
       path: '/ws',
-      maxPayload: 1024 * 1024, // 1 MB hard max per frame
+      maxPayload: 256 * 1024, // 256 KB hard max per frame
+      verifyClient: (info, callback) => {
+        const origin = info.origin || info.req.headers.origin;
+        // Allow undefined origin (non-browser clients/tests) or match CORS_ORIGIN
+        if (origin && env.CORS_ORIGIN !== '*' && origin !== env.CORS_ORIGIN) {
+          console.warn(`WebSocket connection rejected from unauthorized origin: ${origin}`);
+          return callback(false, 403, 'Forbidden');
+        }
+        callback(true);
+      }
     });
 
     this.wss.on('connection', (ws: WebSocket, req) => {
@@ -81,6 +92,11 @@ export class WebSocketGateway {
         connectedAt: new Date(),
         ipAddress,
       };
+
+      (ws as any).isAlive = true;
+      ws.on('pong', () => {
+        (ws as any).isAlive = true;
+      });
 
       this.clientStates.set(ws, state);
       console.info(`🔌 WebSocket client connected from ${ipAddress}`);
@@ -147,9 +163,25 @@ export class WebSocketGateway {
         })
       );
     });
+
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+    }
+    this.pingInterval = setInterval(() => {
+      this.wss?.clients.forEach((ws) => {
+        if ((ws as any).isAlive === false) return ws.terminate();
+        (ws as any).isAlive = false;
+        ws.ping();
+      });
+    }, 30000);
+    this.pingInterval.unref();
   }
 
   public static async close(): Promise<void> {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
     for (const [ws] of this.clientStates) {
       try {
         ws.terminate();
@@ -283,8 +315,7 @@ export class WebSocketGateway {
         return;
       }
 
-      const isGlobalAdmin = state.user?.role === RoleName.ADMIN || state.user?.permissions.includes(Permission.ALL);
-      if (!isGlobalAdmin && call.organizationId !== state.user?.organizationId) {
+      if (call.organizationId !== state.user?.organizationId) {
         ws.send(
           JSON.stringify({
             type: 'ERROR',
@@ -374,8 +405,7 @@ export class WebSocketGateway {
         return;
       }
 
-      const isGlobalAdmin = state.user?.role === RoleName.ADMIN || state.user?.permissions.includes(Permission.ALL);
-      if (!isGlobalAdmin && call.organizationId !== state.user?.organizationId) {
+      if (call.organizationId !== state.user?.organizationId) {
         ws.send(
           JSON.stringify({
             type: 'ERROR',

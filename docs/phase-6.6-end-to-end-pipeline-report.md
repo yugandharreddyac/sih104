@@ -22,7 +22,7 @@ Phase 6.6 integrates all previously deployed neural subsystems into a single, co
 * **Multi-Modal Risk Fusion:** 10-dimensional temporal risk tracking, cross-modal corroboration, and deterministic policy step-up enforcement.
 
 ### Key Milestones & Outcomes:
-1. **Unified Orchestration Engine:** Implemented [UnifiedPipelineOrchestrator](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/pipeline/orchestrator.py) and [UnifiedPipelineResult](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/pipeline/types.py) providing standardized execution contracts.
+1. **Unified Orchestration Engine:** Implemented [UnifiedPipelineOrchestrator](../ai/app/pipeline/orchestrator.py) and [UnifiedPipelineResult](../ai/app/pipeline/types.py) providing standardized execution contracts.
 2. **Absolute Component Isolation:** Every sub-pipeline (ASR, speaker verifier, deepfake detector, conversational memory, risk fusion) is wrapped with isolated exception boundaries and deterministic DSP fallbacks. A catastrophic failure in any single engine **never crashes the call session or drops the connection**.
 3. **Session Memory Bounding & Isolation:** Multi-call isolation validated across 10 concurrent sessions. Explicit memory cleanup methods ensure zero inter-call state contamination or memory leaks.
 4. **Bounded Stress Test Benchmark:** Executed 100 chunk operations (10 concurrent calls $\times$ 10 sequential chunks) under pure CPU execution on an Intel Core i3-1215U processor.

@@ -1,0 +1,166 @@
+{
+  "experiment_title": "VOXSHIELD Phase 3A.2 \u2014 Indic Bona-Fide Control Set Preparation & Validation",
+  "checkpoint_evaluated": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\robust_training\\best_robust_mini_acoustic_cnn.pt",
+  "manifest_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\phase3a_commercial_indic\\indic_bonafide_control_manifest.parquet",
+  "total_samples": 100,
+  "languages": [
+    "hindi",
+    "telugu",
+    "tamil",
+    "english"
+  ],
+  "samples_per_language": 25,
+  "unique_speakers": 100,
+  "leakage_audit": {
+    "train_val_audio_overlap": 0,
+    "train_val_speaker_overlap": 0,
+    "unseen_test_audio_overlap": 0,
+    "unseen_test_speaker_overlap": 0
+  },
+  "frozen_thresholds_applied": {
+    "policy_b": {
+      "wideband": 0.795,
+      "telephony": 0.78
+    },
+    "policy_c": {
+      "wideband": 0.685,
+      "telephony": 0.525
+    }
+  },
+  "evaluation_metrics": {
+    "hindi": {
+      "sample_count": 25,
+      "mean_spoof_prob": 0.4845,
+      "median_spoof_prob": 0.475,
+      "p95_spoof_prob": 0.7961,
+      "max_spoof_prob": 0.807,
+      "policy_b_wideband_theta_0_7950": {
+        "false_positives": 2,
+        "fpr": 0.08
+      },
+      "policy_b_telephony_theta_0_7800": {
+        "false_positives": 4,
+        "fpr": 0.16
+      },
+      "policy_c_wideband_theta_0_6850": {
+        "false_positives": 5,
+        "fpr": 0.2
+      },
+      "policy_c_telephony_theta_0_5250": {
+        "false_positives": 11,
+        "fpr": 0.44
+      }
+    },
+    "telugu": {
+      "sample_count": 25,
+      "mean_spoof_prob": 0.5399,
+      "median_spoof_prob": 0.5593,
+      "p95_spoof_prob": 0.855,
+      "max_spoof_prob": 0.874,
+      "policy_b_wideband_theta_0_7950": {
+        "false_positives": 4,
+        "fpr": 0.16
+      },
+      "policy_b_telephony_theta_0_7800": {
+        "false_positives": 4,
+        "fpr": 0.16
+      },
+      "policy_c_wideband_theta_0_6850": {
+        "false_positives": 5,
+        "fpr": 0.2
+      },
+      "policy_c_telephony_theta_0_5250": {
+        "false_positives": 14,
+        "fpr": 0.56
+      }
+    },
+    "tamil": {
+      "sample_count": 25,
+      "mean_spoof_prob": 0.5802,
+      "median_spoof_prob": 0.6177,
+      "p95_spoof_prob": 0.878,
+      "max_spoof_prob": 0.9386,
+      "policy_b_wideband_theta_0_7950": {
+        "false_positives": 3,
+        "fpr": 0.12
+      },
+      "policy_b_telephony_theta_0_7800": {
+        "false_positives": 3,
+        "fpr": 0.12
+      },
+      "policy_c_wideband_theta_0_6850": {
+        "false_positives": 8,
+        "fpr": 0.32
+      },
+      "policy_c_telephony_theta_0_5250": {
+        "false_positives": 15,
+        "fpr": 0.6
+      }
+    },
+    "english": {
+      "sample_count": 25,
+      "mean_spoof_prob": 0.4737,
+      "median_spoof_prob": 0.4521,
+      "p95_spoof_prob": 0.759,
+      "max_spoof_prob": 0.8494,
+      "policy_b_wideband_theta_0_7950": {
+        "false_positives": 1,
+        "fpr": 0.04
+      },
+      "policy_b_telephony_theta_0_7800": {
+        "false_positives": 1,
+        "fpr": 0.04
+      },
+      "policy_c_wideband_theta_0_6850": {
+        "false_positives": 5,
+        "fpr": 0.2
+      },
+      "policy_c_telephony_theta_0_5250": {
+        "false_positives": 9,
+        "fpr": 0.36
+      }
+    },
+    "all": {
+      "sample_count": 100,
+      "mean_spoof_prob": 0.5196,
+      "median_spoof_prob": 0.5133,
+      "p95_spoof_prob": 0.8225,
+      "max_spoof_prob": 0.9386,
+      "policy_b_wideband_theta_0_7950": {
+        "false_positives": 10,
+        "fpr": 0.1
+      },
+      "policy_b_telephony_theta_0_7800": {
+        "false_positives": 12,
+        "fpr": 0.12
+      },
+      "policy_c_wideband_theta_0_6850": {
+        "false_positives": 23,
+        "fpr": 0.23
+      },
+      "policy_c_telephony_theta_0_5250": {
+        "false_positives": 49,
+        "fpr": 0.49
+      }
+    }
+  },
+  "latency_benchmarks_ms": {
+    "mean": 8.27,
+    "median": 7.41,
+    "p95": 9.24,
+    "total_wall_sec": 0.83
+  },
+  "channel_ambiguity_note": "IndicVoices recordings were captured via diverse smartphone microphones across India. While stored uncompressed at 16 kHz (wideband), acoustic characteristics reflect real-world mobile capture. Both wideband thresholds (\u03b8=0.7950 / \u03b8=0.6850) and telephony thresholds (\u03b8=0.7800 / \u03b8=0.5250) are reported.",
+  "scientific_interpretation": "This experiment measures false-positive transfer onto authentic Indic speech. It demonstrates whether phonetic and dialectal variations in Hindi, Telugu, and Tamil trigger spurious deepfake alarms on an English-trained model. It does NOT establish Indic deepfake detection recall, commercial voice-cloner detection, zero-shot cloning detection, or multilingual spoof detection, because no synthetic/cloned Indic samples exist in the repository.",
+  "integrity": {
+    "training_performed": false,
+    "checkpoints_modified": false,
+    "existing_datasets_modified": false,
+    "existing_manifests_modified": false,
+    "calibration_modified": false,
+    "production_code_modified": false,
+    "external_downloads": false,
+    "packages_installed": false,
+    "synthetic_audio_generated": false
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "experiment_title": "VOXSHIELD Phase 2B.2 \u2014 Robustness-Augmented MiniAcousticCNN Training",
+  "environment": {
+    "python_version": "3.13.7",
+    "pytorch_version": "2.14.0+cpu",
+    "torchaudio_version": "2.11.0+cpu",
+    "soundfile_version": "0.14.0",
+    "scipy_version": "1.18.1",
+    "numpy_version": "2.5.2",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 154 Stepping 4, GenuineIntel",
+    "device": "cpu"
+  },
+  "training_hyperparameters": {
+    "random_seed": 42,
+    "epochs": 15,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "optimizer": "Adam",
+    "loss": "CrossEntropyLoss"
+  },
+  "model_architecture_summary": {
+    "architecture": "MiniAcousticCNN",
+    "parameter_count": 93442,
+    "input_shape": [
+      2,
+      60,
+      301
+    ],
+    "dropout_rate": 0.3
+  },
+  "training_sample_counts": {
+    "total_train_samples": 2800,
+    "clean_train_samples": 1400,
+    "augmented_train_samples": 1400,
+    "train_bonafide_total": 1400,
+    "train_spoof_total": 1400
+  },
+  "augmentation_counts": {
+    "clean": 1400,
+    "alaw": 350,
+    "mulaw": 350,
+    "bandpass": 350,
+    "noise": 350
+  },
+  "validation_sample_counts": {
+    "clean_validation_samples": 300,
+    "alaw_validation_samples": 300,
+    "validation_bonafide": 150,
+    "validation_spoof": 150
+  },
+  "best_epoch": 10,
+  "best_combined_f1": 0.7324,
+  "best_combined_recall": 0.9133,
+  "best_clean_metrics": {
+    "loss": 0.5744,
+    "accuracy": 0.66,
+    "precision": 0.6,
+    "recall": 0.96,
+    "f1": 0.7385,
+    "roc_auc": 0.8684,
+    "fpr": 0.64,
+    "fnr": 0.04,
+    "tn": 54,
+    "fp": 96,
+    "fn": 6,
+    "tp": 144
+  },
+  "best_alaw_metrics": {
+    "loss": 0.6093,
+    "accuracy": 0.6733,
+    "precision": 0.625,
+    "recall": 0.8667,
+    "f1": 0.7263,
+    "roc_auc": 0.7452,
+    "fpr": 0.52,
+    "fnr": 0.1333,
+    "tn": 72,
+    "fp": 78,
+    "fn": 20,
+    "tp": 130
+  },
+  "total_wall_clock_sec": 754.87,
+  "checkpoint_path": "C:\\Users\\bhavy\\OneDrive\\sih_hackathon\\sih104\\ai\\neural_prototype\\results\\robust_training\\best_robust_mini_acoustic_cnn.pt",
+  "checkpoint_size_bytes": 1141462,
+  "checkpoint_size_kb": 1114.71,
+  "integrity_assertions": {
+    "unseen_generator_test_accessed": false,
+    "unseen_generator_test_evaluated": false,
+    "existing_source_disjoint_checkpoint_modified": false,
+    "earlier_indomain_cnn_checkpoint_modified": false,
+    "rf_baseline_modified": false,
+    "existing_datasets_or_manifests_modified": false,
+    "production_code_modified": false,
+    "external_data_downloaded": false,
+    "new_packages_installed": false
+  }
+}

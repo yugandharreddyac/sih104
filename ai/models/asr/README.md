@@ -12,7 +12,7 @@
 * **Expected RAM Footprint:** ~480 MB
 
 ## Model Integrity & Verification
-* **Expected Checksum (SHA-256):** To be registered in [ModelRegistry](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/core/model_registry.py) upon acquisition.
+* **Expected Checksum (SHA-256):** To be registered in [ModelRegistry](../../app/core/model_registry.py) upon acquisition.
 * **Integrity Gate:** Model initialization strictly verifies cryptographic checksum before mounting.
 
 ## Licensing & Source
@@ -21,8 +21,9 @@
 * **Redistribution / Commercial Use:** Permissive MIT License
 
 ## Current Status
-* **Status:** `PLANNED` / `STAGED_STRUCTURE_ONLY`
-* **Weights Downloaded:** NO (Stage-only; zero binaries downloaded in Phase 6.1)
+* **Status:** `AVAILABLE` / `STAGED_ACTIVE`
+* **Weights Downloaded:** YES (`Systran/faster-whisper-base` CPU INT8, ~145 MB `model.bin`)
+* **Verified Checksum (SHA-256):** `d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9`
 
 ## Fallback Behavior
-* If model weights are missing or uninitialized, [StreamingASREngine](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/asr/engine.py) seamlessly returns structured empty transcript segments with explicit `INSUFFICIENT_EVIDENCE` / `INCONCLUSIVE` uncertainty tokens without interrupting active WebSocket audio streams.
+* If model weights are missing or uninitialized, [StreamingASREngine](../../app/asr/engine.py) seamlessly returns structured empty transcript segments with explicit `INSUFFICIENT_EVIDENCE` / `INCONCLUSIVE` uncertainty tokens without interrupting active WebSocket audio streams.

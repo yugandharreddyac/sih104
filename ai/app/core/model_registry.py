@@ -47,6 +47,22 @@ class ModelRegistry:
 
         registered_list = [
             ModelMetadata(
+                model_id="robust_mini_acoustic_cnn_v1",
+                name="Robustness-Augmented MiniAcousticCNN (Source-Disjoint)",
+                version="1.0.0",
+                category="DEEPFAKE",
+                framework="PYTORCH_CPU",
+                device="CPU",
+                status=PipelineStatus.AVAILABLE,
+                checksum_sha256="b8c0b623175a7d53204004690aab3e1cbed921517189c80ad888ea5a3b7cbbc5",
+                license="MIT / Academic Research",
+                training_dataset="VCC2020 + VCC2018 Robustness-Augmented 2x Balanced Corpus",
+                input_sample_rate=16000,
+                inference_latency_ms_p50=6.57,
+                known_limitations="Evaluated on 16 kHz wideband and G.711 telephony audio. Extreme ambient noise (>15 dB) or unverified carrier codecs may alter false alarm rate.",
+                registered_at=now
+            ),
+            ModelMetadata(
                 model_id="deepfake_aasist_spectral_v3",
                 name="Neural Deepfake & Synthetic Speech Detector with Dual DSP Fallback",
                 version="3.5.0",
@@ -69,18 +85,18 @@ class ModelRegistry:
                 category="DEEPFAKE",
                 framework="ONNX_NEURAL",
                 device=device,
-                status=PipelineStatus.AVAILABLE,
+                status=PipelineStatus.NOT_AVAILABLE,
                 checksum_sha256="8bf3d10c3dcfc5a485396998453e2474da6bf498fe01b4403ceb76e9a4a0ca11",
                 license="MIT",
                 training_dataset="Balanced ASVspoof 2021 PA / LA",
                 input_sample_rate=16000,
                 inference_latency_ms_p50=35.0,
-                known_limitations="Narrowband telephone audio requires resampling and normalization.",
+                known_limitations="Historical/intended ONNX model artifact; not physically present on disk. Production deepfake detection uses the verified PyTorch Robust MiniAcousticCNN (robust_mini_acoustic_cnn_v1).",
                 registered_at=now
             ),
             ModelMetadata(
                 model_id="speaker_xvector_biometric_v3",
-                name="ECAPA-TDNN Neural Speaker Biometric Embedder & Dual DSP Fallback",
+                name="Speaker Biometric Embedder & Deterministic DSP Fallback",
                 version="3.5.0",
                 category="SPEAKER",
                 framework="ONNX_NEURAL_DSP",
@@ -91,7 +107,7 @@ class ModelRegistry:
                 training_dataset="VoxCeleb 1 & 2 Multilingual Conversational Corpus",
                 input_sample_rate=16000,
                 inference_latency_ms_p50=12.4,
-                known_limitations="Requires minimum 300ms of speech utterances for optimal enrollment stability.",
+                known_limitations="Primary ECAPA-TDNN ONNX weights are unavailable locally; operating in deterministic DSP 64-band FFT filterbank with random projection fallback (128-dim).",
                 registered_at=now
             ),
             ModelMetadata(
@@ -101,13 +117,13 @@ class ModelRegistry:
                 category="SPEAKER",
                 framework="ONNX_NEURAL",
                 device=device,
-                status=PipelineStatus.AVAILABLE,
+                status=PipelineStatus.NOT_AVAILABLE,
                 checksum_sha256="2ef890f0212dbeb5684622c42c03b4df80ef4cc171da004d2ec754247a3cf3f9",
                 license="Apache-2.0",
                 training_dataset="VoxCeleb 1 & 2 Multilingual Conversational Corpus",
                 input_sample_rate=16000,
                 inference_latency_ms_p50=12.4,
-                known_limitations="Uncalibrated cross-corpus domain shift may require adaptive score thresholding.",
+                known_limitations="BLOCKED: The genuine SpeechBrain ECAPA-TDNN ONNX model artifact is not currently present on disk. Speaker verification runs on deterministic DSP fallback.",
                 registered_at=now
             ),
             ModelMetadata(

@@ -41,7 +41,7 @@ This report documents the design, implementation, and verification of **Phase 6.
 
 ## 3. Normalization Architecture
 
-[LanguageIdentifier.normalize_language_code](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/asr/language.py) provides deterministic sanitization across diverse casing, punctuation, and locale conventions:
+[LanguageIdentifier.normalize_language_code](../ai/app/asr/language.py) provides deterministic sanitization across diverse casing, punctuation, and locale conventions:
 
 ```text
 Incoming Locale String
@@ -72,7 +72,7 @@ The routing decision is executed through 5 consecutive evaluation layers:
 
 ## 5. Multi-Turn Conversational Tracking & Language Switching
 
-The [LanguageContextTracker](file:///c:/Users/supre/OneDrive/Desktop/sih104/ai/app/asr/language.py) implements a memory-bounded sliding window:
+The [LanguageContextTracker](../ai/app/asr/language.py) implements a memory-bounded sliding window:
 * **Window Size:** $N = 5$ observations per session.
 * **Weighted Voting:** Recency-weighted voting function:
   $$W_{\text{obs}} = \text{Confidence} \cdot \left(1.0 + \frac{\text{turn\_index}}{\text{window\_len}} \cdot 0.5\right)$$

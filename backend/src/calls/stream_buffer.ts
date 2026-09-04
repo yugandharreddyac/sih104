@@ -17,6 +17,9 @@ export interface StreamBufferMetrics {
   totalChunksReceived: number;
   totalChunksDropped: number;
   sequenceErrors: number;
+  duplicatesIgnored: number;
+  staleChunksIgnored: number;
+  lastCommittedAcousticSeq: number;
   currentBufferSizeBytes: number;
   currentBufferChunkCount: number;
   maxBufferSizeBytes: number;
@@ -27,6 +30,7 @@ export interface StreamBufferMetrics {
 export class StreamBuffer {
   private static readonly MAX_BUFFER_CHUNKS = 100;
   private static readonly MAX_BUFFER_BYTES = 5 * 1024 * 1024; // 5 MB per call session
+  private static readonly MAX_SEEN_HISTORY = 1000;
 
   private queue: BufferedChunk[] = [];
   private currentBytes = 0;
@@ -34,29 +38,77 @@ export class StreamBuffer {
   private totalReceived = 0;
   private totalDropped = 0;
   private sequenceErrors = 0;
+  private lastCommittedAcousticSeq = -1;
+  private seenSequences: Set<number> = new Set();
+  private duplicatesIgnored = 0;
+  private staleChunksIgnored = 0;
 
   constructor(public readonly callId: string, public readonly streamId: string) {}
 
   /**
    * Pushes a new normalized chunk into the bounded buffer.
-   * Drops oldest chunks or rejects if buffer limit exceeded (backpressure).
+   * Rejects duplicate sequence numbers and stale out-of-order sequence numbers.
+   * Drops oldest chunks if buffer capacity limit exceeded (backpressure).
    */
   public push(chunk: {
     sequenceNumber: number;
     data: Buffer;
     timestampMs?: number;
     durationMs?: number;
-  }): { accepted: boolean; sequenceError: boolean; droppedOldest: boolean } {
+  }): {
+    accepted: boolean;
+    sequenceError: boolean;
+    droppedOldest: boolean;
+    isDuplicate: boolean;
+    isStale: boolean;
+  } {
     this.totalReceived++;
+
+    // 1. Duplicate check: sequence number has already been seen and committed
+    if (this.seenSequences.has(chunk.sequenceNumber)) {
+      this.duplicatesIgnored++;
+      return {
+        accepted: false,
+        sequenceError: false,
+        droppedOldest: false,
+        isDuplicate: true,
+        isStale: false,
+      };
+    }
+
+    // 2. Stale / out-of-order check: arrived after a newer sequence was already committed
+    if (this.lastCommittedAcousticSeq >= 0 && chunk.sequenceNumber < this.lastCommittedAcousticSeq) {
+      this.staleChunksIgnored++;
+      return {
+        accepted: false,
+        sequenceError: true,
+        droppedOldest: false,
+        isDuplicate: false,
+        isStale: true,
+      };
+    }
+
+    // 3. Normal / Forward Gap Processing
     let sequenceError = false;
     let droppedOldest = false;
 
-    // Sequence continuity check
+    // Sequence continuity check (forward gap detection)
     if (chunk.sequenceNumber !== this.expectedSequence) {
       this.sequenceErrors++;
       sequenceError = true;
     }
     this.expectedSequence = chunk.sequenceNumber + 1;
+    this.lastCommittedAcousticSeq = chunk.sequenceNumber;
+
+    // Track seen sequence with bounded memory
+    this.seenSequences.add(chunk.sequenceNumber);
+    if (this.seenSequences.size > StreamBuffer.MAX_SEEN_HISTORY) {
+      const iter = this.seenSequences.values();
+      const first = iter.next().value;
+      if (typeof first === 'number') {
+        this.seenSequences.delete(first);
+      }
+    }
 
     const chunkSize = chunk.data.length;
 
@@ -91,6 +143,8 @@ export class StreamBuffer {
       accepted: true,
       sequenceError,
       droppedOldest,
+      isDuplicate: false,
+      isStale: false,
     };
   }
 
@@ -102,6 +156,14 @@ export class StreamBuffer {
     return chunk;
   }
 
+  public getLastCommittedSeq(): number {
+    return this.lastCommittedAcousticSeq;
+  }
+
+  public isSequenceSeen(seq: number): boolean {
+    return this.seenSequences.has(seq);
+  }
+
   public getMetrics(): StreamBufferMetrics {
     const utilization = this.currentBytes / StreamBuffer.MAX_BUFFER_BYTES;
     return {
@@ -109,6 +171,9 @@ export class StreamBuffer {
       totalChunksReceived: this.totalReceived,
       totalChunksDropped: this.totalDropped,
       sequenceErrors: this.sequenceErrors,
+      duplicatesIgnored: this.duplicatesIgnored,
+      staleChunksIgnored: this.staleChunksIgnored,
+      lastCommittedAcousticSeq: this.lastCommittedAcousticSeq,
       currentBufferSizeBytes: this.currentBytes,
       currentBufferChunkCount: this.queue.length,
       maxBufferSizeBytes: StreamBuffer.MAX_BUFFER_BYTES,
@@ -120,6 +185,11 @@ export class StreamBuffer {
   public clear(): void {
     this.queue = [];
     this.currentBytes = 0;
+    this.expectedSequence = 0;
+    this.lastCommittedAcousticSeq = -1;
+    this.seenSequences.clear();
+    this.duplicatesIgnored = 0;
+    this.staleChunksIgnored = 0;
   }
 }
 

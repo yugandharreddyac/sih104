@@ -197,14 +197,14 @@ def test_deepfake_dsp_fallback_path():
 
 
 def test_deepfake_onnx_exception_dsp_fallback():
-    model = DeepfakeAcousticModel(model_version="deepfake_aasist_spectral_v3")
+    model = DeepfakeAcousticModel(model_version="robust_mini_acoustic_cnn_v1")
     fe = AcousticFeatureExtractor(sample_rate=16000)
-    original_session = DeepfakeAcousticModel._cached_session
+    original_model = DeepfakeAcousticModel._cached_neural_model
 
     try:
-        mock_sess = MagicMock()
-        mock_sess.run.side_effect = RuntimeError("Synthetic ONNX Runtime deepfake execution fault")
-        DeepfakeAcousticModel._cached_session = mock_sess
+        mock_model = MagicMock()
+        mock_model.side_effect = RuntimeError("Synthetic PyTorch deepfake execution fault")
+        DeepfakeAcousticModel._cached_neural_model = mock_model
 
         t = np.linspace(0, 1.0, 16000, endpoint=False)
         samples = (0.4 * np.sin(2 * np.pi * 300 * t)).astype(np.float32)
@@ -214,7 +214,7 @@ def test_deepfake_onnx_exception_dsp_fallback():
         assert pred.raw_spoof_score is not None
         assert 0.0 <= pred.raw_spoof_score <= 1.0
     finally:
-        DeepfakeAcousticModel._cached_session = original_session
+        DeepfakeAcousticModel._cached_neural_model = original_model
 
 
 def test_deepfake_enrollment_anti_spoofing_gate_preservation():
@@ -253,7 +253,7 @@ def test_deepfake_result_contract_integrity():
     assert isinstance(res.status, DeepfakeStatus)
     assert isinstance(res.artifacts_detected, list)
     assert isinstance(res.explainability, list)
-    assert res.model_version == detector.model_id
+    assert res.model_version in (detector.model_id, "dsp_acoustic_fallback_v1")
     assert res.engine_type in ("NEURAL", "DSP_FALLBACK")
     assert res.inference_latency_ms >= 0.0
 

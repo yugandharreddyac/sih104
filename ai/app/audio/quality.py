@@ -59,7 +59,38 @@ class AudioQualityAnalyzer:
         dynamic_range_db = float(20.0 * np.log10(p95 / p10))
         snr_estimate_db = max(0.0, dynamic_range_db - 3.0)
 
-        # 5. Quality Rating & Uncertainty Penalty Assignment
+        # 5. Spectral Bandwidth & High-Frequency Ratio (Cutoff: 3.8 kHz)
+        if len(samples) >= 160:
+            n_samples = len(samples)
+            freqs = np.fft.rfftfreq(n_samples, 1.0 / self.sample_rate)
+            fft_mag = np.abs(np.fft.rfft(samples))
+            fft_power = fft_mag ** 2
+            total_power = float(np.sum(fft_power))
+
+            if total_power > 1e-12:
+                # 95% cumulative energy roll-off frequency as effective spectral bandwidth
+                cum_power = np.cumsum(fft_power)
+                idx_95 = int(np.searchsorted(cum_power, 0.95 * total_power))
+                idx_95 = min(idx_95, len(freqs) - 1)
+                spectral_bandwidth_hz = float(freqs[idx_95])
+
+                # High-frequency ratio around 3.8 kHz cutoff vs passband (>= 300 Hz)
+                cutoff_hz = 3800.0
+                high_band = freqs >= cutoff_hz
+                low_band = (freqs >= 300.0) & (freqs < cutoff_hz)
+
+                high_power = float(np.sum(fft_power[high_band]))
+                low_power = float(np.sum(fft_power[low_band]))
+
+                high_frequency_ratio = float(high_power / (low_power + 1e-8))
+            else:
+                spectral_bandwidth_hz = 0.0
+                high_frequency_ratio = 0.0
+        else:
+            spectral_bandwidth_hz = 0.0
+            high_frequency_ratio = 0.0
+
+        # 6. Quality Rating & Uncertainty Penalty Assignment
         notes = []
         uncertainty_penalty = 0.0
 
@@ -109,5 +140,24 @@ class AudioQualityAnalyzer:
             channels=1,
             duration_ms=round(duration_ms, 2),
             uncertainty_penalty=round(uncertainty_penalty, 3),
-            notes=" | ".join(notes)
+            notes=" | ".join(notes),
+            spectral_bandwidth_hz=round(spectral_bandwidth_hz, 1),
+            high_frequency_ratio=round(high_frequency_ratio, 4)
         )
+
+    @staticmethod
+    def is_telephony_bandwidth(quality: AudioQualityResult) -> bool:
+        """
+        Conservative acoustic classification of narrowband telephone band.
+        Requires:
+        - Non-poor quality, sufficient speech/signal level (RMS >= -42 dBFS, SNR >= 8.0 dB, silence <= 0.85)
+        - Spectral energy roll-off <= 3800 Hz
+        - Minimal energy above 3.8 kHz (high_frequency_ratio < 0.05)
+        """
+        if quality.rating == AudioQualityRating.POOR:
+            return False
+        if quality.spectral_bandwidth_hz is None or quality.high_frequency_ratio is None:
+            return False
+        if quality.rms_dbfs < -42.0 or quality.snr_estimate_db < 8.0 or quality.silence_ratio > 0.85:
+            return False
+        return quality.spectral_bandwidth_hz <= 3800.0 and quality.high_frequency_ratio < 0.05

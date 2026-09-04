@@ -101,7 +101,19 @@ class AudioStreamPipeline:
         deepfake_result = self.deepfake.analyze(chunk, quality=quality_result)
         speaker_result = self.speaker.verify_speaker(chunk=chunk, claimed_speaker_id=chunk.claimed_speaker_id, quality=quality_result)
         replay_result = self.replay.detect_replay(chunk, quality=quality_result)
-        manipulation_result = self.manipulation.analyze(samples)
+        has_gap = None
+        if chunk.metadata:
+            if "sequenceGap" in chunk.metadata:
+                has_gap = bool(chunk.metadata["sequenceGap"])
+            elif "sequence_gap" in chunk.metadata:
+                has_gap = bool(chunk.metadata["sequence_gap"])
+
+        manipulation_result = self.manipulation.analyze(
+            samples,
+            sequence_number=chunk.chunk_index,
+            has_sequence_gap=has_gap,
+            session_id=chunk.stream_id or chunk.call_id
+        )
 
         stream_id = chunk.stream_id or chunk.call_id
         session = self.temporal_aggregator.get_or_create_session(stream_id)
@@ -258,7 +270,9 @@ class AudioStreamPipeline:
                 "sample_rate": chunk.sample_rate,
                 "channels": chunk.channels,
                 "duration_ms": round(duration_ms, 2),
-                "phase": "PHASE_4_CONVERSATIONAL_INTELLIGENCE"
+                "phase": "PHASE_4_CONVERSATIONAL_INTELLIGENCE",
+                "channel_type": chunk.channel_type.value if chunk.channel_type else None,
+                "codec": chunk.codec
             }
         )
 

@@ -9,7 +9,8 @@ import os
 import time
 import logging
 import numpy as np
-from typing import List, Optional, Any
+from pathlib import Path
+from typing import List, Optional, Any, Tuple
 
 from ai.app.deepfake.types import DeepfakeFeatureVector, RawDeepfakePrediction
 
@@ -17,16 +18,16 @@ logger = logging.getLogger("voxshield.deepfake.model")
 
 
 class DeepfakeAcousticModel:
-    _cached_session: Optional[Any] = None
+    _cached_neural_model: Optional[Any] = None
+    _cached_extractor: Optional[Any] = None
     _neural_initialized: bool = False
-    _neural_model_path: str = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "models", "deepfake", "deepfake_detector.onnx"
+    _default_model_path: str = str(
+        Path(__file__).resolve().parents[3] / "ai" / "neural_prototype" / "results" / "robust_training" / "best_robust_mini_acoustic_cnn.pt"
     )
 
-    def __init__(self, model_version: str = "deepfake_aasist_spectral_v3", model_path: Optional[str] = None):
+    def __init__(self, model_version: str = "robust_mini_acoustic_cnn_v1", model_path: Optional[str] = None):
         self.model_version = model_version
-        self._custom_model_path = model_path or self._neural_model_path
+        self._custom_model_path = model_path or self._default_model_path
 
         # Baseline calibration weights for DSP fallback (ASVspoof 2019/2021 LA benchmarks)
         self.w_lfcc = 0.35
@@ -39,52 +40,59 @@ class DeepfakeAcousticModel:
 
     @classmethod
     def _ensure_neural_session(cls, custom_path: Optional[str] = None) -> Optional[Any]:
-        """Lazily initializes and caches the ONNX Runtime Deepfake model session on CPU."""
-        if cls._neural_initialized and cls._cached_session is not None:
-            return cls._cached_session
+        """Lazily initializes and caches the PyTorch CPU Robust MiniAcousticCNN model and feature extractor."""
+        if cls._neural_initialized and cls._cached_neural_model is not None:
+            return cls._cached_neural_model
 
-        target_path = custom_path or cls._neural_model_path
+        target_path = custom_path or cls._default_model_path
         if not os.path.exists(target_path) or not os.path.isfile(target_path):
             logger.warning(
-                f"[Deepfake] Neural ONNX model not found at '{target_path}'. "
+                f"[Deepfake] Robust CNN checkpoint not found at '{target_path}'. "
                 "Engaging deterministic DSP LFCC/Wiener fallback."
             )
             cls._neural_initialized = True
-            cls._cached_session = None
+            cls._cached_neural_model = None
+            cls._cached_extractor = None
             return None
 
         try:
-            import onnxruntime as ort
-            logger.info(f"[Deepfake] Loading Neural ONNX model from {target_path}...")
+            import torch
+            from ai.neural_prototype.model import MiniAcousticCNN
+            from ai.neural_prototype.features import TwoChannelSpectrogramExtractor
+
+            logger.info(f"[Deepfake] Loading Robust MiniAcousticCNN from '{target_path}' on CPU...")
             start_t = time.perf_counter()
 
-            session_opts = ort.SessionOptions()
-            session_opts.intra_op_num_threads = 2
-            session_opts.inter_op_num_threads = 1
-            session_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            checkpoint = torch.load(target_path, map_location="cpu")
+            model = MiniAcousticCNN(in_channels=2, num_classes=2, dropout_rate=0.3)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            model.eval()
 
-            session = ort.InferenceSession(
-                target_path,
-                sess_options=session_opts,
-                providers=["CPUExecutionProvider"]
+            extractor = TwoChannelSpectrogramExtractor(
+                sample_rate=16000,
+                n_bins=60,
+                target_duration_sec=3.0
             )
-            cls._cached_session = session
+
+            cls._cached_neural_model = model
+            cls._cached_extractor = extractor
             cls._neural_initialized = True
             load_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
-            logger.info(f"[Deepfake] Neural ONNX model successfully loaded in {load_ms} ms.")
-            return cls._cached_session
+            logger.info(f"[Deepfake] Robust MiniAcousticCNN (93,442 params) loaded in {load_ms} ms.")
+            return cls._cached_neural_model
         except Exception as e:
             logger.warning(
-                f"[Deepfake] Failed to initialize Neural ONNX session: {e}. "
+                f"[Deepfake] Failed to initialize Robust MiniAcousticCNN: {e}. "
                 "Gracefully falling back to deterministic DSP."
             )
             cls._neural_initialized = True
-            cls._cached_session = None
+            cls._cached_neural_model = None
+            cls._cached_extractor = None
             return None
 
     @property
     def is_neural_active(self) -> bool:
-        return self._cached_session is not None
+        return self._cached_neural_model is not None
 
     def _predict_dsp(self, features: DeepfakeFeatureVector) -> Tuple[float, float, List[str]]:
         """Deterministic LFCC higher-order variance and acoustic DSP scoring."""
@@ -154,7 +162,7 @@ class DeepfakeAcousticModel:
         """
         dsp_spoof_score, dsp_confidence, dsp_artifacts = self._predict_dsp(features)
 
-        # 1. Primary Neural Path (ONNX Runtime)
+        # 1. Primary Neural Path (PyTorch CPU Robust MiniAcousticCNN)
         if (
             not force_dsp
             and self.is_neural_active
@@ -162,43 +170,40 @@ class DeepfakeAcousticModel:
             and len(raw_samples) >= 4800  # >= 300ms
         ):
             try:
+                import torch
                 audio_float = raw_samples.astype(np.float32)
                 if np.max(np.abs(audio_float)) > 1.0:
                     audio_float = audio_float / 32768.0
 
-                audio_tensor = audio_float.reshape(1, -1)
-                input_name = self._cached_session.get_inputs()[0].name
-                outputs = self._cached_session.run(None, {input_name: audio_tensor})
+                wave_tensor = torch.from_numpy(audio_float.copy())
+                feat_tensor = self._cached_extractor.extract(wave_tensor).unsqueeze(0)
 
-                logits = outputs[0][0]
-                if len(logits) >= 2 and np.all(np.isfinite(logits)):
-                    exp_l = np.exp(logits - np.max(logits))
-                    probs = exp_l / np.sum(exp_l)
-                    p_fake = float(probs[1])
+                with torch.no_grad():
+                    logits = self._cached_neural_model(feat_tensor)
+                    probs = torch.softmax(logits, dim=-1)[0]
+                    p_fake = float(probs[1].item())
 
-                    # Ensemble: Blend neural probability with physical acoustic DSP evidence
-                    combined_spoof = float(0.60 * p_fake + 0.40 * dsp_spoof_score)
-                    combined_spoof = float(np.clip(combined_spoof, 0.0, 1.0))
+                # Map probability directly to spoof_score per Requirement 4
+                spoof_score = float(np.clip(p_fake, 0.0, 1.0))
+                confidence = float(np.clip(0.50 + abs(spoof_score - 0.50) * 1.0, 0.50, 0.98))
 
-                    combined_conf = float(np.clip(0.50 + abs(combined_spoof - 0.50) * 1.0, 0.50, 0.95))
-
-                    artifacts = list(dsp_artifacts)
-                    if p_fake > 0.60:
-                        artifacts.append(
-                            f"Neural acoustic transformer detected synthetic speech generation / voice clone pattern (Neural p_fake: {round(p_fake, 3)})."
-                        )
-
-                    return RawDeepfakePrediction(
-                        raw_spoof_score=round(combined_spoof, 4),
-                        raw_confidence=round(combined_conf, 3),
-                        model_version=self.model_version,
-                        engine_type="NEURAL",
-                        feature_vector=features,
-                        artifacts=artifacts
+                artifacts: List[str] = []
+                if spoof_score >= 0.685:
+                    artifacts.append(
+                        f"Robust MiniAcousticCNN detected synthetic vocoder / voice clone pattern (spoof_score: {round(spoof_score, 4)})"
                     )
+
+                return RawDeepfakePrediction(
+                    raw_spoof_score=round(spoof_score, 4),
+                    raw_confidence=round(confidence, 3),
+                    model_version=self.model_version,
+                    engine_type="NEURAL",
+                    feature_vector=features,
+                    artifacts=artifacts
+                )
             except Exception as exc:
                 logger.warning(
-                    f"[Deepfake] Neural ONNX inference failed: {exc}. "
+                    f"[Deepfake] Robust CNN inference failed: {exc}. "
                     "Routing to deterministic DSP fallback."
                 )
 
@@ -206,7 +211,7 @@ class DeepfakeAcousticModel:
         return RawDeepfakePrediction(
             raw_spoof_score=round(dsp_spoof_score, 4),
             raw_confidence=round(dsp_confidence, 3),
-            model_version=self.model_version,
+            model_version="dsp_acoustic_fallback_v1",
             engine_type="DSP_FALLBACK",
             feature_vector=features,
             artifacts=dsp_artifacts

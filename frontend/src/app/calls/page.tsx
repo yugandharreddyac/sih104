@@ -35,7 +35,7 @@ interface CallSession {
   callerIdentifier: string;
   callerDisplayName?: string;
   direction: 'INBOUND' | 'OUTBOUND';
-  status: 'ACTIVE' | 'RINGING' | 'TERMINATED';
+  status: 'ACTIVE' | 'RINGING' | 'TERMINATED' | 'INITIALIZING' | 'VERIFYING' | 'FLAGGED' | 'BLOCKED';
   organizationId: string;
   claimedSpeakerId?: string;
   createdAt: string;
@@ -48,137 +48,116 @@ export default function CallsPage() {
   const [streamSource, setStreamSource] = useState<'MIC' | 'SYNTHETIC'>('SYNTHETIC');
   const [claimedSpeakerId, setClaimedSpeakerId] = useState('speaker-cfo-001');
 
-  // Phase 2, 3, 4 Live Telemetry State
+  // Phase 2, 3, 4 Live Telemetry State (Starts clean / waiting for stream)
   const [telemetry, setTelemetry] = useState({
-    overallAssessment: 'AUTHENTICITY_SUPPORTED',
+    overallAssessment: 'AWAITING_STREAM',
     deepfake: {
-      status: 'AUTHENTIC',
-      spoofScore: 0.12,
-      confidence: 0.88,
-      uncertainty: 0.05,
+      status: 'NOT_AVAILABLE',
+      spoofScore: 0.0,
+      confidence: 0.0,
+      uncertainty: 1.0,
       artifacts: [] as string[],
-      explainability: ['Acoustic harmonic distribution consistent with natural human speech.'],
-      latencyMs: 1.8,
+      explainability: ['Awaiting audio stream for acoustic neural evaluation.'],
+      latencyMs: 0,
     },
     speaker: {
-      status: 'MATCH',
-      similarityScore: 0.88,
-      confidence: 0.90,
-      isEnrolled: true,
-      enrolledSpeakerId: 'speaker-cfo-001',
-      explainability: ['Acoustic vocal tract resonance matches enrolled CFO profile.'],
+      status: 'NOT_AVAILABLE',
+      similarityScore: 0.0,
+      confidence: 0.0,
+      isEnrolled: false,
+      enrolledSpeakerId: '',
+      explainability: ['Awaiting voice sample for biometric enrollment matching.'],
     },
     replay: {
-      status: 'NOT_REPLAY',
-      replayProbability: 0.08,
-      confidence: 0.85,
-      explainability: ['Direct acoustic frequency profile verified.'],
+      status: 'NOT_AVAILABLE',
+      replayProbability: 0.0,
+      confidence: 0.0,
+      explainability: ['Awaiting spectral frequency frames.'],
     },
     manipulation: {
       level: 'NO_INDICATOR',
       indicators: [] as string[],
     },
     vad: {
-      state: 'SPEECH',
-      speechProbability: 0.94,
+      state: 'SILENCE',
+      speechProbability: 0.0,
     },
     quality: {
-      rating: 'GOOD',
-      rmsDbfs: -22.5,
-      peakAmplitude: 0.62,
+      rating: 'INITIALIZING',
+      rmsDbfs: -96.0,
+      peakAmplitude: 0.0,
       clippingRatio: 0.0,
-      snrEstimateDb: 28.4,
-      notes: 'Clean telephony signal',
+      snrEstimateDb: 0.0,
+      notes: 'No audio packets received yet',
     },
     temporal: {
-      accumulatedSpeechSec: 2.5,
-      isWarmedUp: true,
+      accumulatedSpeechSec: 0.0,
+      isWarmedUp: false,
     },
     conversation: {
-      transcript: 'I am calling from your bank security team. Please verify the OTP 482910 right now.',
-      redactedTranscript: 'I am calling from your bank security team. Please verify the OTP [REDACTED] right now.',
+      transcript: '',
+      redactedTranscript: 'Awaiting speech recognition transcript...',
       language: 'EN',
-      languageConfidence: 0.98,
-      asrConfidence: 0.96,
-      asrUncertainty: 0.04,
-      intent: 'OTP_REQUEST',
-      isAdversarialIntent: true,
-      requestedAction: 'One-Time Authentication Code',
-      actionType: 'DISCLOSE_CREDENTIAL',
-      isHighRiskAction: true,
-      tactics: ['AUTHORITY_EXPLOITATION', 'URGENCY_PRESSURE', 'VERIFICATION_BYPASS'],
-      progressionState: 'SECRET_HARVESTING_ATTEMPTED',
-      sequenceScore: 0.88,
-      highestSeverity: 'CRITICAL',
-      claims: [{ identity: 'Bank Security Department', org: 'Central Bank Fraud Unit', turn: 1 }],
+      languageConfidence: 0.0,
+      asrConfidence: 0.0,
+      asrUncertainty: 1.0,
+      intent: 'NONE',
+      isAdversarialIntent: false,
+      requestedAction: 'NONE',
+      actionType: 'NONE',
+      isHighRiskAction: false,
+      tactics: [] as string[],
+      progressionState: 'IDLE',
+      sequenceScore: 0.0,
+      highestSeverity: 'LOW',
+      claims: [] as Array<{ identity: string; org: string; turn: number }>,
       inconsistencies: [] as string[],
-      currentPhase: 'ACTION_REQUEST',
-      nlpLatencyMs: 4.2,
+      currentPhase: 'INITIALIZATION',
+      nlpLatencyMs: 0,
     },
-    totalAiLatencyMs: 6.8,
-    evidenceSummary: [
-      'Acoustic vocal tract resonance matches enrolled CFO profile.',
-      'Intent: Direct OTP credential solicitation with high urgency.',
-      'Behavioral: Multi-turn sequence reached secret harvesting stage.',
-    ],
+    totalAiLatencyMs: 0,
+    evidenceSummary: [] as string[],
   });
 
   // Phase 5 Unified Multi-Modal Decision & Policy State
   const [unifiedRisk, setUnifiedRisk] = useState({
-    overallRiskScore: 88.5,
-    riskLevel: 'CRITICAL',
-    confidence: 0.92,
-    uncertainty: 0.08,
+    overallRiskScore: null as number | null,
+    riskLevel: 'MONITOR',
+    confidence: 0.0,
+    uncertainty: 1.0,
     dimensions: {
-      overall: 88.5,
-      identity_impersonation: 85.0,
-      deepfake_synthetic: 12.0,
-      replay_injection: 8.0,
-      social_engineering: 92.0,
-      credential_theft: 95.0,
-      financial_fraud: 88.0,
-      account_takeover: 45.0,
-      verification_bypass: 90.0,
+      overall: 0.0,
+      identity_impersonation: 0.0,
+      deepfake_synthetic: 0.0,
+      replay_injection: 0.0,
+      social_engineering: 0.0,
+      credential_theft: 0.0,
+      financial_fraud: 0.0,
+      account_takeover: 0.0,
+      verification_bypass: 0.0,
       inconsistency: 0.0,
     },
-    riskVelocity: 14.2,
-    riskTrajectoryTrend: 'ESCALATING',
-    primaryDrivers: [
-      'CRITICAL THREAT: High-confidence multi-modal credential harvesting pattern.',
-      'Direct solicitation of authentication credentials / OTP [REDACTED].',
-      'Multi-turn sequence reached SECRET_HARVESTING_ATTEMPTED stage.',
-    ],
-    contradictingSignals: [
-      'Acoustic voice is bona-fide human speech; threat is driven by conversational social engineering.',
-    ],
+    riskVelocity: 0.0,
+    riskTrajectoryTrend: 'STABLE',
+    primaryDrivers: ['Awaiting multi-modal signals for composite risk evaluation.'],
+    contradictingSignals: [] as string[],
     evidenceGraph: {
-      nodes: [
-        { node_id: 'node_intent', layer: 'Semantic', cue: 'Adversarial intent: OTP_REQUEST', confidence: 0.95 },
-        { node_id: 'node_secret', layer: 'SensitiveData', cue: 'Direct solicitation of OTP [REDACTED]', confidence: 0.95 },
-        { node_id: 'node_prog', layer: 'Behavioral', cue: 'Progression: SECRET_HARVESTING_ATTEMPTED', confidence: 0.92 },
-        { node_id: 'node_act', layer: 'Action', cue: 'Action: DISCLOSE_CREDENTIAL', confidence: 0.95 },
-      ],
-      edges: [
-        { source_node_id: 'node_intent', target_node_id: 'node_secret', relationship: 'CAUSES_ESCALATION' },
-        { source_node_id: 'node_secret', target_node_id: 'node_prog', relationship: 'SUPPORTS' },
-      ],
-      primary_findings: [
-        'Direct solicitation of authentication credentials / OTP [REDACTED]',
-        'Multi-turn sequence reached SECRET_HARVESTING_ATTEMPTED',
-      ],
+      nodes: [] as Array<{ node_id: string; layer: string; cue: string; confidence: number }>,
+      edges: [] as Array<{ source_node_id: string; target_node_id: string; relationship: string }>,
+      primary_findings: [] as string[],
     },
     policyRecommendation: {
-      policy_id: 'POL-CRED-001',
-      policy_name: 'Enforce Out-of-Band Step-Up on Credential Harvesting',
-      version: '1.2.0',
-      priority: 'CRITICAL_CREDENTIAL_DEFENSE',
-      is_triggered: true,
-      recommended_action: 'REQUIRE_STEP_UP_VERIFICATION',
-      requires_human_approval: true,
-      explanation: 'Policy POL-CRED-001 triggered: High-confidence credential solicitation detected under active social engineering pressure.',
+      policy_id: 'POL-DEFAULT',
+      policy_name: 'Baseline Monitoring',
+      version: '1.0.0',
+      priority: 'MONITOR',
+      is_triggered: false,
+      recommended_action: 'MONITOR',
+      requires_human_approval: false,
+      explanation: 'System monitoring call stream in baseline posture.',
     },
-    humanWorkflowState: 'AWAITING_HUMAN',
-    fusionLatencyMs: 3.2,
+    humanWorkflowState: 'IDLE',
+    fusionLatencyMs: 0,
   });
 
   const [interventionFeedback, setInterventionFeedback] = useState<string | null>(null);
@@ -197,6 +176,24 @@ export default function CallsPage() {
   useEffect(() => {
     selectedCallRef.current = selectedCall;
     latestRiskSeqRef.current = -1;
+    if (selectedCall) {
+      // Load initial risk assessment if already recorded in backend
+      ApiClient.get(`/risk/${selectedCall.id}`).then((res) => {
+        if (res.success && res.data) {
+          const r = res.data;
+          setUnifiedRisk((prev) => ({
+            ...prev,
+            overallRiskScore: r.overall_risk_score ?? prev.overallRiskScore,
+            riskLevel: r.risk_level ?? prev.riskLevel,
+            confidence: r.confidence ?? prev.confidence,
+            uncertainty: r.uncertainty ?? prev.uncertainty,
+            dimensions: r.dimensions ?? prev.dimensions,
+            primaryDrivers: r.primary_drivers ?? prev.primaryDrivers,
+            policyRecommendation: r.policy_recommendation ?? prev.policyRecommendation,
+          }));
+        }
+      });
+    }
   }, [selectedCall]);
 
   useEffect(() => {
@@ -208,48 +205,19 @@ export default function CallsPage() {
       const res = await ApiClient.get('/calls');
       if (res.success && res.data && res.data.length > 0) {
         setCalls(res.data);
-        setSelectedCall(res.data[0]);
+        if (!selectedCallRef.current) {
+          setSelectedCall(res.data[0]);
+        }
       } else {
-        const dummyCalls: CallSession[] = [
-          {
-            id: 'call-sec-demo-101',
-            callerIdentifier: '+1 (555) 839-2041',
-            callerDisplayName: 'Wire Department Pretext',
-            direction: 'INBOUND',
-            status: 'ACTIVE',
-            organizationId: '00000000-0000-0000-0000-000000000001',
-            claimedSpeakerId: 'speaker-cfo-001',
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 'call-sec-demo-102',
-            callerIdentifier: '+91 98201 48291',
-            callerDisplayName: 'Executive IT Pretext',
-            direction: 'INBOUND',
-            status: 'ACTIVE',
-            organizationId: '00000000-0000-0000-0000-000000000001',
-            claimedSpeakerId: 'speaker-admin-002',
-            createdAt: new Date().toISOString(),
-          },
-        ];
-        setCalls(dummyCalls);
-        setSelectedCall(dummyCalls[0]);
+        setCalls([]);
+        setSelectedCall(null);
       }
     } catch {
-      const fallbackCall: CallSession = {
-        id: 'call-sec-demo-101',
-        callerIdentifier: '+1 (555) 839-2041',
-        callerDisplayName: 'Wire Department Pretext',
-        direction: 'INBOUND',
-        status: 'ACTIVE',
-        organizationId: '00000000-0000-0000-0000-000000000001',
-        claimedSpeakerId: 'speaker-cfo-001',
-        createdAt: new Date().toISOString(),
-      };
-      setCalls([fallbackCall]);
-      setSelectedCall(fallbackCall);
+      setCalls([]);
+      setSelectedCall(null);
     }
   };
+
 
   const connectWebSocket = () => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
@@ -647,18 +615,18 @@ export default function CallsPage() {
                                 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
                                 : unifiedRisk.riskLevel === 'HIGH'
                                 ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
-                                : unifiedRisk.riskLevel === 'ELEVATED' || unifiedRisk.riskLevel === 'GUARDED'
+                                : unifiedRisk.riskLevel === 'ELEVATED' || unifiedRisk.riskLevel === 'GUARDED' || unifiedRisk.riskLevel === 'MONITOR'
                                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                                 : unifiedRisk.riskLevel === 'LOW' || unifiedRisk.riskLevel === 'SAFE'
                                 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                                 : 'bg-slate-700/40 text-slate-300 border border-slate-600/40'
                             }`}
                           >
-                            {unifiedRisk.riskLevel} THREAT ({typeof unifiedRisk.overallRiskScore === 'number' ? `${unifiedRisk.overallRiskScore.toFixed(1)}/100` : 'NOT AVAILABLE'})
+                            {unifiedRisk.riskLevel} THREAT ({typeof unifiedRisk.overallRiskScore === 'number' ? `${unifiedRisk.overallRiskScore.toFixed(1)}/100` : 'NOT EVALUATED'})
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 font-mono mt-0.5">
-                          Session: {selectedCall.id} • Latency: {unifiedRisk.fusionLatencyMs}ms
+                          Session: {selectedCall.id} • Latency: {unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs || 0}ms
                         </p>
                       </div>
 
@@ -677,7 +645,7 @@ export default function CallsPage() {
                               className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
                             >
                               <Play className="w-3.5 h-3.5" />
-                              <span>Test Scenario</span>
+                              <span>Test Scenario Stream</span>
                             </button>
                           </>
                         ) : (
@@ -692,7 +660,22 @@ export default function CallsPage() {
                       </div>
                     </div>
 
-                    {/* Microphone Stream Health Bar & Error Alerts */}
+                    {/* Multi-Factor Safety Invariant Alert */}
+                    {(unifiedRisk.dimensions.social_engineering >= 70 || unifiedRisk.dimensions.credential_theft >= 70) && telemetry.deepfake.spoofScore < 0.3 && (
+                      <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-white font-bold">
+                            MULTI-FACTOR THREAT OVERRIDE ACTIVE
+                          </strong>
+                          <span>
+                            Acoustic voice is bona-fide human speech (deepfake spoof score: {(telemetry.deepfake.spoofScore * 100).toFixed(1)}%), but <strong>HIGH CONVERSATIONAL SOCIAL ENGINEERING / CREDENTIAL THEFT</strong> was detected. Call is evaluated as HIGH/CRITICAL threat.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Microphone Stream Health Bar */}
                     {isStreaming && (
                       <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900 border border-indigo-500/30 text-xs font-mono">
                         <div className="flex items-center gap-2">
@@ -728,12 +711,91 @@ export default function CallsPage() {
                     )}
                   </div>
 
-                  {/* PHASE 5: 10-Dimensional Multi-Modal Risk Matrix HUD */}
+                  {/* Subsystem Model Status Row */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {/* Deepfake */}
+                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
+                      <span className="text-slate-400 text-[10px] block uppercase">Acoustic Deepfake</span>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            telemetry.deepfake.status === 'DETECTED' || telemetry.deepfake.status === 'SPOOF' || telemetry.deepfake.spoofScore >= 0.685
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : telemetry.deepfake.status === 'AUTHENTIC' || telemetry.deepfake.status === 'NOT_DETECTED'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : telemetry.deepfake.status === 'INCONCLUSIVE'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'bg-slate-800 text-amber-300/80 border border-amber-500/20'
+                          }`}
+                        >
+                          {telemetry.deepfake.status}
+                        </span>
+                        <span className="text-white font-bold">{(telemetry.deepfake.spoofScore * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    {/* Biometric Speaker */}
+                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
+                      <span className="text-slate-400 text-[10px] block uppercase">Speaker Match</span>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            telemetry.speaker.status === 'MATCH'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : telemetry.speaker.status === 'MISMATCH'
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {telemetry.speaker.status}
+                        </span>
+                        <span className="text-white font-bold">{(telemetry.speaker.similarityScore * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    {/* Replay */}
+                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
+                      <span className="text-slate-400 text-[10px] block uppercase">Replay Attack</span>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            telemetry.replay.status === 'REPLAY_DETECTED'
+                              ? 'bg-rose-500/20 text-rose-300'
+                              : telemetry.replay.status === 'NOT_REPLAY'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {telemetry.replay.status}
+                        </span>
+                        <span className="text-white font-bold">{(telemetry.replay.replayProbability * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+
+                    {/* VAD */}
+                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
+                      <span className="text-slate-400 text-[10px] block uppercase">Voice Activity (VAD)</span>
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                            telemetry.vad.state === 'SPEECH'
+                              ? 'bg-indigo-500/20 text-indigo-300'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {telemetry.vad.state}
+                        </span>
+                        <span className="text-white font-bold">{(telemetry.vad.speechProbability * 100).toFixed(0)}%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 10-Dimensional Multi-Modal Risk Matrix HUD */}
                   <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
                         <Activity className="w-4 h-4 text-indigo-400" />
-                        10-Dimensional Unified Risk Matrix
+                        10-Dimensional Unified Risk Tensor
                       </span>
                       <div className="flex items-center gap-3 text-[11px] font-mono">
                         <span className="text-slate-400">
@@ -754,15 +816,15 @@ export default function CallsPage() {
                         { label: 'Financial Fraud', val: unifiedRisk.dimensions.financial_fraud, color: 'bg-amber-500' },
                         { label: 'Identity Mismatch', val: unifiedRisk.dimensions.identity_impersonation, color: 'bg-indigo-500' },
                         { label: 'Account Takeover', val: unifiedRisk.dimensions.account_takeover, color: 'bg-amber-500' },
-                        { label: 'Deepfake Synth', val: unifiedRisk.dimensions.deepfake_synthetic, color: 'bg-emerald-500' },
-                        { label: 'Replay Attack', val: unifiedRisk.dimensions.replay_injection, color: 'bg-emerald-500' },
-                        { label: 'Inconsistency', val: unifiedRisk.dimensions.inconsistency, color: 'bg-emerald-500' },
+                        { label: 'Deepfake Synth', val: unifiedRisk.dimensions.deepfake_synthetic, color: 'bg-indigo-400' },
+                        { label: 'Replay Attack', val: unifiedRisk.dimensions.replay_injection, color: 'bg-indigo-400' },
+                        { label: 'Inconsistency', val: unifiedRisk.dimensions.inconsistency, color: 'bg-indigo-400' },
                         { label: 'Overall Threat', val: unifiedRisk.dimensions.overall, color: 'bg-rose-600' },
                       ].map((dim, i) => (
                         <div key={i} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-1">
                           <div className="flex justify-between text-[10px] font-mono text-slate-400">
                             <span className="truncate">{dim.label}</span>
-                            <span className="font-bold text-white">{typeof dim.val === 'number' ? dim.val.toFixed(0) : 'N/A'}</span>
+                            <span className="font-bold text-white">{typeof dim.val === 'number' ? dim.val.toFixed(0) : '0'}</span>
                           </div>
                           <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                             <div className={`h-full ${dim.color} rounded-full`} style={{ width: `${typeof dim.val === 'number' ? Math.min(100, Math.max(0, dim.val)) : 0}%` }} />
@@ -772,7 +834,7 @@ export default function CallsPage() {
                     </div>
                   </div>
 
-                  {/* PHASE 5: Deterministic Policy Trigger & Human-in-the-Loop Decision Bar */}
+                  {/* Deterministic Policy Trigger & Human-in-the-Loop Decision Bar */}
                   {unifiedRisk.policyRecommendation?.is_triggered && (
                     <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 to-indigo-950/40 border border-rose-500/30 space-y-3">
                       <div className="flex items-center justify-between">
@@ -817,42 +879,7 @@ export default function CallsPage() {
                     </div>
                   )}
 
-                  {/* PHASE 5: Evidence Graph & Primary Diagnostic Findings */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Primary Explainable Drivers */}
-                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs font-mono">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                        Primary Explainable Drivers
-                      </span>
-                      <ul className="space-y-1.5 text-slate-300 text-[11px]">
-                        {unifiedRisk.primaryDrivers.map((driver, idx) => (
-                          <li key={idx} className="flex items-start gap-1.5">
-                            <span className="text-rose-400 font-bold">•</span>
-                            <span>{driver}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    {/* Evidence Graph DAG Nodes */}
-                    <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs font-mono">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-                        Evidence Graph Cues & Corroboration
-                      </span>
-                      <div className="space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
-                        {unifiedRisk.evidenceGraph.nodes.map((node, idx) => (
-                          <div key={idx} className="p-1.5 rounded bg-slate-950/70 border border-slate-800 flex items-center justify-between text-[10px]">
-                            <span className="text-slate-300 truncate">{node.cue}</span>
-                            <span className="text-indigo-400 font-bold shrink-0 ml-2">[{node.layer}]</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Redacted Live Transcript & Conversational Turn Summary */}
+                  {/* Redacted Live Transcript Stream */}
                   <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
                     <div className="flex items-center justify-between text-xs font-mono">
                       <span className="text-slate-400 flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px]">
@@ -865,22 +892,17 @@ export default function CallsPage() {
                     </div>
 
                     <p className="text-xs font-mono text-slate-200 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800/80">
-                      "{telemetry.conversation.redactedTranscript}"
+                      "{telemetry.conversation.redactedTranscript || telemetry.conversation.transcript || 'Waiting for audio speech turn...'}"
                     </p>
-                  </div>
-
-                  {/* Phase 5 Operational Status */}
-                  <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-slate-400">Decision Intelligence Pipeline:</span>
-                    <span className="text-emerald-400 font-bold flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      PHASE 5 DECISION LAYER ACTIVE (100% MODULES ONLINE)
-                    </span>
                   </div>
                 </>
               ) : (
-                <div className="p-12 text-center text-slate-500 text-sm font-mono">
-                  Select a live call session to inspect unified multi-modal risk and policy intelligence.
+                <div className="p-16 text-center text-slate-500 text-sm font-mono space-y-3">
+                  <PhoneCall className="w-10 h-10 text-slate-600 mx-auto" />
+                  <p className="text-slate-300 font-bold">No Call Session Selected</p>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Select a monitored session from the left queue or stream audio from the SIP/RTP telephony gateway.
+                  </p>
                 </div>
               )}
             </div>
@@ -890,3 +912,4 @@ export default function CallsPage() {
     </div>
   );
 }
+

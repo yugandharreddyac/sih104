@@ -8,7 +8,7 @@ export const Phase1Notice: React.FC<{ compact?: boolean }> = ({ compact = false 
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-950/60 border border-indigo-500/30 text-indigo-300 text-xs font-mono">
         <Info className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-        <span>PHASE 1 FOUNDATION: Architectural boundaries active. Zero fake AI scores generated.</span>
+        <span>VOXSHIELD SOC: Real-Time Multi-Modal Voice & Social Engineering Defense</span>
       </div>
     );
   }
@@ -20,16 +20,16 @@ export const Phase1Notice: React.FC<{ compact?: boolean }> = ({ compact = false 
       </div>
       <div className="space-y-1">
         <div className="font-semibold text-white flex items-center gap-2">
-          <span>VOXSHIELD Phase 1 Foundation Active</span>
+          <span>VOXSHIELD Active SOC Protection</span>
           <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-indigo-500/30 text-indigo-300 font-mono">
-            Zero Mock Scores Rule Enforced
+            Zero Audio Retention & Pre-Persistence Privacy Firewall Enforced
           </span>
         </div>
         <p className="text-xs text-slate-400 leading-relaxed">
-          The core security layer, deterministic policy engine, privacy firewall, RBAC, independent verification channels, and AI pipeline interfaces are live. 
-          Detection engine statuses explicitly report <code className="text-amber-400 font-mono">NOT_AVAILABLE</code> until neural acoustic models and fine-tuned classifiers are attached in Phase 2.
+          The unified security pipeline continuously correlates 256ms acoustic neural deepfake detection, biometric speaker verification, spectral replay checks, asynchronous streaming ASR, and multi-turn conversational intent classification under deterministic policy enforcement.
         </p>
       </div>
     </div>
   );
 };
+

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { Phase1Notice } from '@/components/Phase1Notice';
-import { Activity, Server, Database, Cpu, ShieldCheck, RefreshCw } from 'lucide-react';
+import { Activity, Server, Database, Cpu, ShieldCheck, RefreshCw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 
 export default function HealthPage() {
@@ -15,7 +15,7 @@ export default function HealthPage() {
     setLoading(true);
     const res = await ApiClient.get('/health');
     setLoading(false);
-    if (res.success || res.data) {
+    if (res.status || res.success || res.components) {
       setHealthData(res.data || res);
     }
   };
@@ -23,6 +23,17 @@ export default function HealthPage() {
   useEffect(() => {
     fetchHealth();
   }, []);
+
+  const getStatusBadge = (status?: string) => {
+    const s = status?.toUpperCase() || 'UNKNOWN';
+    if (s === 'HEALTHY' || s === 'CONNECTED' || s === 'ACTIVE') {
+      return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+    }
+    if (s === 'OFFLINE_OR_PENDING' || s === 'DEGRADED' || s === 'INITIALIZED') {
+      return 'bg-amber-500/20 text-amber-300 border-amber-500/30';
+    }
+    return 'bg-rose-500/20 text-rose-300 border-rose-500/30';
+  };
 
   return (
     <div className="flex min-h-screen bg-[#090d16]">
@@ -36,7 +47,7 @@ export default function HealthPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
-              <span>Platform Component Status</span>
+              <span>Platform Component Status ({healthData?.status || 'MONITORING'})</span>
             </h2>
             <button onClick={fetchHealth} className="p-1 text-slate-400 hover:text-white rounded">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -52,12 +63,12 @@ export default function HealthPage() {
                     <Server className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white font-mono">Backend Core</h3>
+                    <h3 className="text-xs font-bold text-white font-mono">Backend Gateway</h3>
                     <p className="text-[10px] text-slate-400 font-mono">Node.js Express + WS</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  HEALTHY
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.backend?.status || 'HEALTHY')}`}>
+                  {healthData?.components?.backend?.status || 'HEALTHY'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
@@ -66,8 +77,8 @@ export default function HealthPage() {
                   <span className="text-slate-200">4000</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Status:</span>
-                  <span className="text-emerald-400">ONLINE</span>
+                  <span>Uptime:</span>
+                  <span className="text-slate-200">{healthData?.components?.backend?.uptimeSeconds ? `${Math.floor(healthData.components.backend.uptimeSeconds)}s` : 'Active'}</span>
                 </div>
               </div>
             </div>
@@ -80,27 +91,27 @@ export default function HealthPage() {
                     <Cpu className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white font-mono">AI Engine Service</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Python FastAPI</p>
+                    <h3 className="text-xs font-bold text-white font-mono">Acoustic AI Service</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">PyTorch + CTranslate2</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
-                  PHASE 1 READY
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.aiService?.status)}`}>
+                  {healthData?.components?.aiService?.status || 'OFFLINE_OR_PENDING'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between">
-                  <span>Port:</span>
-                  <span className="text-slate-200">8000</span>
+                  <span>Latency:</span>
+                  <span className="text-slate-200">{healthData?.components?.aiService?.latencyMs !== undefined ? `${healthData.components.aiService.latencyMs}ms` : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Pipelines:</span>
-                  <span className="text-cyan-400">Interfaces Initialized</span>
+                  <span>Target URL:</span>
+                  <span className="text-cyan-400 truncate max-w-[150px]">{healthData?.components?.aiService?.targetUrl || 'http://localhost:8000'}</span>
                 </div>
               </div>
             </div>
 
-            {/* PostgreSQL */}
+            {/* PostgreSQL Database */}
             <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
@@ -109,21 +120,21 @@ export default function HealthPage() {
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-white font-mono">PostgreSQL Database</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">17 Schema Entities</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Dual-Mode Persistence</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  CONNECTED
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.database?.status)}`}>
+                  {healthData?.components?.database?.status || 'CONNECTED'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between">
-                  <span>Port:</span>
-                  <span className="text-slate-200">5432</span>
+                  <span>Persistence Mode:</span>
+                  <span className="text-slate-200">{healthData?.persistenceMode || 'MEMORY_FALLBACK'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Redaction:</span>
-                  <span className="text-emerald-400">Zero Secret Retention</span>
+                  <span>Zero Retention:</span>
+                  <span className="text-emerald-400">Enforced</span>
                 </div>
               </div>
             </div>
@@ -140,18 +151,18 @@ export default function HealthPage() {
                     <p className="text-[10px] text-slate-400 font-mono">Pre-Persistence Sanitizer</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  ACTIVE
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.privacyFirewall?.status || 'ACTIVE')}`}>
+                  {healthData?.components?.privacyFirewall?.status || 'ACTIVE'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between">
-                  <span>Categories:</span>
-                  <span className="text-slate-200">11 Entity Types</span>
+                  <span>Redaction Engine:</span>
+                  <span className="text-slate-200">DETERMINISTIC</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Interception:</span>
-                  <span className="text-emerald-400">Deterministic RegEx</span>
+                  <span>Entities:</span>
+                  <span className="text-emerald-400">OTP, Cards, Passwords</span>
                 </div>
               </div>
             </div>
@@ -160,26 +171,26 @@ export default function HealthPage() {
             <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
-                    <ShieldCheck className="w-5 h-5" />
+                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                    <Activity className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white font-mono">Policy Engine</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Deterministic Rules V1</p>
+                    <h3 className="text-xs font-bold text-white font-mono">Deterministic Policy Engine</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">Rule Evaluator V1</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
-                  ACTIVE
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.policyEngine?.status || 'ACTIVE')}`}>
+                  {healthData?.components?.policyEngine?.status || 'ACTIVE'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between">
-                  <span>Priority Sorting:</span>
+                  <span>Precedence:</span>
                   <span className="text-slate-200">Enforced</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Decision Logic:</span>
-                  <span className="text-emerald-400">Deterministic</span>
+                  <span>Decisions:</span>
+                  <span className="text-emerald-400">ALLOW | STEP_UP | BLOCK</span>
                 </div>
               </div>
             </div>
@@ -189,3 +200,4 @@ export default function HealthPage() {
     </div>
   );
 }
+

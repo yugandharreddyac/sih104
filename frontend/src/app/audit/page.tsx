@@ -45,7 +45,14 @@ export default function AuditPage() {
             </div>
 
             <div className="space-y-2">
+              {logs.length === 0 && !loading && (
+                <div className="p-8 text-center text-slate-500 font-mono text-xs">
+                  <ShieldCheck className="w-6 h-6 text-emerald-400/50 mx-auto mb-1.5" />
+                  <p>Zero audit log entries recorded yet.</p>
+                </div>
+              )}
               {logs.map((log) => (
+
                 <div key={log.id} className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 font-mono text-xs space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

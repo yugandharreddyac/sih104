@@ -20,24 +20,14 @@ export default function LoginPage() {
     const res = await ApiClient.post('/auth/login', { email, password });
     setLoading(false);
 
-    if (res.success && res.data?.token) {
-      localStorage.setItem('voxshield_token', res.data.token);
-      localStorage.setItem('voxshield_user', JSON.stringify(res.data.user));
+    if (res.success && res.data?.token && res.data?.user) {
+      ApiClient.setAuth(res.data.token, res.data.user);
       router.push('/dashboard');
     } else {
-      // Fallback for standalone frontend navigation if backend is not yet started
-      localStorage.setItem('voxshield_token', 'dev-token-phase1');
-      localStorage.setItem(
-        'voxshield_user',
-        JSON.stringify({
-          email,
-          fullName: 'SOC Security Analyst',
-          role: 'SECURITY_ANALYST',
-        })
-      );
-      router.push('/dashboard');
+      setError(res.message || res.error || 'Authentication failed. Please verify credentials.');
     }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#070b14] p-4 relative overflow-hidden">

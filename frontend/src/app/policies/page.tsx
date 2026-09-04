@@ -55,7 +55,14 @@ export default function PoliciesPage() {
               </h2>
 
               <div className="space-y-3">
+                {policies.length === 0 && !loading && (
+                  <div className="p-8 text-center text-slate-500 font-mono text-xs soc-glass rounded-xl border border-slate-800">
+                    <FileCheck2 className="w-6 h-6 text-slate-600 mx-auto mb-1.5" />
+                    <p>No active enterprise policies found in registry.</p>
+                  </div>
+                )}
                 {policies.map((policy) => (
+
                   <div key={policy.id} className="soc-glass p-5 rounded-xl border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>

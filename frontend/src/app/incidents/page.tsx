@@ -64,6 +64,12 @@ export default function IncidentsPage() {
               </div>
 
               <div className="space-y-2">
+                {incidents.length === 0 && !loading && (
+                  <div className="p-6 text-center text-slate-500 font-mono text-xs">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-400/50 mx-auto mb-1.5" />
+                    <p>No active incidents recorded.</p>
+                  </div>
+                )}
                 {incidents.map((inc) => (
                   <div
                     key={inc.id}
@@ -113,7 +119,13 @@ export default function IncidentsPage() {
                       <p className="text-xs text-slate-400 font-mono mt-1">
                         Classification: {selectedIncident.attackClassification}
                       </p>
+                      {selectedIncident.callId && (
+                        <p className="text-[11px] text-cyan-400 font-mono mt-0.5">
+                          Associated Call: {selectedIncident.callId}
+                        </p>
+                      )}
                     </div>
+
 
                     <div className="flex items-center gap-2">
                       <button

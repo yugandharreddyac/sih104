@@ -14,6 +14,8 @@ import {
   Activity,
   LogOut,
 } from 'lucide-react';
+import { ApiClient } from '@/lib/api';
+
 
 const NAV_ITEMS = [
   { name: 'SOC Overview', href: '/dashboard', icon: Shield },
@@ -28,13 +30,36 @@ const NAV_ITEMS = [
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
+  const [user, setUser] = React.useState<any>(null);
+
+  React.useEffect(() => {
+    const localUser = ApiClient.getUser();
+    if (localUser) {
+      setUser(localUser);
+    } else {
+      ApiClient.get('/auth/me').then((res) => {
+        if (res.success && res.data) {
+          setUser(res.data);
+        }
+      });
+    }
+  }, []);
 
   const handleLogout = () => {
+    ApiClient.clearAuth();
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('voxshield_token');
-      localStorage.removeItem('voxshield_user');
       window.location.href = '/';
     }
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'SO';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -83,11 +108,11 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-7 h-7 rounded-full bg-indigo-500/30 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-indigo-300">
-              SA
+              {getInitials(user?.fullName)}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-200 truncate">SOC Analyst</p>
-              <p className="text-[10px] text-indigo-400 font-mono truncate">SECURITY_ANALYST</p>
+              <p className="text-xs font-semibold text-slate-200 truncate">{user?.fullName || 'SOC Operator'}</p>
+              <p className="text-[10px] text-indigo-400 font-mono truncate">{user?.role || 'AUTHENTICATED'}</p>
             </div>
           </div>
           <button
@@ -102,3 +127,4 @@ export const Sidebar: React.FC = () => {
     </aside>
   );
 };
+

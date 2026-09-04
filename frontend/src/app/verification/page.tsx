@@ -9,18 +9,29 @@ import { ApiClient } from '@/lib/api';
 
 export default function VerificationPage() {
   const [requests, setRequests] = useState<any[]>([]);
+  const [calls, setCalls] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [mechanism, setMechanism] = useState('AUTHENTICATOR_PUSH');
   const [targetIdentity, setTargetIdentity] = useState('cfo-approvals@corp.internal');
-  const [callId, setCallId] = useState('00000000-0000-0000-0000-000000000001');
+  const [callId, setCallId] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
   const fetchVerifications = async () => {
     setLoading(true);
-    const res = await ApiClient.get('/verification');
+    const [verRes, callsRes] = await Promise.all([
+      ApiClient.get('/verification'),
+      ApiClient.get('/calls'),
+    ]);
     setLoading(false);
-    if (res.success && res.data) {
-      setRequests(res.data);
+
+    if (verRes.success && verRes.data) {
+      setRequests(verRes.data);
+    }
+    if (callsRes.success && callsRes.data && callsRes.data.length > 0) {
+      setCalls(callsRes.data);
+      if (!callId) {
+        setCallId(callsRes.data[0].id);
+      }
     }
   };
 
@@ -30,6 +41,10 @@ export default function VerificationPage() {
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!callId) {
+      setMsg('Please specify or select a target call session.');
+      return;
+    }
     const res = await ApiClient.post('/verification', {
       callId,
       mechanism,
@@ -39,6 +54,8 @@ export default function VerificationPage() {
     if (res.success) {
       setMsg('Step-Up Out-of-Band Verification Dispatched!');
       fetchVerifications();
+    } else {
+      setMsg(res.message || res.error || 'Failed to dispatch verification challenge');
     }
   };
 
@@ -57,6 +74,7 @@ export default function VerificationPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar title="Independent Step-Up Verification Hub" subtitle="Out-of-band authentication decoupling" />
+
 
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
           <Phase1Notice />
@@ -85,6 +103,15 @@ export default function VerificationPage() {
               </div>
 
               <div className="space-y-3">
+                {requests.length === 0 && !loading && (
+                  <div className="p-8 text-center text-slate-500 font-mono text-xs soc-glass rounded-xl border border-slate-800">
+                    <ShieldCheck className="w-7 h-7 text-emerald-400/50 mx-auto mb-2" />
+                    <p>No active verification requests.</p>
+                    <p className="text-[10px] text-slate-600 mt-1">
+                      Step-up challenges triggered by policy enforcement will appear here.
+                    </p>
+                  </div>
+                )}
                 {requests.map((req) => (
                   <div key={req.id} className="soc-glass p-4 rounded-xl border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
@@ -148,14 +175,30 @@ export default function VerificationPage() {
 
               <form onSubmit={handleCreateRequest} className="space-y-3">
                 <div>
-                  <label className="block text-xs font-mono text-slate-400 mb-1">Target Call Session ID</label>
-                  <input
-                    type="text"
-                    value={callId}
-                    onChange={(e) => setCallId(e.target.value)}
-                    required
-                    className="w-full p-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
-                  />
+                  <label className="block text-xs font-mono text-slate-400 mb-1">Target Call Session</label>
+                  {calls.length > 0 ? (
+                    <select
+                      value={callId}
+                      onChange={(e) => setCallId(e.target.value)}
+                      required
+                      className="w-full p-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      {calls.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.callerIdentifier} ({c.id.slice(0, 8)}...)
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={callId}
+                      onChange={(e) => setCallId(e.target.value)}
+                      placeholder="Enter call UUID"
+                      required
+                      className="w-full p-2.5 bg-slate-950/80 border border-slate-700 rounded-lg text-xs font-mono text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -194,6 +237,7 @@ export default function VerificationPage() {
                 </button>
               </form>
             </div>
+
           </div>
         </main>
       </div>

@@ -37,6 +37,16 @@ export class RiskService {
   private static isValidRiskResponse(data: any): boolean {
     if (!data || typeof data !== 'object') return false;
     if (!data.dimensions || typeof data.dimensions !== 'object') return false;
+
+    // Validate that each dimension, if present, is a finite number in [0, 100] or null
+    for (const [key, val] of Object.entries(data.dimensions)) {
+      if (val !== null && val !== undefined) {
+        if (typeof val !== 'number' || !Number.isFinite(val) || val < 0 || val > 100) {
+          return false;
+        }
+      }
+    }
+
     if (
       typeof data.overall_risk_score !== 'number' ||
       !Number.isFinite(data.overall_risk_score) ||

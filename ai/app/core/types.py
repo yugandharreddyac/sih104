@@ -501,6 +501,10 @@ class SpeakerVerificationResult(BaseModel):
     engine_type: Optional[str] = None
     explainability: List[str] = Field(default_factory=list)
     inference_latency_ms: float = 0.0
+    speaker_backend: Optional[str] = None
+    speaker_model_loaded: bool = False
+    verification_method: Optional[str] = None
+    verification_score: Optional[float] = None
 
 
 class ReplayAnalysisResult(BaseModel):

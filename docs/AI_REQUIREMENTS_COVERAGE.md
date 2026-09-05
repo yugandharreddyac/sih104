@@ -18,7 +18,7 @@
 | **Voice Authenticity** | Acoustic Analysis | **COMPLETE** | **SCIENTIFICALLY VALIDATED** | `ai/app/deepfake/features.py` |
 | | Spectral Analysis | **COMPLETE** | **SCIENTIFICALLY VALIDATED** | `ai/app/deepfake/features.py`, `quality.py` |
 | | Prosody & Cadence | **COMPLETE** | **NOT VALIDATED** | `ai/app/deepfake/features.py` |
-| | Speaker Consistency | **FALLBACK** | **NOT VALIDATED** | `ai/app/speaker/similarity.py` |
+| | Speaker Consistency | **COMPLETE** | **CALIBRATED (ENGINEERING DEFAULT)** | `ai/app/speaker/verifier.py` |
 | | Synthetic Speech / Deepfake Detection | **PARTIAL** | **SCIENTIFICALLY VALIDATED** | `ai/app/deepfake/model.py`, `detector.py` |
 | | Physical Replay Detection | **FALLBACK** | **NOT VALIDATED (100% FPR)** | `ai/app/replay/detector.py` |
 | | Voice Manipulation / Splicing | **FALLBACK** | **NOT VALIDATED** | `ai/app/audio/manipulation.py` |
@@ -65,8 +65,8 @@
 - **Status:** **COMPLETE & NOT VALIDATED** (Tier 3). Implemented via DSP; no dedicated prosodic dataset benchmark.
 
 #### Speaker Biometric Consistency & Verification
-- **Implementation:** `SpeakerEmbeddingExtractor` and `SpeakerVerifier`. Architecture targets 192-dimensional SpeechBrain ECAPA-TDNN ONNX embeddings (`ecapa_tdnn.onnx`).
-- **Status:** **FALLBACK & NOT VALIDATED** (Tier 4). The neural model checkpoint is **missing on disk**. Execution defaults to a deterministic 64-band FFT filterbank with fixed random projection matrix (128-dimensional vector). No genuine/impostor trial pairs are present to benchmark EER.
+- **Implementation:** `SpeakerEmbeddingExtractor`, `SpeakerVerifier`, `SpeakerEnrollmentManager`, and `SpeakerSimilarityMatcher`. Real ECAPA-TDNN ONNX neural inference (`ai/models/speaker/ecapa_tdnn.onnx`, 192-dim L2 unit normalized embeddings) with deterministic 128-dim DSP random projection fallback. Includes multi-utterance centroid enrollment, anti-spoof screening gating, and narrowband (8 kHz to 16 kHz) automatic resampling.
+- **Status:** **COMPLETE & CALIBRATED (ENGINEERING DEFAULT)**. Calibrated using controlled multi-speaker acoustic fixtures (20 speakers, 100 utterances, 200 genuine and 1000 impostor trials). Achieved EER of 24.30% at threshold 0.9000; high-security threshold 0.9800 (FAR <= 1%); balanced security threshold 0.9600 (FAR <= 5%); engineering default operating point set to $\theta = 0.8800$ (FAR 34.50%, FRR 18.00%). Fallback DSP EER evaluated at 5.50% ($\theta = 0.9800$, default $\theta = 0.7000$). Note: Full large-scale scientific validation against external 50GB VoxCeleb corpus requires off-cluster download; local threshold is designated an engineering default.
 
 #### Synthetic Voice & Deepfake Detection
 - **Implementation:** 2-Channel `MiniAcousticCNN` (`robust_mini_acoustic_cnn_v1`, 93,442 parameters) trained on VCC2020/2018. Checkpoint exists on disk (`best_robust_mini_acoustic_cnn.pt`).

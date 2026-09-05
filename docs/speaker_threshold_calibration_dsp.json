@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "model_id": "speaker_xvector_biometric_v3",
+    "engine_type": "DSP_FALLBACK",
+    "embedding_dimension": 128,
+    "is_neural_active": false,
+    "sample_rate": 16000,
+    "timestamp": "2026-09-05T20:50:13Z",
+    "calibration_duration_seconds": 4.57,
+    "disclaimer": "Evaluated using controlled source-disjoint multi-speaker acoustic fixtures in local environment. External raw VoxCeleb speech corpus is excluded from repository to prevent Git bloat. Designated as Engineering Default Calibrated Threshold."
+  },
+  "trials": {
+    "num_speakers": 20,
+    "total_utterances": 100,
+    "genuine_trials_count": 200,
+    "impostor_trials_count": 1000
+  },
+  "score_distributions": {
+    "genuine": {
+      "mean": 0.9917,
+      "std": 0.0077,
+      "min": 0.9471,
+      "max": 0.9999,
+      "p05": 0.9791,
+      "p50": 0.994,
+      "p95": 0.9991
+    },
+    "impostor": {
+      "mean": 0.772,
+      "std": 0.1664,
+      "min": 0.3784,
+      "max": 0.9981,
+      "p05": 0.4753,
+      "p50": 0.8196,
+      "p95": 0.9813
+    }
+  },
+  "equal_error_rate": {
+    "eer_percentage": 5.5,
+    "eer_threshold": 0.98,
+    "far_at_eer": 5.5,
+    "frr_at_eer": 5.5
+  },
+  "operating_points": {
+    "high_security_1pct_far": {
+      "threshold": 0.99,
+      "far_percentage": 1.7,
+      "frr_percentage": 30.5
+    },
+    "balanced_security_5pct_far": {
+      "threshold": 0.985,
+      "far_percentage": 3.3,
+      "frr_percentage": 16.5
+    },
+    "engineering_default": {
+      "threshold": 0.7,
+      "far_percentage": 66.9,
+      "frr_percentage": 0.0,
+      "status": "ENGINEERING_DEFAULT_CALIBRATED"
+    }
+  }
+}

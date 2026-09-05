@@ -89,6 +89,14 @@ class SpeakerEmbeddingExtractor:
 
     def _extract_dsp_fallback(self, samples: np.ndarray, speaker_id: Optional[str] = None) -> SpeakerEmbeddingVector:
         """Deterministic mathematical DSP 64-band FFT filterbank with random projection."""
+        samples = np.asarray(samples, dtype=np.float32)
+        if samples.ndim > 1:
+            samples = np.mean(samples, axis=-1 if samples.shape[-1] <= 2 else 0)
+        samples = samples.flatten()
+
+        if not np.all(np.isfinite(samples)):
+            samples = np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
+
         if len(samples) < 320:
             zero_vec = [0.0] * self.dsp_dim
             return SpeakerEmbeddingVector(
@@ -96,7 +104,8 @@ class SpeakerEmbeddingExtractor:
                 embedding=zero_vec,
                 dimension=self.dsp_dim,
                 energy_norm=0.0,
-                model_version=self.model_version
+                model_version=self.model_version,
+                engine_type="DSP_FALLBACK"
             )
 
         # 1. FFT Spectrogram (64 filter sub-bands)
@@ -150,6 +159,14 @@ class SpeakerEmbeddingExtractor:
         """
         Extracts L2-normalized speaker embedding vector (ECAPA-TDNN 192-dim primary, DSP 128-dim fallback).
         """
+        samples = np.asarray(samples, dtype=np.float32)
+        if samples.ndim > 1:
+            samples = np.mean(samples, axis=-1 if samples.shape[-1] <= 2 else 0)
+        samples = samples.flatten()
+
+        if not np.all(np.isfinite(samples)):
+            samples = np.nan_to_num(samples, nan=0.0, posinf=0.0, neginf=0.0)
+
         if len(samples) < 320:
             zero_vec = [0.0] * (self.embedding_dim if (self.is_neural_active and not force_dsp) else self.dsp_dim)
             return SpeakerEmbeddingVector(

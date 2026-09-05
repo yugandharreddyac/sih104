@@ -2,11 +2,14 @@ import { Router } from 'express';
 import { TelephonyWebhookController } from './webhook.controller';
 import { authenticate, requirePermission } from '../../auth/rbac';
 import { Permission } from '../../auth/types';
+import { requireWebhookSignature } from './webhook_auth';
 
 const router = Router();
 
-// In a real carrier setup (e.g. Twilio), you might use a signature-validation middleware.
-// For now, we reuse the robust internal RBAC logic.
+// Provider-agnostic signature validation
+router.use(requireWebhookSignature);
+
+// Preserve robust internal RBAC logic for tenant isolation and authorization
 router.use(authenticate);
 
 router.post('/start', requirePermission(Permission.CALLS_INTERVENE), TelephonyWebhookController.onCallStart);

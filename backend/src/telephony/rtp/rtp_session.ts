@@ -51,19 +51,30 @@ export class RtpSession extends EventEmitter {
 
     // Sequence tracking and loss detection
     if (this.lastSeqNumber !== null) {
-      const expectedSeq = (this.lastSeqNumber + 1) & 0xffff;
-      if (seq !== expectedSeq) {
-        if (seq < this.lastSeqNumber && (this.lastSeqNumber - seq) < 30000) {
-          this.metrics.outOfOrderPackets++;
-        } else {
+      const diff = (seq - this.lastSeqNumber) & 0xffff;
+      
+      if (diff === 0) {
+        // Exact duplicate
+        this.metrics.outOfOrderPackets++;
+        return [];
+      } else if (diff >= 32768) {
+        // Older out-of-order packet (arrived late)
+        this.metrics.outOfOrderPackets++;
+        return [];
+      } else {
+        // Newer packet. Detect packet loss.
+        const expectedSeq = (this.lastSeqNumber + 1) & 0xffff;
+        if (seq !== expectedSeq) {
           const lost = (seq - this.lastSeqNumber - 1) & 0xffff;
           if (lost > 0 && lost < 1000) {
             this.metrics.packetsLost += lost;
           }
         }
+        this.lastSeqNumber = seq;
       }
+    } else {
+      this.lastSeqNumber = seq;
     }
-    this.lastSeqNumber = seq;
     this.metrics.lastSequenceNumber = seq;
     this.metrics.lastTimestamp = packet.header.timestamp;
 

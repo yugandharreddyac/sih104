@@ -183,6 +183,85 @@ describe('Telephony & RTP Ingestion Engine', () => {
       expect(metrics.packetsReceived).toBe(2);
       expect(metrics.packetsLost).toBe(3); // Lost sequence 2, 3, 4
     });
+
+    it('should drop duplicate packets before decoding', () => {
+      const session = new RtpSession({
+        callId: 'test-dup',
+        sessionId: 'sess-dup',
+        ssrc: 0x1111,
+        remoteAddress: '127.0.0.1',
+        remotePort: 10000,
+        codec: 'G711U',
+        sampleRate: 8000,
+        channels: 1,
+        startedAt: new Date(),
+      });
+
+      const p1 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 10, timestamp: 0, ssrc: 0x1111 }, Buffer.alloc(160)))!;
+      const p2 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 10, timestamp: 0, ssrc: 0x1111 }, Buffer.alloc(160)))!; // Exact duplicate
+
+      session.processPacket(p1);
+      const res = session.processPacket(p2);
+      
+      expect(res).toEqual([]); // Should return empty array, dropped before decoding
+      const metrics = session.getMetrics();
+      expect(metrics.packetsReceived).toBe(2); // Ingested twice
+      expect(metrics.outOfOrderPackets).toBe(1); // One marked as out of order / duplicate
+      expect(metrics.packetsLost).toBe(0);
+      expect(metrics.lastSequenceNumber).toBe(10); // Still 10
+    });
+
+    it('should safely drop older out-of-order packets before decoding', () => {
+      const session = new RtpSession({
+        callId: 'test-ooo',
+        sessionId: 'sess-ooo',
+        ssrc: 0x2222,
+        remoteAddress: '127.0.0.1',
+        remotePort: 10000,
+        codec: 'G711U',
+        sampleRate: 8000,
+        channels: 1,
+        startedAt: new Date(),
+      });
+
+      const p1 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 20, timestamp: 1600, ssrc: 0x2222 }, Buffer.alloc(160)))!;
+      const p2_old = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 15, timestamp: 800, ssrc: 0x2222 }, Buffer.alloc(160)))!; 
+
+      session.processPacket(p1);
+      const res = session.processPacket(p2_old); // Older packet arriving late
+      
+      expect(res).toEqual([]); // Dropped
+      const metrics = session.getMetrics();
+      expect(metrics.outOfOrderPackets).toBe(1);
+      expect(metrics.lastSequenceNumber).toBe(20); // Remains 20
+    });
+
+    it('should correctly handle 16-bit sequence wraparound', () => {
+      const session = new RtpSession({
+        callId: 'test-wrap',
+        sessionId: 'sess-wrap',
+        ssrc: 0x3333,
+        remoteAddress: '127.0.0.1',
+        remotePort: 10000,
+        codec: 'G711U',
+        sampleRate: 8000,
+        channels: 1,
+        startedAt: new Date(),
+      });
+
+      const p1 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 65535, timestamp: 0, ssrc: 0x3333 }, Buffer.alloc(160)))!;
+      const p2 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 0, timestamp: 160, ssrc: 0x3333 }, Buffer.alloc(160)))!; // Wraparound
+      const p3 = RtpParser.parse(RtpParser.serialize({ version: 2, payloadType: 0, sequenceNumber: 2, timestamp: 480, ssrc: 0x3333 }, Buffer.alloc(160)))!; // Wraparound with gap
+
+      session.processPacket(p1);
+      session.processPacket(p2);
+      session.processPacket(p3);
+      
+      const metrics = session.getMetrics();
+      expect(metrics.lastSequenceNumber).toBe(2);
+      expect(metrics.packetsLost).toBe(1); // Missing sequence 1
+      expect(metrics.outOfOrderPackets).toBe(0);
+    });
   });
 
   describe('RtpCommunicationAdapter', () => {

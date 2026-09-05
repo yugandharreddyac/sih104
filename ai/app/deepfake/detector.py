@@ -23,24 +23,30 @@ from ai.app.deepfake.features import AcousticFeatureExtractor
 from ai.app.deepfake.model import DeepfakeAcousticModel
 from ai.app.deepfake.calibration import (
     DeepfakeCalibrator,
+    AcousticThresholdProfile,
     WIDEBAND_THRESHOLD,
     TELEPHONY_THRESHOLD
 )
 
 
 class DeepfakeDetector:
-    def __init__(self, sample_rate: int = 16000):
+    def __init__(
+        self,
+        sample_rate: int = 16000,
+        threshold_profile: Optional[AcousticThresholdProfile] = None,
+    ):
         self.sample_rate = sample_rate
         self.model_id = "robust_mini_acoustic_cnn_v1"
         self.feature_extractor = AcousticFeatureExtractor(sample_rate=sample_rate)
         self.quality_analyzer = AudioQualityAnalyzer(sample_rate=sample_rate)
         self.model = DeepfakeAcousticModel(model_version=self.model_id)
-        # Policy C validated thresholds: 0.685 (Wideband), 0.525 (Telephony)
+        # Policy C validated thresholds: 0.6850 (Wideband), 0.5250 (Telephony)
         self.calibrator = DeepfakeCalibrator(
             spoof_threshold=WIDEBAND_THRESHOLD,
             authentic_threshold=0.50,
             wideband_threshold=WIDEBAND_THRESHOLD,
-            telephony_threshold=TELEPHONY_THRESHOLD
+            telephony_threshold=TELEPHONY_THRESHOLD,
+            profile=threshold_profile,
         )
 
         model_meta = ModelRegistry.get_model(self.model_id)
@@ -70,7 +76,8 @@ class DeepfakeDetector:
         start_time = time.perf_counter()
 
         samples = self.decode_samples(chunk.audio_base64)
-        duration_ms = (len(samples) / self.sample_rate) * 1000.0 if len(samples) > 0 else 0.0
+        effective_sr = chunk.sample_rate if (chunk.sample_rate and chunk.sample_rate > 0) else self.sample_rate
+        duration_ms = (len(samples) / effective_sr) * 1000.0 if len(samples) > 0 else 0.0
 
         # Dynamic quality analysis if not provided explicitly
         if quality is None:
@@ -80,6 +87,7 @@ class DeepfakeDetector:
             applied_channel, applied_thresh, _ = self.calibrator.resolve_threshold(
                 channel_type=chunk.channel_type,
                 codec=chunk.codec,
+                sample_rate=chunk.sample_rate,
                 quality=quality
             )
             return DeepfakeAnalysisResult(
@@ -99,11 +107,26 @@ class DeepfakeDetector:
                 threshold_applied=applied_thresh
             )
 
+        # Standardize samples to canonical model sample rate (16 kHz) if input is narrowband (e.g. 8 kHz telephony)
+        analysis_samples = samples
+        if effective_sr != self.sample_rate and len(samples) > 0:
+            try:
+                import torch
+                import torchaudio
+                t_in = torch.from_numpy(samples).float()
+                t_resampled = torchaudio.transforms.Resample(orig_freq=effective_sr, new_freq=self.sample_rate)(t_in)
+                analysis_samples = t_resampled.numpy().copy()
+            except Exception:
+                old_indices = np.linspace(0, len(samples) - 1, len(samples))
+                new_len = int(round(len(samples) * (self.sample_rate / effective_sr)))
+                new_indices = np.linspace(0, len(samples) - 1, new_len)
+                analysis_samples = np.interp(new_indices, old_indices, samples).astype(np.float32)
+
         # 1. Extract Acoustic & LFCC Features
-        features = self.feature_extractor.extract_features(samples)
+        features = self.feature_extractor.extract_features(analysis_samples)
 
         # 2. Score via Model (Neural ONNX Primary + DSP Fallback)
-        prediction = self.model.predict(features, raw_samples=samples)
+        prediction = self.model.predict(features, raw_samples=analysis_samples)
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
@@ -115,6 +138,7 @@ class DeepfakeDetector:
             inference_latency_ms=inference_latency_ms,
             channel_type=chunk.channel_type,
             codec=chunk.codec,
+            sample_rate=chunk.sample_rate,
         )
 
         return result

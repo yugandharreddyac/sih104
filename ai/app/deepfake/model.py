@@ -188,7 +188,7 @@ class DeepfakeAcousticModel:
                 confidence = float(np.clip(0.50 + abs(spoof_score - 0.50) * 1.0, 0.50, 0.98))
 
                 artifacts: List[str] = []
-                if spoof_score >= 0.685:
+                if spoof_score > 0.50:
                     artifacts.append(
                         f"Robust MiniAcousticCNN detected synthetic vocoder / voice clone pattern (spoof_score: {round(spoof_score, 4)})"
                     )

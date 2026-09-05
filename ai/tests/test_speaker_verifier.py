@@ -97,6 +97,11 @@ def test_speaker_enrollment_and_matching():
     assert mismatch_res.similarity_score < mismatch_res.threshold_applied
 
 
+import pytest
+import os
+from ai.app.deepfake.model import DeepfakeAcousticModel
+
+@pytest.mark.skipif(not DeepfakeAcousticModel().is_neural_active, reason="Deepfake neural model not loaded (Torch or model missing)")
 def test_enrollment_rejection_on_synthetic_voice():
     """Proves that the real active anti-spoof enrollment gate rejects synthetic tones without mocking."""
     verifier = SpeakerVerifier(sample_rate=16000)

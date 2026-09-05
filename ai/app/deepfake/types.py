@@ -17,9 +17,9 @@ class DeepfakeFeatureVector(BaseModel):
 
 
 class RawDeepfakePrediction(BaseModel):
-    raw_spoof_score: float = Field(..., ge=0.0, le=1.0)
-    raw_confidence: float = Field(..., ge=0.0, le=1.0)
+    raw_spoof_score: Optional[float] = None
+    raw_confidence: float = 0.0
     model_version: str
     engine_type: str = "DSP_FALLBACK"
     feature_vector: DeepfakeFeatureVector
-    artifacts: List[str]
+    artifacts: List[str] = Field(default_factory=list)

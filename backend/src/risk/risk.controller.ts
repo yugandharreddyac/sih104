@@ -20,7 +20,7 @@ export class RiskController {
         textTranscript,
         claimedSpeakerId,
         metadata,
-      }, req.user?.id);
+      }, req.user?.id, req.user?.organizationId);
 
       res.json({ success: true, data: assessment });
     } catch (err: any) {

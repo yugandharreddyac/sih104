@@ -702,7 +702,8 @@ export class WebSocketGateway {
                     textTranscript: asyncConv.asr?.transcript,
                     claimedSpeakerId,
                   },
-                  state.user?.id
+                  state.user?.id,
+                  state.user?.organizationId
                 );
 
                 this.broadcast({
@@ -808,7 +809,8 @@ export class WebSocketGateway {
           textTranscript,
           claimedSpeakerId,
         },
-        state.user?.id
+        state.user?.id,
+        state.user?.organizationId
       );
 
       this.broadcast({

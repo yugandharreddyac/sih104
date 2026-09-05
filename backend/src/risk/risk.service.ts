@@ -1,3 +1,4 @@
+import { CallsService } from '../calls/calls.service';
 import { v4 as uuidv4 } from 'uuid';
 import { RiskAssessment } from './risk.model';
 import { PrivacyFirewall } from '../security/privacy_firewall';
@@ -134,7 +135,15 @@ export class RiskService {
     };
   }
 
-  public static async evaluateUnifiedRisk(payload: UnifiedRiskEvaluationPayload, actorUserId?: string): Promise<any> {
+  public static async evaluateUnifiedRisk(
+    payload: UnifiedRiskEvaluationPayload,
+    actorUserId?: string,
+    organizationId?: string
+  ): Promise<any> {
+    const auditOrganizationId =
+      organizationId ||
+      CallsService.getCallById(payload.callId)?.organizationId ||
+      '00000000-0000-0000-0000-000000000001';
     const sanitizedMetadata = PrivacyFirewall.sanitizeObject(payload.metadata || {});
     const sanitizedTranscript = payload.textTranscript ? PrivacyFirewall.sanitize(payload.textTranscript).sanitizedText : undefined;
 
@@ -185,7 +194,7 @@ export class RiskService {
               try {
                 await AuditService.record({
                   actorUserId,
-                  organizationId: '00000000-0000-0000-0000-000000000001',
+                  organizationId: auditOrganizationId,
                   action: 'CRITICAL_RISK_DETECTED',
                   resourceType: 'RISK_ASSESSMENT',
                   resourceId: payload.callId,
@@ -217,7 +226,7 @@ export class RiskService {
     try {
       await AuditService.record({
         actorUserId,
-        organizationId: '00000000-0000-0000-0000-000000000001',
+        organizationId: auditOrganizationId,
         action: 'RISK_FUSION_UNAVAILABLE',
         resourceType: 'RISK_FUSION_SERVICE',
         resourceId: payload.callId,
@@ -424,7 +433,7 @@ export class RiskService {
 
     await AuditService.record({
       actorUserId,
-      organizationId: '00000000-0000-0000-0000-000000000001',
+      organizationId: CallsService.getCallById(payload.callId)?.organizationId || '00000000-0000-0000-0000-000000000001',
       action: 'TRANSACTION_CONTEXT_INGESTED',
       resourceType: 'TRANSACTION',
       resourceId: payload.transactionId,

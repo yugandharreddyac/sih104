@@ -39,7 +39,7 @@ export default function HealthPage() {
     <div className="flex min-h-screen bg-[#090d16]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar title="System & Component Health Matrix" subtitle="Real-time diagnostics across all layers" />
+        <Navbar title="System & Component Health Matrix" subtitle="Real-time diagnostics across all platform layers" />
 
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
           <Phase1Notice />
@@ -49,7 +49,11 @@ export default function HealthPage() {
               <Activity className="w-4 h-4 text-emerald-400" />
               <span>Platform Component Status ({healthData?.status || 'MONITORING'})</span>
             </h2>
-            <button onClick={fetchHealth} className="p-1 text-slate-400 hover:text-white rounded">
+            <button
+              onClick={fetchHealth}
+              aria-label="Refresh Health Diagnostics"
+              className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+            >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
@@ -64,7 +68,7 @@ export default function HealthPage() {
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-white font-mono">Backend Gateway</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Node.js Express + WS</p>
+                    <p className="text-[10px] text-slate-400 font-mono">Node.js Express + WebSocket</p>
                   </div>
                 </div>
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.backend?.status || 'HEALTHY')}`}>
@@ -96,7 +100,7 @@ export default function HealthPage() {
                   </div>
                 </div>
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.aiService?.status)}`}>
-                  {healthData?.components?.aiService?.status || 'OFFLINE_OR_PENDING'}
+                  {healthData?.components?.aiService?.status === 'HEALTHY' ? 'HEALTHY' : 'AI STANDBY'}
                 </span>
               </div>
               <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800">
@@ -105,7 +109,7 @@ export default function HealthPage() {
                   <span className="text-slate-200">{healthData?.components?.aiService?.latencyMs !== undefined ? `${healthData.components.aiService.latencyMs}ms` : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Target URL:</span>
+                  <span>Target Service:</span>
                   <span className="text-cyan-400 truncate max-w-[150px]">{healthData?.components?.aiService?.targetUrl || 'http://localhost:8000'}</span>
                 </div>
               </div>
@@ -133,8 +137,8 @@ export default function HealthPage() {
                   <span className="text-slate-200">{healthData?.persistenceMode || 'MEMORY_FALLBACK'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Zero Retention:</span>
-                  <span className="text-emerald-400">Enforced</span>
+                  <span>Zero Audio Retention:</span>
+                  <span className="text-emerald-400 font-semibold">Enforced</span>
                 </div>
               </div>
             </div>
@@ -175,8 +179,8 @@ export default function HealthPage() {
                     <Activity className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white font-mono">Deterministic Policy Engine</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Rule Evaluator V1</p>
+                    <h3 className="text-xs font-bold text-white font-mono">Policy Engine</h3>
+                    <p className="text-[10px] text-slate-400 font-mono">Deterministic Enforcer</p>
                   </div>
                 </div>
                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${getStatusBadge(healthData?.components?.policyEngine?.status || 'ACTIVE')}`}>
@@ -200,4 +204,3 @@ export default function HealthPage() {
     </div>
   );
 }
-

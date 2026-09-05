@@ -16,7 +16,7 @@ export default function VerificationPage() {
   const [callId, setCallId] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
-  const fetchVerifications = async () => {
+  const fetchVerifications = React.useCallback(async () => {
     setLoading(true);
     const [verRes, callsRes] = await Promise.all([
       ApiClient.get('/verification'),
@@ -33,11 +33,11 @@ export default function VerificationPage() {
         setCallId(callsRes.data[0].id);
       }
     }
-  };
+  }, [callId]);
 
   useEffect(() => {
     fetchVerifications();
-  }, []);
+  }, [fetchVerifications]);
 
   const handleCreateRequest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +75,6 @@ export default function VerificationPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar title="Independent Step-Up Verification Hub" subtitle="Out-of-band authentication decoupling" />
 
-
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
           <Phase1Notice />
 
@@ -97,7 +96,11 @@ export default function VerificationPage() {
                   <Lock className="w-4 h-4 text-amber-400" />
                   <span>Out-of-Band Verification Requests ({requests.length})</span>
                 </h2>
-                <button onClick={fetchVerifications} className="p-1 text-slate-400 hover:text-white rounded">
+                <button
+                  onClick={fetchVerifications}
+                  aria-label="Refresh Verifications"
+                  className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                >
                   <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                 </button>
               </div>
@@ -106,9 +109,9 @@ export default function VerificationPage() {
                 {requests.length === 0 && !loading && (
                   <div className="p-8 text-center text-slate-500 font-mono text-xs soc-glass rounded-xl border border-slate-800">
                     <ShieldCheck className="w-7 h-7 text-emerald-400/50 mx-auto mb-2" />
-                    <p>No active verification requests.</p>
-                    <p className="text-[10px] text-slate-600 mt-1">
-                      Step-up challenges triggered by policy enforcement will appear here.
+                    <p className="text-slate-300 font-semibold">No Pending Step-Up Challenges</p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Out-of-band challenges dispatched automatically by deterministic policy rules will appear here.
                     </p>
                   </div>
                 )}
@@ -119,19 +122,19 @@ export default function VerificationPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-mono font-bold text-white">{req.mechanism}</span>
                           <span
-                            className={`text-[10px] font-mono px-2 py-0.5 rounded ${
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border font-bold ${
                               req.status === 'APPROVED'
-                                ? 'bg-emerald-500/20 text-emerald-300'
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                                 : req.status === 'REJECTED'
-                                ? 'bg-rose-500/20 text-rose-300'
-                                : 'bg-amber-500/20 text-amber-300'
+                                ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                             }`}
                           >
                             {req.status}
                           </span>
                         </div>
                         <p className="text-xs text-slate-400 font-mono mt-1">
-                          Target Identity: <span className="text-cyan-300">{req.targetIdentityMasked}</span>
+                          Target Identity: <span className="text-cyan-300">{req.targetIdentityMasked || req.targetIdentity}</span>
                         </p>
                       </div>
 
@@ -139,14 +142,14 @@ export default function VerificationPage() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleResolve(req.id, 'APPROVED')}
-                            className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1"
+                            className="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>Confirm</span>
                           </button>
                           <button
                             onClick={() => handleResolve(req.id, 'REJECTED')}
-                            className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold flex items-center gap-1"
+                            className="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
                           >
                             <XCircle className="w-3.5 h-3.5" />
                             <span>Reject</span>
@@ -156,7 +159,7 @@ export default function VerificationPage() {
                     </div>
 
                     <div className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 font-mono">
-                      {req.notes}
+                      {req.notes || 'Awaiting out-of-band response from user authenticator application.'}
                     </div>
                   </div>
                 ))}
@@ -167,7 +170,7 @@ export default function VerificationPage() {
             <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-4">
               <h2 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
                 <Send className="w-4 h-4 text-cyan-400" />
-                <span>Trigger Out-of-Band Verification</span>
+                <span>Trigger Out-of-Band Challenge</span>
               </h2>
               <p className="text-xs text-slate-400">
                 Dispatch an independent challenge completely decoupled from the live voice interaction.
@@ -230,14 +233,13 @@ export default function VerificationPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 mt-2"
+                  className="w-full py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 shadow-md shadow-amber-500/20 mt-2 transition-all"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Dispatch Step-Up Challenge</span>
                 </button>
               </form>
             </div>
-
           </div>
         </main>
       </div>

@@ -6,6 +6,7 @@ import { Navbar } from '@/components/Navbar';
 import { Phase1Notice } from '@/components/Phase1Notice';
 import { BarChart3, ShieldAlert, CheckCircle2, Layers, Activity, TrendingUp, RefreshCw, AlertTriangle, FileText } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
+import { formatSafeTime } from '@/lib/format';
 
 export default function RiskPage() {
   const [calls, setCalls] = useState<any[]>([]);
@@ -15,7 +16,7 @@ export default function RiskPage() {
   const [evidence, setEvidence] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchCalls = async () => {
+  const fetchCalls = React.useCallback(async () => {
     setLoading(true);
     const res = await ApiClient.get('/calls');
     setLoading(false);
@@ -29,13 +30,13 @@ export default function RiskPage() {
       setSelectedCallId('');
       setAssessment(null);
     }
-  };
+  }, [selectedCallId]);
 
   useEffect(() => {
     fetchCalls();
-  }, []);
+  }, [fetchCalls]);
 
-  const fetchRiskData = async (callId: string) => {
+  const fetchRiskData = React.useCallback(async (callId: string) => {
     if (!callId) return;
     setLoading(true);
     const [riskRes, timelineRes, evidenceRes] = await Promise.all([
@@ -56,13 +57,15 @@ export default function RiskPage() {
     if (evidenceRes.success && evidenceRes.data) {
       setEvidence(evidenceRes.data);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (selectedCallId) {
       fetchRiskData(selectedCallId);
     }
-  }, [selectedCallId]);
+  }, [selectedCallId, fetchRiskData]);
+
+  const isEvaluated = assessment && (typeof assessment.overall_risk_score === 'number' || typeof assessment.compositeScore === 'number');
 
   return (
     <div className="flex min-h-screen bg-[#090d16]">
@@ -73,17 +76,17 @@ export default function RiskPage() {
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
           <Phase1Notice />
 
-          {/* Model Status & Axiom Card */}
+          {/* Model Status Card */}
           <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h2 className="text-sm font-bold text-white font-mono flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-cyan-400" />
-                <span>Multi-Modal Threat Fusion Architecture</span>
+                <span>Multi-Modal Threat Fusion Engine</span>
               </h2>
 
               {calls.length > 0 && (
                 <div className="flex items-center gap-2">
-                  <label className="text-xs font-mono text-slate-400">Inspecting Call:</label>
+                  <label className="text-xs font-mono text-slate-400">Target Call:</label>
                   <select
                     value={selectedCallId}
                     onChange={(e) => setSelectedCallId(e.target.value)}
@@ -95,7 +98,11 @@ export default function RiskPage() {
                       </option>
                     ))}
                   </select>
-                  <button onClick={() => fetchRiskData(selectedCallId)} className="p-1 text-slate-400 hover:text-white rounded">
+                  <button
+                    onClick={() => fetchRiskData(selectedCallId)}
+                    aria-label="Refresh Risk Data"
+                    className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                  >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
@@ -109,19 +116,21 @@ export default function RiskPage() {
           {assessment ? (
             <div className="space-y-6">
               {/* Multi-Factor Invariant Banner */}
-              {assessment.dimensions && (assessment.dimensions.social_engineering >= 70 || assessment.dimensions.credential_theft >= 70) && assessment.dimensions.deepfake_synthetic < 30 && (
-                <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                  <div>
-                    <strong className="block text-white font-bold">
-                      MULTI-FACTOR THREAT OVERRIDE ACTIVE
-                    </strong>
-                    <span>
-                      Acoustic neural deepfake score is low ({assessment.dimensions.deepfake_synthetic}%), but conversational social engineering ({assessment.dimensions.social_engineering}%) and credential solicitation ({assessment.dimensions.credential_theft}%) are elevated. Composite risk is evaluated as HIGH/CRITICAL.
-                    </span>
+              {assessment.dimensions &&
+                ((assessment.dimensions.social_engineering >= 70 || assessment.dimensions.credential_theft >= 70)) &&
+                assessment.dimensions.deepfake_synthetic < 30 && (
+                  <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-white font-bold">
+                        MULTI-FACTOR THREAT OVERRIDE ACTIVE
+                      </strong>
+                      <span>
+                        Acoustic neural deepfake score is low ({assessment.dimensions.deepfake_synthetic}%), but conversational social engineering ({assessment.dimensions.social_engineering}%) and credential solicitation ({assessment.dimensions.credential_theft}%) are elevated. Composite risk is evaluated as HIGH/CRITICAL.
+                      </span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Composite Risk Evaluation */}
@@ -131,39 +140,52 @@ export default function RiskPage() {
                   </h3>
 
                   <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-center space-y-2">
-                    <span className="text-[11px] font-mono text-slate-400 block">Assessment Level</span>
-                    <div
-                      className={`text-xl font-bold font-mono ${
-                        assessment.risk_level === 'CRITICAL'
-                          ? 'text-rose-400'
-                          : assessment.risk_level === 'HIGH'
-                          ? 'text-orange-400'
-                          : 'text-amber-400'
-                      }`}
-                    >
-                      {assessment.risk_level || assessment.severity || 'MONITOR'}
-                    </div>
-                    <p className="text-xs text-slate-300 font-mono">
-                      Overall Threat Score:{' '}
-                      <strong className="text-white">
-                        {assessment.overall_risk_score !== undefined
-                          ? `${Number(assessment.overall_risk_score).toFixed(1)}/100`
-                          : (assessment.compositeScore ?? 'N/A')}
-                      </strong>
-                    </p>
+                    <span className="text-[11px] font-mono text-slate-400 block">Threat Assessment</span>
+                    {isEvaluated ? (
+                      <>
+                        <div
+                          className={`text-xl font-bold font-mono ${
+                            assessment.risk_level === 'CRITICAL'
+                              ? 'text-rose-400'
+                              : assessment.risk_level === 'HIGH'
+                              ? 'text-orange-400'
+                              : assessment.risk_level === 'ELEVATED' || assessment.risk_level === 'GUARDED' || assessment.risk_level === 'MONITOR'
+                              ? 'text-amber-400'
+                              : 'text-emerald-400'
+                          }`}
+                        >
+                          {assessment.risk_level || assessment.severity || 'EVALUATED'}
+                        </div>
+                        <p className="text-xs text-slate-300 font-mono">
+                          Composite Score:{' '}
+                          <strong className="text-white">
+                            {assessment.overall_risk_score !== undefined && assessment.overall_risk_score !== null
+                              ? `${Number(assessment.overall_risk_score).toFixed(1)}/100`
+                              : (assessment.compositeScore ? `${Number(assessment.compositeScore).toFixed(1)}/100` : '—')}
+                          </strong>
+                        </p>
+                      </>
+                    ) : (
+                      <div className="py-2">
+                        <span className="text-sm font-bold font-mono text-slate-400">EVALUATION PENDING</span>
+                        <p className="text-[11px] text-slate-500 font-mono mt-1">Awaiting audio session data</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800 text-xs font-mono space-y-2 text-slate-300">
                     <div className="flex justify-between">
-                      <span className="text-slate-500">Threat Level:</span>
-                      <span className="text-cyan-400 font-bold">{assessment.risk_level || assessment.severity || 'SAFE'}</span>
+                      <span className="text-slate-500">Threat Posture:</span>
+                      <span className="text-cyan-400 font-bold">
+                        {isEvaluated ? (assessment.risk_level || assessment.severity || 'SAFE') : 'PENDING'}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Calibrated Confidence:</span>
                       <span className="text-emerald-400 font-bold">
                         {assessment.confidence !== undefined && assessment.confidence !== null
                           ? `${(assessment.confidence * 100).toFixed(0)}%`
-                          : 'N/A'}
+                          : 'PENDING'}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -171,7 +193,7 @@ export default function RiskPage() {
                       <span className="text-slate-400">
                         {assessment.uncertainty !== undefined && assessment.uncertainty !== null
                           ? `${(assessment.uncertainty * 100).toFixed(0)}%`
-                          : 'N/A'}
+                          : 'PENDING'}
                       </span>
                     </div>
                     {assessment.risk_velocity !== undefined && (
@@ -192,20 +214,32 @@ export default function RiskPage() {
 
                   {assessment.dimensions ? (
                     <div className="grid grid-cols-2 gap-3 font-mono text-xs">
-                      {Object.entries(assessment.dimensions).map(([key, val]: [string, any], idx) => (
-                        <div key={idx} className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
-                          <div className="flex justify-between text-slate-300">
-                            <span className="capitalize">{key.replace(/_/g, ' ')}</span>
-                            <strong className="text-white">{Number(val).toFixed(0)}</strong>
+                      {Object.entries(assessment.dimensions).map(([key, val]: [string, any], idx) => {
+                        const hasVal = typeof val === 'number' && Number.isFinite(val);
+                        const numVal = hasVal ? Number(val) : 0;
+                        return (
+                          <div key={idx} className="p-3 rounded-lg bg-slate-900/70 border border-slate-800 space-y-1.5">
+                            <div className="flex justify-between text-slate-300">
+                              <span className="capitalize">{key.replace(/_/g, ' ')}</span>
+                              <strong className="text-white">{hasVal ? numVal.toFixed(0) : '—'}</strong>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${
+                                  hasVal
+                                    ? numVal >= 70
+                                      ? 'bg-rose-500'
+                                      : numVal >= 40
+                                      ? 'bg-amber-500'
+                                      : 'bg-cyan-500'
+                                    : 'bg-slate-700'
+                                } rounded-full transition-all duration-300`}
+                                style={{ width: `${hasVal ? Math.min(100, Math.max(0, numVal)) : 0}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full ${Number(val) > 70 ? 'bg-rose-500' : Number(val) > 40 ? 'bg-amber-500' : 'bg-emerald-500'} rounded-full`}
-                              style={{ width: `${Math.min(100, Math.max(0, Number(val)))}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-xs text-slate-500 font-mono">No tensor dimensions available for this assessment.</p>
@@ -227,9 +261,9 @@ export default function RiskPage() {
                         <div className="flex items-center gap-3">
                           <span className="text-slate-500">Turn #{item.chunkIndex ?? idx}</span>
                           <span className="font-bold text-white">Score: {item.overall_risk_score ?? item.riskScore ?? 'N/A'}</span>
-                          <span className="text-indigo-400">[{item.risk_level || 'MONITOR'}]</span>
+                          <span className="text-indigo-400">[{item.risk_level || 'EVALUATED'}]</span>
                         </div>
-                        <span className="text-slate-500 text-[10px]">{new Date(item.timestamp || Date.now()).toLocaleTimeString()}</span>
+                        <span className="text-slate-500 text-[10px]">{formatSafeTime(item.timestamp)}</span>
                       </div>
                     ))}
                   </div>
@@ -250,4 +284,3 @@ export default function RiskPage() {
     </div>
   );
 }
-

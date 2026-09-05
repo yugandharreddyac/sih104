@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { ApiClient, WS_BASE } from '@/lib/api';
+import { formatSafeTime } from '@/lib/format';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -120,64 +121,96 @@ export default function DashboardPage() {
         <main className="flex-1 p-6 space-y-6 overflow-y-auto">
           <Phase1Notice />
 
+          {/* Pipeline Stage Navigation Ribbon */}
+          <div className="grid grid-cols-5 gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono text-center">
+            <div className="p-2 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-indigo-300">
+              <span className="block text-[10px] text-slate-500 font-semibold">1. INGEST</span>
+              <span className="font-bold text-slate-200">SIP / 16kHz PCM</span>
+            </div>
+            <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/20 text-cyan-300">
+              <span className="block text-[10px] text-slate-500 font-semibold">2. ANALYZE</span>
+              <span className="font-bold text-slate-200">Neural + ASR</span>
+            </div>
+            <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/20 text-amber-300">
+              <span className="block text-[10px] text-slate-500 font-semibold">3. FUSION</span>
+              <span className="font-bold text-slate-200">10D Threat Tensor</span>
+            </div>
+            <div className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 text-purple-300">
+              <span className="block text-[10px] text-slate-500 font-semibold">4. DECIDE</span>
+              <span className="font-bold text-slate-200">Policy Rules</span>
+            </div>
+            <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 text-rose-300">
+              <span className="block text-[10px] text-slate-500 font-semibold">5. ACT</span>
+              <span className="font-bold text-slate-200">Step-Up / Enforce</span>
+            </div>
+          </div>
+
           {/* Metric Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link
               href="/calls"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-indigo-500/50 flex items-center justify-between transition-all"
+              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-indigo-500/50 flex items-center justify-between transition-all group"
             >
               <div>
                 <p className="text-xs font-mono text-slate-400">Live Call Streams</p>
                 <h3 className="text-2xl font-bold text-white mt-1">{stats.activeCalls}</h3>
-                <span className="text-[10px] text-emerald-400 font-mono">
-                  ● {stats.activeCalls > 0 ? 'Active Channels' : 'Channels Idle'}
+                <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  {stats.activeCalls > 0 ? 'Active Channels' : 'Channels Idle'}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-indigo-500/10 text-indigo-400">
+              <div className="p-3 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
                 <PhoneCall className="w-5 h-5" />
               </div>
             </Link>
 
             <Link
               href="/incidents"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-rose-500/50 flex items-center justify-between transition-all"
+              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-rose-500/50 flex items-center justify-between transition-all group"
             >
               <div>
                 <p className="text-xs font-mono text-slate-400">Security Incidents</p>
                 <h3 className="text-2xl font-bold text-rose-400 mt-1">{stats.openIncidents}</h3>
-                <span className="text-[10px] text-rose-400 font-mono">
-                  ● {stats.openIncidents > 0 ? 'Under Investigation' : 'Queue Clear'}
+                <span className="text-[10px] text-rose-400 font-mono flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                  {stats.openIncidents > 0 ? 'Under Investigation' : 'Queue Clear'}
                 </span>
               </div>
-              <div className="p-3 rounded-lg bg-rose-500/10 text-rose-400">
+              <div className="p-3 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20 transition-colors">
                 <AlertTriangle className="w-5 h-5" />
               </div>
             </Link>
 
             <Link
               href="/policies"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-cyan-500/50 flex items-center justify-between transition-all"
+              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-cyan-500/50 flex items-center justify-between transition-all group"
             >
               <div>
                 <p className="text-xs font-mono text-slate-400">Deterministic Policies</p>
                 <h3 className="text-2xl font-bold text-white mt-1">{stats.activePolicies}</h3>
-                <span className="text-[10px] text-cyan-400 font-mono">● Rules Enforced</span>
+                <span className="text-[10px] text-cyan-400 font-mono flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                  Rules Enforced
+                </span>
               </div>
-              <div className="p-3 rounded-lg bg-cyan-500/10 text-cyan-400">
+              <div className="p-3 rounded-lg bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
                 <FileCheck2 className="w-5 h-5" />
               </div>
             </Link>
 
             <Link
               href="/verification"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-amber-500/50 flex items-center justify-between transition-all"
+              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-amber-500/50 flex items-center justify-between transition-all group"
             >
               <div>
                 <p className="text-xs font-mono text-slate-400">Out-of-Band Step-Ups</p>
                 <h3 className="text-2xl font-bold text-amber-400 mt-1">{stats.pendingVerifications}</h3>
-                <span className="text-[10px] text-amber-400 font-mono">● IdP Challenges</span>
+                <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                  IdP Challenges
+                </span>
               </div>
-              <div className="p-3 rounded-lg bg-amber-500/10 text-amber-400">
+              <div className="p-3 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20 transition-colors">
                 <Lock className="w-5 h-5" />
               </div>
             </Link>
@@ -194,7 +227,11 @@ export default function DashboardPage() {
                 </h2>
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono text-slate-400">Live WebSocket Feed</span>
-                  <button onClick={loadData} className="p-1 text-slate-400 hover:text-white rounded">
+                  <button
+                    onClick={loadData}
+                    aria-label="Refresh Data"
+                    className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                  >
                     <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
                   </button>
                 </div>
@@ -227,7 +264,7 @@ export default function DashboardPage() {
                         )}
                       </div>
                       <span className="text-[10px] text-slate-500 shrink-0">
-                        {new Date(alert.timestamp).toLocaleTimeString()}
+                        {formatSafeTime(alert.timestamp)}
                       </span>
                     </div>
                   ))}
@@ -235,9 +272,9 @@ export default function DashboardPage() {
               ) : (
                 <div className="p-8 text-center text-slate-500 text-xs font-mono rounded-lg bg-slate-950/40 border border-slate-800/60">
                   <ShieldCheck className="w-8 h-8 text-emerald-400/50 mx-auto mb-2" />
-                  <p>Zero active security alerts on stream.</p>
-                  <p className="text-[10px] text-slate-600 mt-1">
-                    System monitoring live voice sessions for spoofing, replay & credential extraction.
+                  <p className="text-slate-300 font-semibold">Security Stream Active — Zero Threats on Queue</p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Continuous acoustic analysis, synthetic voice detection & credential harvesting defense active.
                   </p>
                 </div>
               )}
@@ -249,7 +286,7 @@ export default function DashboardPage() {
                     Monitored Call Sessions ({callsList.length})
                   </h3>
                   <Link href="/calls" className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono">
-                    <span>Inspect Queue</span>
+                    <span>Inspect Live Console</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -268,21 +305,23 @@ export default function DashboardPage() {
                           {c.callerDisplayName && <span className="text-slate-400">({c.callerDisplayName})</span>}
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                             {c.status}
                           </span>
-                          <span className="text-slate-500 text-[10px]">{new Date(c.createdAt).toLocaleTimeString()}</span>
+                          <span className="text-slate-500 text-[10px]">{formatSafeTime(c.createdAt)}</span>
                         </div>
                       </Link>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500 font-mono py-2">No active calls in session store.</p>
+                  <div className="p-4 rounded-lg bg-slate-950/40 border border-slate-800/60 text-center">
+                    <p className="text-xs text-slate-500 font-mono">No active call sessions connected to gateway.</p>
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* Architecture Stack & Truthful Subsystem Health */}
+            {/* Architecture Stack & Subsystem Health */}
             <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-4">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
                 <Activity className="w-4 h-4 text-cyan-400" />
@@ -296,7 +335,7 @@ export default function DashboardPage() {
                     <Server className="w-4 h-4 text-indigo-400" />
                     <span className="text-slate-200 font-bold">Backend Gateway</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
                     ONLINE
                   </span>
                 </div>
@@ -308,13 +347,13 @@ export default function DashboardPage() {
                     <span className="text-slate-200 font-bold">Acoustic AI Service</span>
                   </div>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                    className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
                       healthData?.components?.aiService?.status === 'HEALTHY'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-amber-500/20 text-amber-300'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                     }`}
                   >
-                    {healthData?.components?.aiService?.status || 'DSP_FALLBACK'}
+                    {healthData?.components?.aiService?.status === 'HEALTHY' ? 'HEALTHY' : 'AI STANDBY'}
                   </span>
                 </div>
 
@@ -325,10 +364,10 @@ export default function DashboardPage() {
                     <span className="text-slate-200 font-bold">PostgreSQL DB</span>
                   </div>
                   <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold ${
+                    className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
                       healthData?.components?.database?.status === 'CONNECTED'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-indigo-500/20 text-indigo-300'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
                     }`}
                   >
                     {healthData?.components?.database?.status || 'DUAL_MODE'}
@@ -341,8 +380,8 @@ export default function DashboardPage() {
                     <ShieldCheck className="w-4 h-4 text-emerald-400" />
                     <span className="text-slate-200 font-bold">Privacy Firewall</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
-                    ACTIVE
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
+                    ENFORCED
                   </span>
                 </div>
 
@@ -352,7 +391,7 @@ export default function DashboardPage() {
                     <FileCheck2 className="w-4 h-4 text-cyan-400" />
                     <span className="text-slate-200 font-bold">Policy Enforcer</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
                     ACTIVE
                   </span>
                 </div>
@@ -364,7 +403,7 @@ export default function DashboardPage() {
                   href="/calls"
                   className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800 text-xs text-slate-300 transition-colors font-mono"
                 >
-                  <span>Real-Time Call Analyzer</span>
+                  <span>Live Call Command Center</span>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
                 </Link>
                 <Link
@@ -389,4 +428,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

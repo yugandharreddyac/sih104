@@ -22,8 +22,11 @@ services:
     image: redis:7-alpine
     container_name: voxshield-redis
     restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD?err_missing_redis_password}"]
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD?err_missing_redis_password}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "$$REDIS_PASSWORD", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -61,7 +64,7 @@ services:
       - PORT=4000
       - NODE_ENV=production
       - DATABASE_URL=postgresql://${POSTGRES_USER?err_missing_user}:${POSTGRES_PASSWORD?err_missing_password}@postgres:5432/${POSTGRES_DB?err_missing_db}
-      - REDIS_URL=redis://redis:6379
+      - REDIS_URL=redis://:${REDIS_PASSWORD?err_missing_redis_password}@redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
       - JWT_SECRET=${JWT_SECRET?err_missing_jwt}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY?err_missing_encryption}

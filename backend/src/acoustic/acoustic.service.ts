@@ -99,7 +99,7 @@ export class AcousticService {
         spoof_score: null,
         confidence: 0.0,
         uncertainty: 1.0,
-        model_version: 'deepfake_aasist_spectral_v3',
+        model_version: 'robust_mini_acoustic_cnn_v1',
         engine_type: null,
         explainability: ['Acoustic AI service unavailable; deepfake detection degraded.'],
         inference_latency_ms: null,
@@ -260,7 +260,7 @@ export class AcousticService {
     return {
       overall_status: 'ACOUSTIC_INTELLIGENCE_DEGRADED',
       modules: {
-        deepfake_detection: { status: 'UNAVAILABLE', model: 'deepfake_aasist_spectral_v3' },
+        deepfake_detection: { status: 'UNAVAILABLE', model: 'robust_mini_acoustic_cnn_v1' },
         speaker_verification: { status: 'UNAVAILABLE', model: 'speaker_xvector_biometric_v3' },
         replay_detection: { status: 'UNAVAILABLE', model: 'replay_spectral_decay_v3' },
         vad: { status: 'UNAVAILABLE', model: 'acoustic_multi_feature_vad_v2' },

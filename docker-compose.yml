@@ -6,11 +6,9 @@ services:
     container_name: voxshield-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-voxshield_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-voxshield_secure_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-voxshield_db}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER?err_missing_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?err_missing_password}
+      POSTGRES_DB: ${POSTGRES_DB?err_missing_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -24,8 +22,6 @@ services:
     image: redis:7-alpine
     container_name: voxshield-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -42,8 +38,6 @@ services:
       - VOXSHIELD_AI_PORT=8000
       - VOXSHIELD_AI_HOST=0.0.0.0
       - VOXSHIELD_AI_ENVIRONMENT=production
-    ports:
-      - "8000:8000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -66,20 +60,19 @@ services:
     environment:
       - PORT=4000
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://voxshield_user:${POSTGRES_PASSWORD:-voxshield_secure_pass}@postgres:5432/voxshield_db
+      - DATABASE_URL=postgresql://${POSTGRES_USER?err_missing_user}:${POSTGRES_PASSWORD?err_missing_password}@postgres:5432/${POSTGRES_DB?err_missing_db}
       - REDIS_URL=redis://redis:6379
       - AI_SERVICE_URL=http://ai-service:8000
-      - JWT_SECRET=${JWT_SECRET:-voxshield_super_secure_jwt_secret_dev_key_2026!}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
-      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-voxshield_default_dev_webhook_secret_2026}
+      - JWT_SECRET=${JWT_SECRET?err_missing_jwt}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY?err_missing_encryption}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET?err_missing_webhook}
       - INTERVENTION_WEBHOOK_URL=${INTERVENTION_WEBHOOK_URL:-}
       - RTP_UDP_PORT=10000
     ports:
       - "4000:4000"
       - "10000:10000/udp"
     healthcheck:
-
-      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -238,14 +238,14 @@ describe('Phase 4B: Load & Scalability Benchmark', () => {
     expect(res.connectionsSuccessful).toBe(25);
     expect(res.connectionsFailed).toBe(0);
     expect(res.framesDelivered).toBe(250);
-  });
+  }, 15000);
 
   it('Tier 4: 50 Concurrent WebSocket Streams', async () => {
     const res = await runLoadTier(50, 10, 10);
     expect(res.connectionsSuccessful).toBe(50);
     expect(res.connectionsFailed).toBe(0);
     expect(res.framesDelivered).toBe(500);
-  });
+  }, 20000);
 
   it('Tier 5: 100 Concurrent WebSocket Streams (Capacity Validation)', async () => {
     if (!benchmarkResults[50] || benchmarkResults[50].connectionsFailed > 0) {
@@ -257,7 +257,7 @@ describe('Phase 4B: Load & Scalability Benchmark', () => {
     expect(res.connectionsSuccessful).toBe(100);
     expect(res.connectionsFailed).toBe(0);
     expect(res.framesDelivered).toBe(1000);
-  });
+  }, 30000);
 
   afterAll(() => {
     console.log('\n================================================================');

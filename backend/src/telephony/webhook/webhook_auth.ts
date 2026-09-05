@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { env } from '../../config/env';
+import { logger } from '../../utils/logger';
 
 const ALLOWED_PROVIDERS = ['GENERIC_TELEPHONY'];
 
@@ -97,7 +98,7 @@ export function requireWebhookSignature(req: Request, res: Response, next: NextF
     }
   } catch (err) {
     // Fail safely without logging secrets or raw payloads
-    console.error('Webhook signature validation failed with an unexpected error.');
+    logger.error('Webhook signature validation failed with an unexpected error.');
     res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR' });
   }
 }

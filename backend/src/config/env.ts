@@ -5,7 +5,7 @@ dotenv.config();
 
 const isProd = process.env.NODE_ENV === 'production';
 
-const envSchema = z.object({
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform((val) => parseInt(val, 10)).default('4000'),
   JWT_SECRET: isProd ? z.string().min(16).refine(val => val !== 'voxshield_super_secure_jwt_secret_dev_key_2026!', { message: "Cannot use default JWT_SECRET in production" }) : z.string().min(16).default('voxshield_super_secure_jwt_secret_dev_key_2026!'),

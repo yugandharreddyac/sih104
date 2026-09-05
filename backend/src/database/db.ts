@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 import { Pool, QueryResult, QueryResultRow } from 'pg';
 import { env } from '../config/env';
 import { dbQueryDurationSeconds } from '../health/metrics.controller';
@@ -33,10 +35,10 @@ export class DatabaseService {
 
         this.pool.on('error', (err) => {
           this.connected = false;
-          console.warn('⚠️ PostgreSQL pool notice:', err.message);
+          logger.warn('PostgreSQL pool notice', { error: err.message });
         });
       } catch (err) {
-        console.warn('⚠️ PostgreSQL initialization notice (running with in-memory store):', (err as any).message);
+        logger.warn('PostgreSQL initialization notice (running with in-memory store)', { error: (err as any).message });
       }
     }
   }

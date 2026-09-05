@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db';
 import { PrivacyFirewall } from './privacy_firewall';
@@ -76,7 +78,7 @@ export class AuditService {
       );
     } catch (err) {
       // Graceful fallback to memory log when standalone db is not connected
-      console.info(`[AUDIT] ${entry.action} by ${entry.actorUserId || 'ANON'} [${entry.result}]`);
+      logger.info(`[AUDIT] ${entry.action} by ${entry.actorUserId || 'ANON'} [${entry.result}]`);
     }
 
     return logId;

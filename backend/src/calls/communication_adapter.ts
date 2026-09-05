@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 import { EventEmitter } from 'events';
 import { AudioNormalizer, NormalizedAudioResult } from './audio_normalizer';
 import { StreamBuffer, StreamBufferManager } from './stream_buffer';
@@ -40,7 +42,7 @@ export class TestAudioAdapter extends EventEmitter implements CommunicationAdapt
   private activeSessions: Map<string, CallStreamMetadata> = new Map();
 
   public async initialize(): Promise<void> {
-    console.info('🔌 TestAudioAdapter initialized with audio normalization and buffer manager.');
+    logger.info('🔌 TestAudioAdapter initialized with audio normalization and buffer manager.');
   }
 
   public async startCallSession(metadata: CallStreamMetadata): Promise<string> {
@@ -91,7 +93,7 @@ export class RtpCommunicationAdapter extends EventEmitter implements Communicati
   private activeSessions: Map<string, CallStreamMetadata> = new Map();
 
   public async initialize(): Promise<void> {
-    console.info('🔌 RtpCommunicationAdapter initialized for Asterisk / FreeSWITCH / VoIP media gateway.');
+    logger.info('🔌 RtpCommunicationAdapter initialized for Asterisk / FreeSWITCH / VoIP media gateway.');
   }
 
   public async startCallSession(metadata: CallStreamMetadata): Promise<string> {

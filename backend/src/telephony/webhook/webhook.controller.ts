@@ -1,3 +1,5 @@
+import { logger } from '../../utils/logger';
+
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { CallsService } from '../../calls/calls.service';
@@ -50,7 +52,7 @@ export class TelephonyWebhookController {
 
       res.status(201).json({ success: true, data: call });
     } catch (err: any) {
-      console.error('Webhook Call Start Error:', err);
+      logger.error('Webhook Call Start Error:', err);
       res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR' });
     }
   }
@@ -82,7 +84,7 @@ export class TelephonyWebhookController {
       
       res.status(200).json({ success: true, message: 'Call terminated successfully' });
     } catch (err: any) {
-      console.error('Webhook Call End Error:', err);
+      logger.error('Webhook Call End Error:', err);
       res.status(500).json({ success: false, error: 'INTERNAL_SERVER_ERROR' });
     }
   }

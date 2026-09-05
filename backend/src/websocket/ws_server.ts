@@ -1,4 +1,5 @@
 import http from 'http';
+import { logger } from '../utils/logger';
 import { WebSocketServer, WebSocket } from 'ws';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { TokenService } from '../auth/jwt';
@@ -190,8 +191,7 @@ export class WebSocketGateway {
       };
 
       this.clientStates.set(ws, state);
-      console.info(`🔌 WebSocket client connected from ${ipAddress}`);
-
+      logger.info(`WebSocket client connected from ${ipAddress}`);
       ws.on('message', async (message: string | Buffer) => {
         try {
           const msgStr = typeof message === 'string' ? message : message.toString('utf-8');
@@ -245,7 +245,7 @@ export class WebSocketGateway {
           SpeechBufferManager.remove(state.activeCallId);
         }
         this.clientStates.delete(ws);
-        console.info(`🔌 WebSocket client disconnected`);
+        logger.info(`WebSocket client disconnected`);
       });
 
       // Send initial handshake
@@ -1018,7 +1018,7 @@ export class WebSocketGateway {
         claimedSpeakerId: chunkInfo.claimedSpeakerId,
       });
     } catch (err) {
-      console.warn(`[ASR/Conversation] Async analyzeTurn error for call ${callId}:`, err);
+      logger.warn(`[ASR/Conversation] Async analyzeTurn error for call ${callId}:`, { error: err });
     }
 
     const asrState = this.callAsrStates.get(callId);
@@ -1123,7 +1123,7 @@ export class WebSocketGateway {
             }
           }
         } catch (riskErr) {
-          console.warn(`[RiskService] Error evaluating unified risk for call ${callId}:`, riskErr);
+          logger.warn(`[RiskService] Error evaluating unified risk for call ${callId}:`, { error: riskErr });
         }
       }
     } finally {

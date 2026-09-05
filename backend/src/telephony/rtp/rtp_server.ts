@@ -6,6 +6,7 @@
 
 import dgram from 'dgram';
 import { EventEmitter } from 'events';
+import { logger } from '../../utils/logger';
 import { RtpParser } from './rtp_parser';
 import { RtpSession } from './rtp_session';
 import { TelephonySessionMetadata } from './types';
@@ -57,7 +58,7 @@ export class RtpServer extends EventEmitter {
         this.socket = socket;
 
         socket.on('error', (err) => {
-          console.error('❌ [RTP Server] UDP Socket Error:', err);
+          logger.error('RTP Server UDP Socket Error', err);
           this.emit('error', err);
         });
 
@@ -68,7 +69,7 @@ export class RtpServer extends EventEmitter {
         socket.on('listening', () => {
           const addr = socket.address();
           this.isListening = true;
-          console.info(`📞 [RTP Server] Ingestion Gateway listening on UDP ${addr.address}:${addr.port}`);
+          logger.info(`RTP Server Ingestion Gateway listening on UDP ${addr.address}:${addr.port}`);
           this.startSessionCleaner();
           resolve();
         });
@@ -81,7 +82,7 @@ export class RtpServer extends EventEmitter {
   }
 
   /**
-   * Stops the RTP server and cleans up active sessions.
+   * Stops the RTP server gracefully.
    */
   public async stop(): Promise<void> {
     if (this.sessionCleanupInterval) {
@@ -178,7 +179,7 @@ export class RtpServer extends EventEmitter {
     // Initialize ring buffer
     StreamBufferManager.getOrCreate(callId, sessionId);
 
-    console.info(`📞 [RTP Server] New Telephony Call Session initialized: ${callId} (SSRC: 0x${ssrc.toString(16)}, Codec: ${codec})`);
+    logger.info(`RTP Server New Telephony Call Session initialized: ${callId} (SSRC: 0x${ssrc.toString(16)}, Codec: ${codec})`);
 
     // Broadcast session start on WebSocket for SOC dashboard
     WebSocketGateway.broadcast({
@@ -300,7 +301,7 @@ export class RtpServer extends EventEmitter {
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
-      console.warn(`⚠️ [RTP Server] Audio frame dispatch warning for ${callId}:`, err);
+      logger.warn(`RTP Server Audio frame dispatch warning for ${callId}:`, { error: err });
     }
   }
 
@@ -332,7 +333,7 @@ export class RtpServer extends EventEmitter {
       timestamp: new Date().toISOString(),
     });
 
-    console.info(`📞 [RTP Server] Telephony Call Session closed: ${callId} (${reason})`);
+    logger.info(`RTP Server Telephony Call Session closed: ${callId} (${reason})`);
   }
 
   private startSessionCleaner(): void {

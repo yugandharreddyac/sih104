@@ -1,6 +1,7 @@
 import { createClient, RedisClientType } from 'redis';
 import { env } from '../config/env';
 import crypto from 'crypto';
+import { logger } from '../utils/logger';
 
 export const INSTANCE_ID = crypto.randomUUID();
 export const REDIS_CHANNEL = 'voxshield_ws_events';
@@ -40,12 +41,12 @@ class RedisPubSub {
 
         pub.on('error', (err) => {
           if (!this.isClosed && process.env.NODE_ENV !== 'test') {
-            console.warn(`⚠️ Redis Pub Client Error: ${err.message}`);
+            logger.warn(`⚠️ Redis Pub Client Error: ${err.message}`);
           }
         });
         sub.on('error', (err) => {
           if (!this.isClosed && process.env.NODE_ENV !== 'test') {
-            console.warn(`⚠️ Redis Sub Client Error: ${err.message}`);
+            logger.warn(`⚠️ Redis Sub Client Error: ${err.message}`);
           }
         });
 
@@ -60,7 +61,7 @@ class RedisPubSub {
 
         this.isConnected = true;
         if (process.env.NODE_ENV !== 'test') {
-          console.info(`📡 Redis Pub/Sub initialized. Cross-instance scaling active. Instance ID: ${INSTANCE_ID}`);
+          logger.info(`📡 Redis Pub/Sub initialized. Cross-instance scaling active. Instance ID: ${INSTANCE_ID}`);
         }
 
         await sub.subscribe(REDIS_CHANNEL, (messageStr) => {
@@ -78,7 +79,7 @@ class RedisPubSub {
       } catch (err: any) {
         this.isConnected = false;
         if (!this.isClosed && process.env.NODE_ENV !== 'test') {
-          console.warn(`⚠️ Redis Pub/Sub initialization failed. Degraded mode active (Local WebSocket broadcasting only). Error: ${err.message}`);
+          logger.warn(`⚠️ Redis Pub/Sub initialization failed. Degraded mode active (Local WebSocket broadcasting only). Error: ${err.message}`);
         }
       } finally {
         this.initPromise = null;
@@ -104,7 +105,7 @@ class RedisPubSub {
       await this.pubClient.publish(REDIS_CHANNEL, message);
     } catch (err: any) {
       if (!this.isClosed && process.env.NODE_ENV !== 'test') {
-        console.warn(`⚠️ Redis publish failed: ${err.message}`);
+        logger.warn(`⚠️ Redis publish failed: ${err.message}`);
       }
     }
   }

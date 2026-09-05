@@ -48,12 +48,18 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(apiRateLimiter);
 
+import { logContextStore, logger } from './utils/logger';
+
 // Correlation ID & Request Logger Middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   const correlationId = (req.headers['x-correlation-id'] as string) || `req-${Date.now()}-${Math.random().toString(36).substring(7)}`;
   req.correlationId = correlationId;
   res.setHeader('X-Correlation-ID', correlationId);
-  next();
+  
+  // Provide async context for logger across all subsequent operations
+  logContextStore.run({ correlationId }, () => {
+    next();
+  });
 });
 
 // Prometheus HTTP Metrics Middleware
@@ -127,7 +133,7 @@ app.use((req: Request, res: Response) => {
 
 // Global Error Handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error('💥 Unhandled Exception:', err);
+  logger.error('Unhandled Exception in Request', err);
   res.status(500).json({
     success: false,
     error: 'INTERNAL_SERVER_ERROR',
@@ -151,14 +157,50 @@ server.on('close', async () => {
 
 if (process.env.NODE_ENV !== 'test') {
   server.listen(env.PORT, () => {
-    console.info(`🛡️ VOXSHIELD Core Backend listening on port ${env.PORT}`);
-    console.info(`🛡️ Phase 1 Foundation Active. Ready for SOC requests.`);
+    logger.info(`VOXSHIELD Core Backend listening on port ${env.PORT}`);
+    logger.info(`Phase 1 Foundation Active. Ready for SOC requests.`);
   });
 
   if (env.TELEPHONY_ENABLED) {
     rtpServer.start().catch((err) => {
-      console.warn('⚠️ [RTP Server] Startup notice (telephony socket unavailable):', err.message);
+      logger.warn('RTP Server Startup notice (telephony socket unavailable)', { error: err.message });
     });
   }
 }
+
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`Received ${signal}. Starting graceful shutdown...`);
+  
+  server.close(async (err) => {
+    if (err) {
+      logger.error('Error during HTTP server shutdown', { error: err.message });
+      process.exit(1);
+    }
+    logger.info('HTTP server closed.');
+
+    try {
+      await WebSocketGateway.close();
+      logger.info('WebSockets closed.');
+
+      if (env.TELEPHONY_ENABLED) {
+        await rtpServer.stop();
+        logger.info('RTP server closed.');
+      }
+
+      logger.info('Graceful shutdown completed successfully.');
+      process.exit(0);
+    } catch (shutdownErr: any) {
+      logger.error('Error during graceful shutdown', { error: shutdownErr.message });
+      process.exit(1);
+    }
+  });
+
+  setTimeout(() => {
+    logger.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000).unref();
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 

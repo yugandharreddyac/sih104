@@ -24,6 +24,7 @@ import speakerRoutes from './speaker/speaker.routes';
 import modelsRoutes from './models/models.routes';
 import conversationRoutes from './conversation/conversation.routes';
 import interventionRoutes from './interventions/intervention.routes';
+import { telephonyWebhookRoutes } from './telephony/webhook/webhook.routes';
 
 export const app = express();
 
@@ -91,6 +92,7 @@ app.use('/api/speakers', speakerRoutes);
 app.use('/api/models', modelsRoutes);
 app.use('/api/conversation', conversationRoutes);
 app.use('/api/interventions', interventionRoutes);
+app.use('/api/telephony/webhook', telephonyWebhookRoutes);
 
 // Root Welcome & Discovery
 app.get('/', (req: Request, res: Response) => {

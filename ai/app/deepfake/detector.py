@@ -18,6 +18,7 @@ from ai.app.core.types import (
     ChannelType
 )
 from ai.app.core.model_registry import ModelRegistry
+from ai.app.audio.quality import AudioQualityAnalyzer
 from ai.app.deepfake.features import AcousticFeatureExtractor
 from ai.app.deepfake.model import DeepfakeAcousticModel
 from ai.app.deepfake.calibration import (
@@ -32,6 +33,7 @@ class DeepfakeDetector:
         self.sample_rate = sample_rate
         self.model_id = "robust_mini_acoustic_cnn_v1"
         self.feature_extractor = AcousticFeatureExtractor(sample_rate=sample_rate)
+        self.quality_analyzer = AudioQualityAnalyzer(sample_rate=sample_rate)
         self.model = DeepfakeAcousticModel(model_version=self.model_id)
         # Policy C validated thresholds: 0.685 (Wideband), 0.525 (Telephony)
         self.calibrator = DeepfakeCalibrator(
@@ -67,24 +69,12 @@ class DeepfakeDetector:
         """
         start_time = time.perf_counter()
 
-        # Fallback quality if not provided
+        samples = self.decode_samples(chunk.audio_base64)
+        duration_ms = (len(samples) / self.sample_rate) * 1000.0 if len(samples) > 0 else 0.0
+
+        # Dynamic quality analysis if not provided explicitly
         if quality is None:
-            samples_peek = self.decode_samples(chunk.audio_base64)
-            duration_ms = (len(samples_peek) / self.sample_rate) * 1000.0 if len(samples_peek) > 0 else 0.0
-            quality = AudioQualityResult(
-                rating=AudioQualityRating.GOOD,
-                rms_dbfs=-26.0,
-                peak_amplitude=0.5,
-                clipping_ratio=0.0,
-                silence_ratio=0.0,
-                snr_estimate_db=20.0,
-                dynamic_range_db=25.0,
-                sample_rate=self.sample_rate,
-                channels=1,
-                duration_ms=duration_ms,
-                uncertainty_penalty=0.0,
-                notes="Default baseline quality."
-            )
+            quality = self.quality_analyzer.analyze_samples(samples, duration_ms=duration_ms)
 
         if self.status != PipelineStatus.AVAILABLE:
             applied_channel, applied_thresh, _ = self.calibrator.resolve_threshold(
@@ -108,9 +98,6 @@ class DeepfakeDetector:
                 channel_type_applied=applied_channel,
                 threshold_applied=applied_thresh
             )
-
-        samples = self.decode_samples(chunk.audio_base64)
-        duration_ms = (len(samples) / self.sample_rate) * 1000.0 if len(samples) > 0 else 0.0
 
         # 1. Extract Acoustic & LFCC Features
         features = self.feature_extractor.extract_features(samples)

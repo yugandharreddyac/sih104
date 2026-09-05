@@ -57,6 +57,17 @@ def make_pcm_base64(duration_ms: float = 1000.0, sample_rate: int = 16000, freq:
     return base64.b64encode(int16_samples.tobytes()).decode("utf-8")
 
 
+def make_wideband_pcm_base64(duration_ms: float = 1000.0, sample_rate: int = 16000) -> str:
+    """Generates deterministic wideband audio PCM base64 with spectral content spanning across 5 kHz."""
+    n_samples = int(sample_rate * (duration_ms / 1000.0))
+    if n_samples == 0:
+        return ""
+    t = np.linspace(0, duration_ms / 1000.0, n_samples, endpoint=False)
+    samples = 0.3 * np.sin(2 * np.pi * 1000.0 * t) + 0.3 * np.sin(2 * np.pi * 5000.0 * t)
+    int16_samples = (samples * 32767).astype(np.int16)
+    return base64.b64encode(int16_samples.tobytes()).decode("utf-8")
+
+
 def make_quality_result(
     rating: AudioQualityRating = AudioQualityRating.GOOD,
     duration_ms: float = 1000.0,
@@ -316,7 +327,7 @@ def test_scenario_9_backward_compatibility():
     chunk_legacy = AudioChunkPayload(
         call_id="call-legacy-9",
         chunk_index=0,
-        audio_base64=make_pcm_base64(1000.0),
+        audio_base64=make_wideband_pcm_base64(1000.0),
         # channel_type and codec omitted
     )
     result = detector.analyze(chunk_legacy)

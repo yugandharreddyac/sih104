@@ -24,6 +24,7 @@ yarn-error.log*
 
 # AI / ML Binary Model Weights (Protected from Git tracking)
 *.pt
+!ai/neural_prototype/results/robust_training/best_robust_mini_acoustic_cnn.pt
 *.pth
 *.onnx
 *.bin

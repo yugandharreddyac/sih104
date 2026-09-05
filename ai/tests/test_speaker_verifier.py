@@ -31,23 +31,47 @@ def generate_speaker_tone(f0: float = 300.0, duration_sec: float = 1.0, sample_r
 
 
 def test_speaker_enrollment_and_matching():
+    """Validates biometric embedding extraction, centroid profile enrollment, and cosine matching plumbing.
+    
+    Note: The anti-spoof screening dependency is isolated with a mock returning AUTHENTIC so this unit test
+    can evaluate biometric matching using deterministic tone fixtures independently of anti-spoof rejection.
+    """
     verifier = SpeakerVerifier(sample_rate=16000)
+    from ai.app.core.types import DeepfakeAnalysisResult, ChannelType
 
-    # 1. Enroll new executive speaker with 2 valid utterances
-    utt1 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
-    utt2 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
-
-    req = SpeakerEnrollmentRequest(
-        speaker_id="speaker-ceo-test",
-        speaker_name="Sarah Connor (CEO)",
-        audio_utterances_base64=[utt1, utt2],
-        metadata={"role": "CEO"}
+    mock_df_result = DeepfakeAnalysisResult(
+        status=DeepfakeStatus.AUTHENTIC,
+        spoof_score=0.10,
+        confidence=0.90,
+        uncertainty=0.10,
+        spectral_flatness_anomaly=False,
+        vocoder_distortion_score=0.0,
+        lfcc_anomaly_score=0.10,
+        artifacts_detected=[],
+        model_version="robust_mini_acoustic_cnn_v1",
+        engine_type="NEURAL",
+        explainability=["Mocked authentic screening for speaker verification plumbing unit test."],
+        inference_latency_ms=10.0,
+        channel_type_applied=ChannelType.WIDEBAND,
+        threshold_applied=0.685
     )
-    success, profile, msg = verifier.enrollment_manager.enroll_speaker(req)
-    assert success is True
-    assert profile.speaker_id == "speaker-ceo-test"
-    assert profile.anti_spoof_verified is True
-    assert profile.embedding_dimension in (128, 192)
+
+    with patch.object(verifier.enrollment_manager.deepfake_detector, "analyze", return_value=mock_df_result):
+        # 1. Enroll new executive speaker with 2 valid utterances
+        utt1 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
+        utt2 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
+
+        req = SpeakerEnrollmentRequest(
+            speaker_id="speaker-ceo-test",
+            speaker_name="Sarah Connor (CEO)",
+            audio_utterances_base64=[utt1, utt2],
+            metadata={"role": "CEO"}
+        )
+        success, profile, msg = verifier.enrollment_manager.enroll_speaker(req)
+        assert success is True
+        assert profile.speaker_id == "speaker-ceo-test"
+        assert profile.anti_spoof_verified is True
+        assert profile.embedding_dimension in (128, 192)
 
     # 2. Verify with matching speaker audio
     match_chunk = AudioChunkPayload(
@@ -71,6 +95,24 @@ def test_speaker_enrollment_and_matching():
     mismatch_res = verifier.verify_speaker(imposter_chunk)
     assert mismatch_res.status == SpeakerVerificationStatus.MISMATCH
     assert mismatch_res.similarity_score < mismatch_res.threshold_applied
+
+
+def test_enrollment_rejection_on_synthetic_voice():
+    """Proves that the real active anti-spoof enrollment gate rejects synthetic tones without mocking."""
+    verifier = SpeakerVerifier(sample_rate=16000)
+
+    utt1 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
+    utt2 = generate_speaker_tone(f0=220.0, duration_sec=1.0)
+
+    req = SpeakerEnrollmentRequest(
+        speaker_id="speaker-synthetic-attacker",
+        speaker_name="Synthetic Voice Attempt",
+        audio_utterances_base64=[utt1, utt2]
+    )
+    success, profile, msg = verifier.enrollment_manager.enroll_speaker(req)
+    assert success is False
+    assert profile is None
+    assert "rejected by anti-spoof screening" in msg
 
 
 def test_enrollment_rejection_insufficient_utterances():

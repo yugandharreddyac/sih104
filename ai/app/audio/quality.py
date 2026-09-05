@@ -54,10 +54,16 @@ class AudioQualityAnalyzer:
         # 4. Dynamic Range & SNR Estimation
         # Sort amplitudes to find 95th percentile signal vs 10th percentile noise floor
         sorted_amps = np.sort(abs_samples)
-        p95 = max(float(sorted_amps[int(len(sorted_amps) * 0.95)]), 1e-4)
-        p10 = max(float(sorted_amps[int(len(sorted_amps) * 0.10)]), 1e-5)
-        dynamic_range_db = float(20.0 * np.log10(p95 / p10))
-        snr_estimate_db = max(0.0, dynamic_range_db - 3.0)
+        raw_p95 = float(sorted_amps[int(len(sorted_amps) * 0.95)])
+        raw_p10 = float(sorted_amps[int(len(sorted_amps) * 0.10)])
+        if raw_p95 < 1e-4:
+            dynamic_range_db = 0.0
+            snr_estimate_db = 0.0
+        else:
+            p95 = max(raw_p95, 1e-4)
+            p10 = max(raw_p10, 1e-5)
+            dynamic_range_db = float(20.0 * np.log10(p95 / p10))
+            snr_estimate_db = max(0.0, dynamic_range_db - 3.0)
 
         # 5. Spectral Bandwidth & High-Frequency Ratio (Cutoff: 3.8 kHz)
         if len(samples) >= 160:

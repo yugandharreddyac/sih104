@@ -20,7 +20,7 @@
 | | Prosody & Cadence | **COMPLETE** | **NOT VALIDATED** | `ai/app/deepfake/features.py` |
 | | Speaker Consistency | **COMPLETE** | **CALIBRATED (ENGINEERING DEFAULT)** | `ai/app/speaker/verifier.py` |
 | | Synthetic Speech / Deepfake Detection | **PARTIAL** | **SCIENTIFICALLY VALIDATED** | `ai/app/deepfake/model.py`, `detector.py` |
-| | Physical Replay Detection | **FALLBACK** | **NOT VALIDATED (100% FPR)** | `ai/app/replay/detector.py` |
+| | Physical Replay Detection | **FALLBACK (HARDENED DSP)** | **DSP HEURISTIC (EVALUATION PATHWAY READY; DATASET UNAVAILABLE)** | `ai/app/replay/detector.py`, `features.py`, `temporal.py` |
 | | Voice Manipulation / Splicing | **FALLBACK** | **NOT VALIDATED** | `ai/app/audio/manipulation.py` |
 | **Conversation Intelligence** | Streaming ASR | **FALLBACK** | **FUNCTIONALLY TESTED** | `ai/app/asr/engine.py`, `transcriber.py` |
 | | Multilingual Support (Indic) | **FALLBACK** | **NOT VALIDATED** | `ai/app/asr/language.py` |
@@ -73,8 +73,8 @@
 - **Status:** **PARTIAL & SCIENTIFICALLY VALIDATED** (Tier 1). Clean C0 discrimination achieves 0.8733 ROC-AUC and 85.61% precision against 13 unseen ASVspoof 2021 DF vocoders. However, it exhibits severe vulnerability to telephone bandpass (C4 FPR: 77.33%) and additive noise (C5 FPR: 92.00%). Furthermore, execution in environments without `torch` engages the secondary DSP heuristic fallback.
 
 #### Physical Replay Detection
-- **Implementation:** `ReplayDetector` evaluates high-frequency spectral energy decay ($E_{>4\text{kHz}} / E_{\text{total}}$).
-- **Status:** **FALLBACK & NOT VALIDATED** (Tier 4). In scientific validation, **100% of bona-fide mobile Hindi test calls were misdiagnosed as replay attacks** because real phone microphones naturally attenuate frequencies above 4 kHz.
+- **Implementation:** `ReplayDetector` and `ReplayTemporalTracker`. Multi-cue DSP architecture analyzing high-frequency roll-off (strictly attenuated on narrowband/telephony), reverberation tail decay, cubic impulse distortion, spectral flatness, 4–20 Hz temporal modulation energy/entropy, and homomorphic pitch quefrency peak prominence (CPP). Includes multi-turn confidence hysteresis (requires 3 sustained detections to confirm; 4 clean frames to recover) and reproducible dataset evaluation framework (`ai/app/replay/evaluator.py`, `ai/scripts/evaluate_replay_dataset.py`).
+- **Status:** **FALLBACK (HARDENED DSP) & HEURISTIC (DATASET UNAVAILABLE)**. Hardened to prevent false alarms on mobile microphones and narrowband telephony. Evaluator unit tests passing (11/11). Official validation against real loudspeaker re-recordings remains pending external physical replay corpus (ASVspoof 2019 PA).
 
 #### Voice Manipulation & Splicing
 - **Implementation:** `AudioManipulationDetector` monitors packet loss sequence gaps and inter-frame energy discontinuities.

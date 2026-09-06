@@ -391,13 +391,20 @@ class UnifiedPipelineOrchestrator:
         # Temporal Aggregation
         session = self.temporal_aggregator.get_or_create_session(stream_id)
         is_speech = (vad_res.state == VADState.SPEECH) if vad_res else True
-        session.push_chunk(duration_sec=duration_ms / 1000.0, is_speech=is_speech, spoof_score=deepfake_res.spoof_score)
+        session.push_chunk(
+            duration_sec=duration_ms / 1000.0,
+            is_speech=is_speech,
+            spoof_score=deepfake_res.spoof_score,
+            replay_result=replay_res,
+            quality=quality_res
+        )
         temporal_metrics = session.get_metrics()
+        smoothed_replay = session.get_smoothed_replay() or replay_res
 
         overall_acoustic_assessment = self.temporal_aggregator.aggregate_overall_assessment(
             deepfake=deepfake_res,
             speaker_status=speaker_res.status,
-            replay_status=replay_res.status,
+            replay_status=smoothed_replay.status,
             manipulation_level=manipulation_res.level,
             is_warmed_up=temporal_metrics.is_warmed_up
         )
@@ -420,7 +427,7 @@ class UnifiedPipelineOrchestrator:
             overall_assessment=overall_acoustic_assessment,
             deepfake=deepfake_res,
             speaker=speaker_res,
-            replay=replay_res,
+            replay=smoothed_replay,
             manipulation=manipulation_res,
             vad=fallback_vad,
             quality=quality_res,
@@ -512,8 +519,8 @@ class UnifiedPipelineOrchestrator:
             deepfake_confidence=deepfake_res.confidence,
             deepfake_artifacts=deepfake_res.artifacts_detected or [],
             deepfake_engine_status=component_statuses.get("deepfake_detector", "AVAILABLE"),
-            replay_status=replay_res.status,
-            replay_score=replay_res.replay_probability,
+            replay_status=smoothed_replay.status,
+            replay_score=smoothed_replay.replay_probability,
             audio_quality_rating=quality_res.rating if quality_res else AudioQualityRating.GOOD,
             vad_state=vad_res.state if vad_res else VADState.SPEECH,
             overall_risk_score=fusion_result.overall_risk_score,

@@ -16,8 +16,11 @@ from ai.app.core.types import (
     OverallAcousticAssessment,
     SpeakerVerificationStatus,
     ReplayStatus,
+    ReplayAnalysisResult,
+    AudioQualityResult,
     ManipulationLevel
 )
+from ai.app.replay.temporal import ReplayTemporalTracker
 
 
 class StreamTemporalSession:
@@ -28,13 +31,16 @@ class StreamTemporalSession:
         self.spoof_scores: deque = deque(maxlen=max_window_chunks)
         self.accumulated_speech_seconds = 0.0
         self.total_chunks_processed = 0
+        self.replay_tracker = ReplayTemporalTracker(window_size=max_window_chunks)
 
     def push_chunk(
         self,
         duration_sec: float,
         is_speech: bool,
-        spoof_score: Optional[float]
-    ):
+        spoof_score: Optional[float],
+        replay_result: Optional[ReplayAnalysisResult] = None,
+        quality: Optional[AudioQualityResult] = None
+    ) -> Optional[ReplayAnalysisResult]:
         self.total_chunks_processed += 1
         if is_speech:
             self.accumulated_speech_seconds += duration_sec
@@ -42,13 +48,43 @@ class StreamTemporalSession:
         if spoof_score is not None and is_speech:
             self.spoof_scores.append(spoof_score)
 
+        if replay_result is not None:
+            return self.replay_tracker.process_observation(
+                replay_result,
+                is_speech=is_speech,
+                quality=quality
+            )
+        return None
+
     def get_aggregated_spoof_score(self) -> Optional[float]:
         if not self.spoof_scores:
             return None
         # Median across speech window
         return float(np.median(list(self.spoof_scores)))
 
+    def get_smoothed_replay(self) -> Optional[ReplayAnalysisResult]:
+        """Returns temporally smoothed ReplayAnalysisResult, or None if no replay observations."""
+        return self.replay_tracker.get_smoothed_result()
+
+    def update_replay(
+        self,
+        replay_result: ReplayAnalysisResult,
+        is_speech: bool = True,
+        quality: Optional[AudioQualityResult] = None
+    ) -> ReplayAnalysisResult:
+        """Processes a new replay observation through the temporal hysteresis state machine."""
+        return self.replay_tracker.process_observation(
+            replay_result,
+            is_speech=is_speech,
+            quality=quality
+        )
+
+    def reset_replay(self) -> None:
+        """Explicitly resets the temporal replay tracker state."""
+        self.replay_tracker.reset()
+
     def get_metrics(self) -> TemporalAggregationMetrics:
+
         is_warmed_up = self.accumulated_speech_seconds >= 0.60
         # Confidence increases as accumulated speech window grows up to 2.5s
         stability_conf = min(1.0, self.accumulated_speech_seconds / 2.0)
@@ -72,6 +108,7 @@ class TemporalAggregator:
 
     def remove_session(self, stream_id: str):
         if stream_id in self._sessions:
+            self._sessions[stream_id].reset_replay()
             del self._sessions[stream_id]
 
     def aggregate_overall_assessment(

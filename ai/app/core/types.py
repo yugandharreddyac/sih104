@@ -513,6 +513,8 @@ class ReplayAnalysisResult(BaseModel):
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
     high_frequency_loss: bool = False
     reverberation_decay_anomaly: bool = False
+    modulation_anomaly: bool = False
+    cepstral_anomaly: bool = False
     model_version: str
     engine_type: Optional[str] = "DSP"
     explainability: List[str] = Field(default_factory=list)

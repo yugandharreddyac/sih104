@@ -147,6 +147,14 @@ class ReplayFeatureExtractor:
             channel_distortion = 0.0
         channel_distortion = float(np.clip(channel_distortion, 0.0, 100.0))
 
+        # 8. Task 2.2: Temporal Modulation Spectrum Analysis (4-20 Hz band)
+        # Analyzes temporal envelope modulations from syllabic rates and secondary enclosure smear.
+        mod_ratio, mod_entropy, dom_mod_hz = self._extract_modulation_features(samples, rms)
+
+        # 9. Task 2.2: Cepstral / Homomorphic Spectral Analysis
+        # Evaluates quefrency-domain pitch peak prominence and macro-envelope transfer ratio.
+        cpp, cer = self._extract_cepstral_features(samples, rms)
+
         return ReplayFeatureVector(
             spectral_decay_slope=round(float(slope), 4),
             high_freq_cutoff_ratio=round(high_freq_cutoff_ratio, 4),
@@ -156,5 +164,134 @@ class ReplayFeatureExtractor:
             effective_bandwidth_hz=round(effective_bandwidth, 1),
             spectral_flatness=round(spectral_flatness, 4),
             spectral_centroid_hz=round(spectral_centroid, 2),
-            spectral_bandwidth_hz=round(spectral_bandwidth, 2)
+            spectral_bandwidth_hz=round(spectral_bandwidth, 2),
+            modulation_energy_ratio_4_20hz=round(float(mod_ratio), 4),
+            modulation_spectral_entropy=round(float(mod_entropy), 4),
+            dominant_modulation_hz=round(float(dom_mod_hz), 2),
+            cepstral_peak_prominence=round(float(cpp), 3),
+            cepstral_energy_ratio=round(float(cer), 4)
         )
+
+    def _extract_modulation_features(
+        self, samples: np.ndarray, rms: float
+    ) -> tuple[float, float, float]:
+        """
+        Extracts temporal envelope modulation characteristics targeting the 4-20 Hz region.
+        Returns: (modulation_energy_ratio_4_20hz, modulation_spectral_entropy, dominant_modulation_hz)
+        """
+        if rms < 0.005 or len(samples) < 320:
+            return 0.0, 0.0, 0.0
+
+        # Sub-audible frame-rate envelope downsampling
+        # 10ms frame, 5ms hop -> f_env = 200 Hz
+        hop_size = max(1, int(self.sample_rate * 0.005))
+        frame_len = max(2, int(self.sample_rate * 0.010))
+
+        num_frames = (len(samples) - frame_len) // hop_size + 1
+        if num_frames < 8:
+            return 0.0, 0.0, 0.0
+
+        # Frame energy envelope computation
+        try:
+            shape = (num_frames, frame_len)
+            strides = (samples.strides[0] * hop_size, samples.strides[0])
+            frames = np.lib.stride_tricks.as_strided(samples, shape=shape, strides=strides)
+            env = np.sqrt(np.mean(frames ** 2, axis=1) + 1e-12)
+        except Exception:
+            env = np.zeros(num_frames, dtype=np.float32)
+            for i in range(num_frames):
+                seg = samples[i * hop_size : i * hop_size + frame_len]
+                env[i] = np.sqrt(np.mean(seg ** 2) + 1e-12)
+
+        # Detrend envelope
+        env_detrend = env - np.mean(env)
+        env_std = float(np.std(env_detrend))
+        if env_std < 1e-6:
+            return 0.0, 0.0, 0.0
+
+        f_env = float(self.sample_rate / hop_size)
+        n_mod = max(64, int(2 ** np.ceil(np.log2(max(num_frames, 16)))))
+        hanning = np.hanning(len(env_detrend))
+        mod_fft = np.abs(np.fft.rfft(env_detrend * hanning, n=n_mod))
+        mod_freqs = np.fft.rfftfreq(n_mod, d=1.0 / f_env)
+
+        # Target 4-20 Hz modulation band vs 1-40 Hz total non-DC modulation band
+        band_4_20 = (mod_freqs >= 4.0) & (mod_freqs <= 20.0)
+        band_total = (mod_freqs >= 1.0) & (mod_freqs <= 40.0)
+
+        e_4_20 = float(np.sum(mod_fft[band_4_20])) if np.any(band_4_20) else 0.0
+        e_total = float(np.sum(mod_fft[band_total])) if np.any(band_total) else 1e-6
+
+        ratio_4_20 = float(np.clip(e_4_20 / max(e_total, 1e-6), 0.0, 1.0))
+
+        # Dominant modulation frequency in 1-30 Hz
+        band_dom = (mod_freqs >= 1.0) & (mod_freqs <= 30.0)
+        if np.any(band_dom):
+            dom_idx = int(np.argmax(mod_fft[band_dom]))
+            dom_freq = float(mod_freqs[band_dom][dom_idx])
+        else:
+            dom_freq = 0.0
+
+        # Modulation spectral entropy in 1-40 Hz
+        if e_total > 1e-6 and np.any(band_total):
+            p = mod_fft[band_total] / e_total
+            p_safe = np.maximum(p, 1e-12)
+            k_bins = max(2, len(p))
+            entropy = float(-np.sum(p_safe * np.log(p_safe)) / np.log(k_bins))
+            entropy = float(np.clip(entropy, 0.0, 1.0))
+        else:
+            entropy = 0.0
+
+        return ratio_4_20, entropy, dom_freq
+
+    def _extract_cepstral_features(
+        self, samples: np.ndarray, rms: float
+    ) -> tuple[float, float]:
+        """
+        Extracts real cepstrum / homomorphic spectral characteristics:
+        1. Cepstral peak prominence (CPP) in the vocal pitch quefrency range (2.5 - 15.0 ms).
+        2. Low-quefrency spectral envelope energy ratio.
+        Returns: (cepstral_peak_prominence, cepstral_energy_ratio)
+        """
+        if rms < 0.005 or len(samples) < 320:
+            return 0.0, 0.0
+
+        nfft = 512
+        # Use power spectrum consistently with spectral flatness
+        win_len = min(len(samples), nfft)
+        win = np.hanning(win_len)
+        sig_windowed = samples[:win_len] * win
+        mag_sq = np.abs(np.fft.rfft(sig_windowed, n=nfft)) ** 2
+        log_spec = np.log(mag_sq + 1e-12)
+
+        # Real cepstrum via inverse real FFT
+        cepstrum = np.fft.irfft(log_spec, n=nfft)
+
+        # Quefrency range for pitch periodicity: 2.5 ms to 15.0 ms (66 Hz to 400 Hz pitch)
+        q_min = max(2, int(0.0025 * self.sample_rate))
+        q_max = min(len(cepstrum) // 2, int(0.0150 * self.sample_rate))
+
+        if q_max > q_min:
+            pitch_region = cepstrum[q_min:q_max + 1]
+            q_mean = float(np.mean(pitch_region))
+            q_std = float(np.std(pitch_region))
+            q_peak = float(np.max(pitch_region))
+            cpp = float((q_peak - q_mean) / max(q_std, 1e-6))
+            cpp = float(np.clip(cpp, 0.0, 20.0))
+        else:
+            cpp = 0.0
+
+        # Low-quefrency energy ratio (quefrencies 1..12 vs 1..128)
+        # Macro-envelope transfer function vs fine harmonic rippling structure
+        n_low = min(12, len(cepstrum) // 4)
+        n_high = min(128, len(cepstrum) // 2)
+
+        if n_high > n_low:
+            e_low = float(np.sum(cepstrum[1:n_low + 1] ** 2))
+            e_total = float(np.sum(cepstrum[1:n_high + 1] ** 2))
+            cer = float(np.clip(e_low / max(e_total, 1e-6), 0.0, 1.0))
+        else:
+            cer = 0.0
+
+        return cpp, cer
+

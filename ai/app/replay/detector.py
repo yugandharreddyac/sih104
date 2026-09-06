@@ -21,8 +21,9 @@ from ai.app.replay.features import ReplayFeatureExtractor
 
 
 class ReplayDetector:
-    def __init__(self, sample_rate: int = 16000):
+    def __init__(self, sample_rate: int = 16000, enable_phase2_cues: bool = True):
         self.sample_rate = sample_rate
+        self.enable_phase2_cues = enable_phase2_cues
         self.model_id = "replay_spectral_decay_v3"
         self.feature_extractor = ReplayFeatureExtractor(sample_rate=sample_rate)
 
@@ -151,21 +152,58 @@ class ReplayDetector:
                 "indicating diffuse acoustic spread."
             )
 
+        # Cue 5 (Task 2.2): Temporal Modulation Spectrum Anomaly (4-20 Hz band)
+        # Cue 6 (Task 2.2): Cepstral / Homomorphic Spectral Smear
+        if self.enable_phase2_cues:
+            # Engineering heuristic: elevated modulation ratio in 4-20 Hz with diffuse modulation entropy
+            has_modulation_anomaly = (
+                features.modulation_energy_ratio_4_20hz > 0.65 and
+                features.modulation_spectral_entropy > 0.85
+            )
+            if has_modulation_anomaly:
+                explainability.append(
+                    f"Diffuse envelope modulation in 4-20Hz band (ratio={features.modulation_energy_ratio_4_20hz:.2f}, "
+                    f"entropy={features.modulation_spectral_entropy:.2f}), indicating secondary enclosure modulation smear."
+                )
+
+            # Engineering heuristic: degraded pitch quefrency prominence (CPP < 1.4) with high macro-envelope concentration
+            has_cepstral_anomaly = (
+                features.cepstral_peak_prominence < 1.4 and
+                features.spectral_flatness < 0.35 and
+                features.cepstral_energy_ratio > 0.80
+            )
+            if has_cepstral_anomaly:
+                explainability.append(
+                    f"Degraded pitch quefrency prominence (CPP={features.cepstral_peak_prominence:.2f} < 1.4) "
+                    "with elevated macro-envelope ratio, consistent with multipath acoustic transmission."
+                )
+        else:
+            has_modulation_anomaly = False
+            has_cepstral_anomaly = False
+
+        has_corroboration = has_flatness_anomaly or has_modulation_anomaly or has_cepstral_anomaly
+
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
         # Multi-Cue Decision & Heuristic Evidence Strength Assignment
         # Physical playback cues: has_hf_loss, has_reverb_anomaly, has_distortion
-        # Corroborating cue: has_flatness_anomaly
+        # Corroborating cues: has_flatness_anomaly, has_modulation_anomaly, has_cepstral_anomaly
         if (has_hf_loss and (has_reverb_anomaly or has_distortion)) or (has_reverb_anomaly and has_distortion):
             status = ReplayStatus.REPLAY
             replay_prob = 0.88
             confidence = 0.80 if features.is_narrowband else 0.85
-            explainability.append("Multiple independent acoustic playback cues confirmed physical or digital replay.")
-        elif has_flatness_anomaly and (has_reverb_anomaly or has_distortion or has_hf_loss):
+            if has_modulation_anomaly or has_cepstral_anomaly:
+                confidence = min(0.92, confidence + 0.03)
+                explainability.append("Multiple independent acoustic playback cues corroborated by modulation/cepstral envelope anomalies.")
+            else:
+                explainability.append("Multiple independent acoustic playback cues confirmed physical or digital replay.")
+        elif has_corroboration and (has_reverb_anomaly or has_distortion or has_hf_loss):
             status = ReplayStatus.LIKELY_REPLAY
             replay_prob = 0.65
             confidence = 0.55 if features.is_narrowband else 0.60
-            explainability.append("Acoustic playback cue corroborated by diffuse spectral flatness; moderate replay suspicion.")
+            if has_modulation_anomaly and has_cepstral_anomaly:
+                confidence = min(0.70, confidence + 0.05)
+            explainability.append("Acoustic playback cue corroborated by modulation/cepstral or diffuse spectral indicators; moderate replay suspicion.")
         elif has_hf_loss or has_distortion:
             status = ReplayStatus.LIKELY_REPLAY
             replay_prob = 0.65
@@ -173,26 +211,32 @@ class ReplayDetector:
             explainability.append("Isolated playback indicator observed; moderate replay suspicion.")
         elif has_reverb_anomaly:
             if features.is_narrowband:
-                status = ReplayStatus.NOT_REPLAY
-                replay_prob = 0.25
-                confidence = 0.65
-                explainability.append("Elevated room reverberation observed in isolation over narrowband channel; insufficient for replay classification.")
+                if has_modulation_anomaly or has_cepstral_anomaly:
+                    status = ReplayStatus.LIKELY_REPLAY
+                    replay_prob = 0.55
+                    confidence = 0.55
+                    explainability.append("Elevated room reverberation corroborated by modulation/cepstral cues over narrowband channel; moderate replay suspicion.")
+                else:
+                    status = ReplayStatus.NOT_REPLAY
+                    replay_prob = 0.25
+                    confidence = 0.65
+                    explainability.append("Elevated room reverberation observed in isolation over narrowband channel; insufficient for replay classification.")
             else:
                 status = ReplayStatus.LIKELY_REPLAY
                 replay_prob = 0.60
                 confidence = 0.55
                 explainability.append("Isolated playback indicator observed; moderate replay suspicion.")
-        elif has_flatness_anomaly:
+        elif has_corroboration:
             status = ReplayStatus.NOT_REPLAY
             replay_prob = 0.20
             confidence = 0.70
-            explainability.append("Elevated spectral flatness observed in isolation; consistent with unvoiced speech or ambient noise without acoustic playback cues.")
+            explainability.append("Isolated modulation/cepstral or flatness indicator observed without physical playback cues; consistent with voice dynamics.")
         else:
             status = ReplayStatus.NOT_REPLAY
             replay_prob = 0.12
             if features.is_narrowband:
                 confidence = 0.70  # Tempered confidence because high-frequency spectrum was unobservable
-                explainability.append("Acoustic impulse response and reverberation envelope consistent with direct voice over narrowband channel.")
+                explainability.append("Acoustic impulse response and frequency envelope consistent with direct voice over narrowband channel.")
             else:
                 confidence = 0.82
                 explainability.append("Acoustic impulse response and frequency spectrum consistent with live direct microphone voice.")
@@ -208,6 +252,8 @@ class ReplayDetector:
             confidence=round(float(confidence), 3),
             high_frequency_loss=has_hf_loss,
             reverberation_decay_anomaly=has_reverb_anomaly,
+            modulation_anomaly=has_modulation_anomaly,
+            cepstral_anomaly=has_cepstral_anomaly,
             model_version=self.model_id,
             engine_type="DSP_FALLBACK",
             explainability=explainability,

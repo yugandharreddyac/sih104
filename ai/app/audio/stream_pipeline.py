@@ -118,13 +118,20 @@ class AudioStreamPipeline:
         stream_id = chunk.stream_id or chunk.call_id
         session = self.temporal_aggregator.get_or_create_session(stream_id)
         is_speech = vad_result.state == VADState.SPEECH
-        session.push_chunk(duration_sec=duration_ms / 1000.0, is_speech=is_speech, spoof_score=deepfake_result.spoof_score)
+        session.push_chunk(
+            duration_sec=duration_ms / 1000.0,
+            is_speech=is_speech,
+            spoof_score=deepfake_result.spoof_score,
+            replay_result=replay_result,
+            quality=quality_result
+        )
         temporal_metrics = session.get_metrics()
+        smoothed_replay = session.get_smoothed_replay() or replay_result
 
         overall_assessment = self.temporal_aggregator.aggregate_overall_assessment(
             deepfake=deepfake_result,
             speaker_status=speaker_result.status,
-            replay_status=replay_result.status,
+            replay_status=smoothed_replay.status,
             manipulation_level=manipulation_result.level,
             is_warmed_up=temporal_metrics.is_warmed_up
         )
@@ -149,7 +156,7 @@ class AudioStreamPipeline:
             overall_assessment=overall_assessment,
             deepfake=deepfake_result,
             speaker=speaker_result,
-            replay=replay_result,
+            replay=smoothed_replay,
             manipulation=manipulation_result,
             vad=vad_result,
             quality=quality_result,

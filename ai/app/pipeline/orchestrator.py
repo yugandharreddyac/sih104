@@ -247,8 +247,17 @@ class UnifiedPipelineOrchestrator:
                 contains_secret_request=sensitive_res.contains_direct_request,
                 asr_confidence=asr_conf
             )
-            actions_res = self.action_extractor.extract_action(transcript)
+            from ai.app.context.contract import ContextStoreRegistry
+            ai_context = ContextStoreRegistry.get_adapter().get_context(call_id)
+
+            actions_res = self.action_extractor.extract_action(
+                transcript,
+                tactics=social_eng_res.tactics_detected,
+                context=ai_context
+            )
             claims = self.claims_extractor.extract_claims(transcript, turn_index=chunk_idx)
+
+            act_risk_score = actions_res.action_risk.risk_score if actions_res.action_risk else None
 
             conv_phase = self.conversation_context.process_turn(
                 call_id=call_id,
@@ -260,7 +269,8 @@ class UnifiedPipelineOrchestrator:
                 intent=intent_res.primary_intent,
                 tactics=social_eng_res.tactics_detected,
                 sensitive_findings=sensitive_res.findings,
-                requested_action_type=actions_res.action_type.value
+                requested_action_type=actions_res.action_type.value,
+                action_risk_score=act_risk_score
             )
 
             memory = ConversationMemoryManager.get(call_id)
@@ -468,19 +478,22 @@ class UnifiedPipelineOrchestrator:
         total_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
         # Build risk dimensions dictionary
-        dim_dict = {}
-        if fusion_result.dimensions:
-            for k in [
-                "acoustic_spectral", "biometric_speaker", "replay_channel",
-                "transport_manipulation", "linguistic_language", "intent_adversarial",
-                "sensitive_data_request", "social_engineering_tactic", "requested_action",
-                "situational_inconsistency"
-            ]:
-                dim_dict[k] = getattr(fusion_result.dimensions, k, 0.0)
+        dim_dict = fusion_result.dimensions.model_dump() if fusion_result.dimensions else {}
+        # Populate legacy dimension aliases for backward compatibility
+        dim_dict["acoustic_spectral"] = dim_dict.get("deepfake_synthetic", 0.0)
+        dim_dict["biometric_speaker"] = dim_dict.get("identity_impersonation", 0.0)
+        dim_dict["replay_channel"] = dim_dict.get("replay_injection", 0.0)
+        dim_dict["transport_manipulation"] = dim_dict.get("replay_injection", 0.0)
+        dim_dict["social_engineering_tactic"] = dim_dict.get("social_engineering", 0.0)
+        dim_dict["sensitive_data_request"] = dim_dict.get("credential_theft", 0.0)
+        dim_dict["requested_action"] = max(dim_dict.get("account_takeover", 0.0), dim_dict.get("financial_fraud", 0.0))
+        dim_dict["situational_inconsistency"] = dim_dict.get("inconsistency", 0.0)
 
         # Recommendation
         policy_rec = fusion_result.policy_recommendation
-        if hasattr(policy_rec, "action"):
+        if hasattr(policy_rec, "recommended_action"):
+            rec_str = str(policy_rec.recommended_action.value)
+        elif hasattr(policy_rec, "action"):
             rec_str = str(policy_rec.action.value)
         elif isinstance(policy_rec, str):
             rec_str = policy_rec
@@ -535,3 +548,5 @@ class UnifiedPipelineOrchestrator:
         self.language_router.context_tracker.clear_session(call_id)
         self.temporal_aggregator.remove_session(call_id)
         ConversationMemoryManager.remove(call_id)
+        from ai.app.context.contract import ContextStoreRegistry
+        ContextStoreRegistry.get_adapter().clear_context(call_id)

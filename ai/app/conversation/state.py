@@ -18,7 +18,13 @@ class ConversationPhaseStateMachine:
         Determines current conversation phase from turn context and active intents.
         """
         # Critical action phase
-        if requested_action_type in ["DISCLOSE_CREDENTIAL", "TRANSFER_FUNDS", "INSTALL_REMOTE_SOFTWARE"]:
+        high_risk_actions = {
+            "DISCLOSE_CREDENTIAL", "DISCLOSE_OTP", "DISCLOSE_PIN", "DISCLOSE_PASSWORD",
+            "DISCLOSE_CARD_INFO", "TRANSFER_FUNDS", "UPI_PAYMENT", "APPROVE_TRANSACTION",
+            "INSTALL_REMOTE_SOFTWARE", "SHARE_SCREEN", "DOWNLOAD_MALICIOUS_APP",
+            "BENEFICIARY_ADDITION", "CHANGE_BENEFICIARY", "CHANGE_SECURITY_SETTINGS"
+        }
+        if requested_action_type in high_risk_actions:
             return ConversationPhase.ACTION_REQUEST
 
         # Verification phase

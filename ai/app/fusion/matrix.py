@@ -19,6 +19,7 @@ class RiskMatrixCalculator:
             SignalCategory.ACOUSTIC: 0.15,
             SignalCategory.IDENTITY: 0.20,
             SignalCategory.REPLAY: 0.10,
+            SignalCategory.MANIPULATION: 0.15,
             SignalCategory.INTENT: 0.25,
             SignalCategory.SENSITIVE_DATA: 0.30,
             SignalCategory.SOCIAL_ENGINEERING: 0.25,
@@ -63,6 +64,8 @@ class RiskMatrixCalculator:
                 dim_scores["identity_impersonation"] = max(dim_scores["identity_impersonation"], s.raw_value * 100.0 * eff_conf)
             elif s.category == SignalCategory.REPLAY:
                 dim_scores["replay_injection"] = max(dim_scores["replay_injection"], s.raw_value * 100.0 * eff_conf)
+            elif s.category == SignalCategory.MANIPULATION:
+                dim_scores["replay_injection"] = max(dim_scores["replay_injection"], s.raw_value * 100.0 * eff_conf)
             elif s.category == SignalCategory.SOCIAL_ENGINEERING:
                 dim_scores["social_engineering"] = max(dim_scores["social_engineering"], s.raw_value * 100.0 * eff_conf)
                 if "BYPASS" in s.signal_type:
@@ -76,6 +79,15 @@ class RiskMatrixCalculator:
                     dim_scores["financial_fraud"] = max(dim_scores["financial_fraud"], s.raw_value * 100.0 * eff_conf)
                 elif "REMOTE" in s.signal_type or "PASSWORD" in s.signal_type:
                     dim_scores["account_takeover"] = max(dim_scores["account_takeover"], s.raw_value * 100.0 * eff_conf)
+            elif s.category == SignalCategory.ACTION:
+                if any(k in s.signal_type for k in ["OTP", "PIN", "PASSWORD", "CREDENTIAL", "CARD"]):
+                    dim_scores["credential_theft"] = max(dim_scores["credential_theft"], s.raw_value * 100.0 * eff_conf)
+                elif any(k in s.signal_type for k in ["TRANSFER", "UPI", "TRANSACTION", "BENEFICIARY"]):
+                    dim_scores["financial_fraud"] = max(dim_scores["financial_fraud"], s.raw_value * 100.0 * eff_conf)
+                elif any(k in s.signal_type for k in ["REMOTE", "SCREEN", "APP", "SETTINGS", "LOGIN"]):
+                    dim_scores["account_takeover"] = max(dim_scores["account_takeover"], s.raw_value * 100.0 * eff_conf)
+                elif "BYPASS" in s.signal_type:
+                    dim_scores["verification_bypass"] = max(dim_scores["verification_bypass"], s.raw_value * 100.0 * eff_conf)
 
             if s.raw_value > 0.60 and eff_conf > 0.60:
                 active_threat_signals += 1

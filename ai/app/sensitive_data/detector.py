@@ -29,7 +29,7 @@ class SensitiveDataDetector:
 
         self.request_patterns = [
             re.compile(r'\b(tell|give|share|read|send|provide|type|enter)\s+(me|us)?\s*(the|your)?\s*([0-9]+[-\s]digit\s+|one[-\s]time\s+|verification\s+)?(otp|pin|password|cvv|code|passcode)\b', re.I),
-            re.compile(r'\b(bhejiye|bataye|share\s+karo|cheppandi|sollu|kodunga|bolun|sanga)\b', re.I),
+            re.compile(r'\b(bhejiye|bataye|share\s+karo|cheppandi|sollu|kodunga|bolun|sanga|heli|kodi|parayu|haaki|taka|din)\b', re.I),
         ]
 
         self.read_aloud_patterns = [
@@ -40,6 +40,7 @@ class SensitiveDataDetector:
         self.instruction_patterns = [
             re.compile(r'\b(when\s+you\s+receive|as\s+soon\s+as\s+you\s+get)\s+.*(read|tell|give|share)\b', re.I),
             re.compile(r'\b(press|click|approve)\s+(the\s+notification|push\s+prompt|link)\b', re.I),
+            re.compile(r'\b(enter|type)\s+(?:your\s+)?(?:upi\s+)?pin\s+to\s+(?:receive|claim|get)\s+(?:money|refund|cashback)\b', re.I),
         ]
 
     def detect_situations(self, text: str) -> SensitiveDataResult:

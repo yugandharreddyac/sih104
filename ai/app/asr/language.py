@@ -110,20 +110,26 @@ class LanguageIdentifier:
     BENGALI_RANGE = re.compile(r'[\u0980-\u09FF]')
     TELUGU_RANGE = re.compile(r'[\u0C00-\u0C7F]')
     TAMIL_RANGE = re.compile(r'[\u0B80-\u0BFF]')
+    KANNADA_RANGE = re.compile(r'[\u0C80-\u0CFF]')
+    MALAYALAM_RANGE = re.compile(r'[\u0D00-\u0D7F]')
 
     # Transliterated / romanized markers and vocabulary (distinct phoneme roots)
     HINDI_MARKERS = {"aapka", "kripya", "bhejiye", "khata", "surakshit", "turant", "paisa", "bataye", "karo", "namaste", "dhanyawad", "hai", "nahi"}
     TELUGU_MARKERS = {"meeru", "cheppandi", "dabbulu", "khatha", "ventane", "pampandi", "raaledu", "namaskaram", "dhanyavadalu", "andi", "undi", "kadu"}
     TAMIL_MARKERS = {"unggal", "solla", "panam", "kanakku", "udanadiyaga", "anuppavum", "vanakkam", "nandri", "illai", "irukku", "kodu"}
+    KANNADA_MARKERS = {"neevu", "heli", "duddu", "khathe", "thakshana", "kodi", "illa", "namaskara", "dhanyavadagalu", "maadi", "haaki", "beku", "aagide"}
+    MALAYALAM_MARKERS = {"ningal", "parayu", "panam", "akavunt", "udanadi", "ayakkuka", "illa", "namaskaram", "nanni", "cheyyuka", "adikkuka", "aanu"}
     BENGALI_MARKERS = {"apnar", "bolun", "taka", "ekhoni", "pathan", "nomoshkar", "dhonnobad", "ache", "nei", "koren"}
     MARATHI_MARKERS = {"tumcha", "sanga", "paise", "khate", "twarit", "pathva", "namaskar", "dhanyavad", "ahe", "nahi", "kara"}
-    ENGLISH_TECH_MARKERS = {"otp", "bank", "account", "manager", "transfer", "urgent", "security", "password", "card", "cvv", "verify", "calling", "funds", "transaction"}
+    ENGLISH_TECH_MARKERS = {"otp", "bank", "account", "manager", "transfer", "urgent", "security", "password", "card", "cvv", "verify", "calling", "funds", "transaction", "pin", "screen"}
 
     # Supported Language Metadata Map
     LANGUAGE_METADATA: Dict[LanguageCode, Dict[str, str]] = {
         LanguageCode.HI: {"display_name": "Hindi", "asr_hint": "hi"},
         LanguageCode.TA: {"display_name": "Tamil", "asr_hint": "ta"},
         LanguageCode.TE: {"display_name": "Telugu", "asr_hint": "te"},
+        LanguageCode.KN: {"display_name": "Kannada", "asr_hint": "kn"},
+        LanguageCode.ML: {"display_name": "Malayalam", "asr_hint": "ml"},
         LanguageCode.BN: {"display_name": "Bengali", "asr_hint": "bn"},
         LanguageCode.MR: {"display_name": "Marathi", "asr_hint": "mr"},
         LanguageCode.EN_IN: {"display_name": "Indian English", "asr_hint": "en"},
@@ -154,19 +160,25 @@ class LanguageIdentifier:
         # 3. Telugu
         elif clean in ("te", "te-in", "tel", "telugu", "tel-in"):
             return LanguageCode.TE
-        # 4. Bengali
+        # 4. Kannada
+        elif clean in ("kn", "kn-in", "kan", "kannada", "kan-in"):
+            return LanguageCode.KN
+        # 5. Malayalam
+        elif clean in ("ml", "ml-in", "mal", "malayalam", "mal-in"):
+            return LanguageCode.ML
+        # 6. Bengali
         elif clean in ("bn", "bn-in", "ben", "bengali", "bangla", "ben-in"):
             return LanguageCode.BN
-        # 5. Marathi
+        # 7. Marathi
         elif clean in ("mr", "mr-in", "mar", "marathi", "mar-in"):
             return LanguageCode.MR
-        # 6. Indian English
+        # 8. Indian English
         elif clean in ("en-in", "english-india", "english india", "indian english", "indian-english"):
             return LanguageCode.EN_IN
-        # 7. Generic English
+        # 9. Generic English
         elif clean in ("en", "eng", "english", "en-us", "en-gb"):
             return LanguageCode.EN
-        # 8. Unsupported / Unknown
+        # 10. Unsupported / Unknown
         return LanguageCode.UNSUPPORTED
 
     def detect_from_text(self, text: str) -> Tuple[LanguageCode, float, bool, Optional[LanguageCode]]:
@@ -182,6 +194,10 @@ class LanguageIdentifier:
             return LanguageCode.TA, 0.95, False, None
         if self.TELUGU_RANGE.search(text):
             return LanguageCode.TE, 0.95, False, None
+        if self.KANNADA_RANGE.search(text):
+            return LanguageCode.KN, 0.95, False, None
+        if self.MALAYALAM_RANGE.search(text):
+            return LanguageCode.ML, 0.95, False, None
         if self.BENGALI_RANGE.search(text):
             return LanguageCode.BN, 0.95, False, None
         if self.HINDI_DEVANAGARI_RANGE.search(text):
@@ -197,6 +213,8 @@ class LanguageIdentifier:
         hi_count = len(words.intersection(self.HINDI_MARKERS))
         te_count = len(words.intersection(self.TELUGU_MARKERS))
         ta_count = len(words.intersection(self.TAMIL_MARKERS))
+        kn_count = len(words.intersection(self.KANNADA_MARKERS))
+        ml_count = len(words.intersection(self.MALAYALAM_MARKERS))
         bn_count = len(words.intersection(self.BENGALI_MARKERS))
         mr_count = len(words.intersection(self.MARATHI_MARKERS))
         en_count = len(words.intersection(self.ENGLISH_TECH_MARKERS))
@@ -205,6 +223,8 @@ class LanguageIdentifier:
             LanguageCode.HI: hi_count,
             LanguageCode.TE: te_count,
             LanguageCode.TA: ta_count,
+            LanguageCode.KN: kn_count,
+            LanguageCode.ML: ml_count,
             LanguageCode.BN: bn_count,
             LanguageCode.MR: mr_count,
         }
@@ -268,7 +288,14 @@ class LanguageIdentifier:
                     display_name=meta["display_name"],
                     asr_language_hint=meta["asr_hint"],
                     confidence=text_conf,
-                    detection_source="script_heuristic" if (self.HINDI_DEVANAGARI_RANGE.search(text_content) or self.TELUGU_RANGE.search(text_content) or self.TAMIL_RANGE.search(text_content) or self.BENGALI_RANGE.search(text_content)) else "lexical_heuristic",
+                    detection_source="script_heuristic" if (
+                        self.HINDI_DEVANAGARI_RANGE.search(text_content)
+                        or self.TELUGU_RANGE.search(text_content)
+                        or self.TAMIL_RANGE.search(text_content)
+                        or self.KANNADA_RANGE.search(text_content)
+                        or self.MALAYALAM_RANGE.search(text_content)
+                        or self.BENGALI_RANGE.search(text_content)
+                    ) else "lexical_heuristic",
                     primary_language=text_lang,
                     secondary_language=sec_lang,
                     mixed_language_detected=is_mixed,

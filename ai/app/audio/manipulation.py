@@ -1,11 +1,12 @@
 """
-Audio Injection & Manipulation Indicator Engine
+Audio Injection & Manipulation Indicator Engine (Master 2)
 Detects transport/injection anomalies, unnatural splicing boundaries,
-abrupt spectral discontinuities, and repeated synthetic packet blocks.
+abrupt spectral flux discontinuities, unnatural digital zero insertion, and repeated synthetic packet blocks.
+Deterministic, feature-based acoustic analysis with approximate temporal localization.
 """
 
 import numpy as np
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from ai.app.core.types import ManipulationLevel, ManipulationAnalysisResult
 
 
@@ -85,7 +86,9 @@ class AudioManipulationDetector:
                 cues += 1
                 discontinuity_score = round(step, 3)
                 indicators.append(f"Abrupt cross-chunk waveform discontinuity step ({round(step, 2)})")
-                explainability.append("Abrupt waveform step at frame boundary indicates possible audio splicing or stream injection.")
+                explainability.append(
+                    f"Abrupt waveform step ({round(step, 2)}) at chunk boundary [0.0ms] indicates possible audio splicing or stream injection."
+                )
 
         # Update boundary history for subsequent consecutive chunks
         curr_trailing_sample = float(samples[-1]) if len(samples) > 0 else None
@@ -98,17 +101,20 @@ class AudioManipulationDetector:
             self._prev_boundary_sample = curr_trailing_sample
             self._prev_sequence_number = sequence_number
 
-        # 2. Splicing Boundary Detection (Sudden mid-chunk zero-crossing drop or phase inversion)
+        # 2. Splicing Boundary Detection (Sudden mid-chunk impulse step)
         first_diff = np.abs(np.diff(samples))
         max_step = float(np.max(first_diff)) if len(first_diff) > 0 else 0.0
         splicing_detected = max_step > 0.70
         if splicing_detected:
             cues += 1
+            max_idx = int(np.argmax(first_diff))
+            offset_ms = round((max_idx / self.sample_rate) * 1000.0, 1)
             indicators.append(f"Severe mid-frame amplitude impulse step ({round(max_step, 2)})")
-            explainability.append("High amplitude impulse step without natural vocal onset suggests spliced audio segments.")
+            explainability.append(
+                f"High amplitude impulse step ({round(max_step, 2)}) without natural vocal onset localized at {offset_ms}ms suggests spliced audio."
+            )
 
         # 3. Synthetic Repeated Block / Identical Packet Detection
-        # Check if first half of chunk is identical to second half (replay/loop attack)
         packet_repetition = False
         half = len(samples) // 2
         if half > 200:
@@ -117,7 +123,23 @@ class AudioManipulationDetector:
                 packet_repetition = True
                 cues += 2
                 indicators.append("Identical audio block repetition detected (packet loop/injection)")
-                explainability.append("Identical repeated audio frame detected, characteristic of stream injection or loop replay.")
+                explainability.append(
+                    "Identical repeated audio frame detected across sub-blocks, characteristic of stream injection or loop replay."
+                )
+
+        # 4. Abrupt Spectral Discontinuity / Spectral Flux Jump Analysis
+        flux_cue, flux_info = self._detect_spectral_flux_discontinuity(samples)
+        if flux_cue:
+            cues += 1
+            indicators.append(flux_info["indicator"])
+            explainability.append(flux_info["explanation"])
+
+        # 5. Unnatural Digital Silence Insertion Detection
+        silence_cue, silence_info = self._detect_unnatural_digital_silence(samples)
+        if silence_cue:
+            cues += 1
+            indicators.append(silence_info["indicator"])
+            explainability.append(silence_info["explanation"])
 
         # Assign Manipulation Level
         if cues >= 2 or packet_repetition:
@@ -138,3 +160,93 @@ class AudioManipulationDetector:
             indicators=indicators,
             explainability=explainability
         )
+
+    def _detect_spectral_flux_discontinuity(self, samples: np.ndarray) -> Tuple[bool, Dict[str, str]]:
+        """
+        Calculates spectral flux between short adjacent windows to detect unnatural acoustic cuts.
+        """
+        win_len = int(self.sample_rate * 0.025)  # 25ms window (400 samples at 16kHz)
+        hop_len = win_len // 2
+
+        if len(samples) < win_len * 3:
+            return False, {}
+
+        # Compute STFT magnitude for each frame
+        num_frames = (len(samples) - win_len) // hop_len
+        if num_frames < 3:
+            return False, {}
+
+        magnitudes = []
+        for i in range(num_frames):
+            frame = samples[i * hop_len: i * hop_len + win_len] * np.hanning(win_len)
+            spec = np.abs(np.fft.rfft(frame))
+            spec_norm = spec / (np.linalg.norm(spec) + 1e-6)
+            magnitudes.append(spec_norm)
+
+        # Calculate spectral flux between consecutive frames
+        fluxes = []
+        for i in range(1, len(magnitudes)):
+            diff = magnitudes[i] - magnitudes[i - 1]
+            flux = float(np.sum(diff ** 2))
+            fluxes.append(flux)
+
+        if not fluxes:
+            return False, {}
+
+        max_flux = float(np.max(fluxes))
+        median_flux = float(np.median(fluxes))
+
+        # Check for abnormal flux jump (> 4.5x median flux and > 0.85 absolute with active signal)
+        if max_flux > 0.85 and median_flux > 0.01 and (max_flux / median_flux) > 4.5:
+            max_frame_idx = int(np.argmax(fluxes)) + 1
+            offset_ms = round((max_frame_idx * hop_len / self.sample_rate) * 1000.0, 1)
+            return True, {
+                "indicator": f"Abrupt spectral flux discontinuity at ~{offset_ms}ms (flux={round(max_flux, 2)})",
+                "explanation": f"Abrupt spectral envelope jump ({round(max_flux, 2)}) at ~{offset_ms}ms indicates potential acoustic splice."
+            }
+
+        return False, {}
+
+    def _detect_unnatural_digital_silence(self, samples: np.ndarray) -> Tuple[bool, Dict[str, str]]:
+        """
+        Detects unnatural digital zero-insertion cuts (absolute silence < 1e-6)
+        embedded inside active ambient audio.
+        """
+        silence_thresh = 1e-5
+        is_silent = np.abs(samples) < silence_thresh
+        zero_run_len = int(self.sample_rate * 0.030)  # 30ms
+
+        if len(samples) < zero_run_len * 2:
+            return False, {}
+
+        # Check if overall audio has audible ambient sound
+        rms = float(np.sqrt(np.mean(samples ** 2)))
+        if rms < 0.04:  # Whole chunk is quiet, normal background silence
+            return False, {}
+
+        # Look for contiguous run of pure zero inside the audio
+        run = 0
+        max_run = 0
+        start_idx = 0
+        best_start = 0
+
+        for idx, s in enumerate(is_silent):
+            if s:
+                if run == 0:
+                    start_idx = idx
+                run += 1
+                if run > max_run:
+                    max_run = run
+                    best_start = start_idx
+            else:
+                run = 0
+
+        if max_run >= zero_run_len and best_start > 100 and (best_start + max_run) < (len(samples) - 100):
+            offset_ms = round((best_start / self.sample_rate) * 1000.0, 1)
+            duration_ms = round((max_run / self.sample_rate) * 1000.0, 1)
+            return True, {
+                "indicator": f"Un-dithered digital zero cut ({duration_ms}ms) at ~{offset_ms}ms",
+                "explanation": f"Absolute mathematical silence ({duration_ms}ms) within active speech at ~{offset_ms}ms indicates artificial splicing."
+            }
+
+        return False, {}

@@ -101,6 +101,8 @@ class LanguageCode(str, Enum):
     HI = "hi"
     TA = "ta"
     TE = "te"
+    KN = "kn"
+    ML = "ml"
     BN = "bn"
     MR = "mr"
     UNKNOWN = "unknown"
@@ -319,6 +321,10 @@ class SocialEngineeringTactic(str, Enum):
     EMOTIONAL_MANIPULATION = "EMOTIONAL_MANIPULATION"
     VERIFICATION_BYPASS = "VERIFICATION_BYPASS"
     FINANCIAL_PRESSURE = "FINANCIAL_PRESSURE"
+    REWARD_SCAM = "REWARD_SCAM"
+    REFUSAL_ESCALATION = "REFUSAL_ESCALATION"
+    ACCOUNT_SUSPENSION_THREAT = "ACCOUNT_SUSPENSION_THREAT"
+    DIGITAL_ARREST_THREAT = "DIGITAL_ARREST_THREAT"
 
 
 class AttackProgressionState(str, Enum):
@@ -347,13 +353,38 @@ class SocialEngineeringResult(BaseModel):
 
 class ActionType(str, Enum):
     DISCLOSE_CREDENTIAL = "DISCLOSE_CREDENTIAL"
+    DISCLOSE_OTP = "DISCLOSE_OTP"
+    DISCLOSE_PIN = "DISCLOSE_PIN"
+    DISCLOSE_PASSWORD = "DISCLOSE_PASSWORD"
+    DISCLOSE_CARD_INFO = "DISCLOSE_CARD_INFO"
     TRANSFER_FUNDS = "TRANSFER_FUNDS"
+    UPI_PAYMENT = "UPI_PAYMENT"
     APPROVE_TRANSACTION = "APPROVE_TRANSACTION"
+    BENEFICIARY_ADDITION = "BENEFICIARY_ADDITION"
+    CHANGE_BENEFICIARY = "CHANGE_BENEFICIARY"
     INSTALL_REMOTE_SOFTWARE = "INSTALL_REMOTE_SOFTWARE"
     SHARE_SCREEN = "SHARE_SCREEN"
-    CHANGE_BENEFICIARY = "CHANGE_BENEFICIARY"
+    ACCOUNT_RECOVERY = "ACCOUNT_RECOVERY"
+    SUSPICIOUS_LOGIN = "SUSPICIOUS_LOGIN"
+    CHANGE_SECURITY_SETTINGS = "CHANGE_SECURITY_SETTINGS"
+    DOWNLOAD_MALICIOUS_APP = "DOWNLOAD_MALICIOUS_APP"
     BYPASS_POLICY = "BYPASS_POLICY"
     BENIGN_ACTION = "BENIGN_ACTION"
+
+
+class ActionRiskEvaluation(BaseModel):
+    action_type: ActionType
+    risk_score: float = Field(..., ge=0.0, le=100.0)
+    normalized_score: float = Field(..., ge=0.0, le=1.0)
+    severity: RiskSeverity = RiskSeverity.LOW
+    is_high_risk: bool = False
+    financial_impact_weight: float = 0.0
+    credential_sensitivity_weight: float = 0.0
+    urgency_multiplier: float = 1.0
+    authority_multiplier: float = 1.0
+    hesitation_multiplier: float = 1.0
+    contributing_factors: List[str] = Field(default_factory=list)
+    rationale: str = ""
 
 
 class RequestedActionResult(BaseModel):
@@ -362,6 +393,7 @@ class RequestedActionResult(BaseModel):
     is_high_risk: bool = False
     confidence: float = Field(..., ge=0.0, le=1.0)
     raw_action_text_redacted: str
+    action_risk: Optional[ActionRiskEvaluation] = None
 
 
 class CallerClaimType(str, Enum):

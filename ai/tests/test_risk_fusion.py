@@ -129,3 +129,161 @@ def test_quality_degradation_dampens_confidence():
     # Poor quality must reduce fusion confidence
     assert result.confidence < 0.50
     assert result.uncertainty > 0.50
+
+
+# =====================================================================
+# Master 1 Integration: Replay -> Fusion Tests
+# =====================================================================
+
+def test_replay_signals_propagation_into_fusion():
+    """Validates that Replay REPLAY, NOT_REPLAY, and UNCERTAIN propagate correctly into the canonical signal bus and risk dimensions."""
+    engine = MultiModalRiskFusionEngine()
+    bus = CanonicalSignalBus()
+    now_iso = "2026-09-01T00:00:00Z"
+
+    # 1. Replay REPLAY with high probability (0.90) and confidence (0.85)
+    ac_replay = AcousticIntelligenceResult(
+        call_id="call-rp-01",
+        chunk_index=0,
+        timestamp=now_iso,
+        overall_assessment="SUSPICIOUS",
+        deepfake={"status": DeepfakeStatus.AUTHENTIC.value, "spoof_score": 0.10, "confidence": 0.90, "uncertainty": 0.10, "model_version": "v3"},
+        speaker={"status": SpeakerVerificationStatus.MATCH.value, "similarity_score": 0.85, "confidence": 0.90, "model_version": "v3"},
+        replay={
+            "status": ReplayStatus.REPLAY.value,
+            "replay_probability": 0.90,
+            "confidence": 0.85,
+            "model_version": "replay_spectral_decay_v3",
+            "explainability": ["[DSP_FALLBACK] High frequency roll-off and double reverberation"]
+        },
+        manipulation={"level": "NO_INDICATOR"},
+        vad={"state": "SPEECH", "speech_probability": 0.95, "energy_rms": 0.05, "zero_crossing_rate": 0.05, "spectral_centroid": 1500.0, "confidence": 0.95, "processing_latency_ms": 1.0},
+        quality={"rating": "GOOD", "rms_dbfs": -20.0, "peak_amplitude": 0.6, "clipping_ratio": 0.0, "silence_ratio": 0.0, "snr_estimate_db": 25.0, "dynamic_range_db": 40.0, "sample_rate": 16000, "channels": 1, "duration_ms": 500.0, "uncertainty_penalty": 0.0, "notes": ""},
+        temporal_metrics={"window_duration_seconds": 1.0, "accumulated_speech_seconds": 1.0, "total_chunks_processed": 1, "is_warmed_up": True, "stability_confidence": 0.9},
+        total_ai_latency_ms=5.0
+    )
+
+    signals_rp = bus.normalize_signals("call-rp-01", ac_replay, None)
+    rp_sig = next(s for s in signals_rp if s.category.value == "REPLAY")
+    assert rp_sig.raw_value == 0.90
+    assert rp_sig.calibrated_confidence == 0.85
+    assert rp_sig.severity.value == "HIGH"
+
+    res_rp = engine.evaluate_risk(call_id="call-rp-01", acoustic=ac_replay, conversational=None)
+    assert res_rp.dimensions.replay_injection > 60.0
+    assert res_rp.overall_risk_score > 0.0
+
+    # 2. Replay NOT_REPLAY (probability 0.05, confidence 0.85)
+    ac_not_rp = AcousticIntelligenceResult(
+        call_id="call-rp-02",
+        chunk_index=0,
+        timestamp=now_iso,
+        overall_assessment="AUTHENTICITY_SUPPORTED",
+        deepfake={"status": DeepfakeStatus.AUTHENTIC.value, "spoof_score": 0.10, "confidence": 0.90, "uncertainty": 0.10, "model_version": "v3"},
+        speaker={"status": SpeakerVerificationStatus.MATCH.value, "similarity_score": 0.85, "confidence": 0.90, "model_version": "v3"},
+        replay={
+            "status": ReplayStatus.NOT_REPLAY.value,
+            "replay_probability": 0.05,
+            "confidence": 0.85,
+            "model_version": "replay_spectral_decay_v3",
+            "explainability": ["[DSP_FALLBACK] No physical playback cues"]
+        },
+        manipulation={"level": "NO_INDICATOR"},
+        vad={"state": "SPEECH", "speech_probability": 0.95, "energy_rms": 0.05, "zero_crossing_rate": 0.05, "spectral_centroid": 1500.0, "confidence": 0.95, "processing_latency_ms": 1.0},
+        quality={"rating": "GOOD", "rms_dbfs": -20.0, "peak_amplitude": 0.6, "clipping_ratio": 0.0, "silence_ratio": 0.0, "snr_estimate_db": 25.0, "dynamic_range_db": 40.0, "sample_rate": 16000, "channels": 1, "duration_ms": 500.0, "uncertainty_penalty": 0.0, "notes": ""},
+        temporal_metrics={"window_duration_seconds": 1.0, "accumulated_speech_seconds": 1.0, "total_chunks_processed": 1, "is_warmed_up": True, "stability_confidence": 0.9},
+        total_ai_latency_ms=5.0
+    )
+
+    signals_not_rp = bus.normalize_signals("call-rp-02", ac_not_rp, None)
+    not_rp_sig = next(s for s in signals_not_rp if s.category.value == "REPLAY")
+    assert not_rp_sig.raw_value == 0.05
+    assert not_rp_sig.severity.value == "LOW"
+
+    res_not_rp = engine.evaluate_risk(call_id="call-rp-02", acoustic=ac_not_rp, conversational=None)
+    assert res_not_rp.dimensions.replay_injection < 15.0
+    assert res_not_rp.overall_risk_score < 30.0
+    assert res_not_rp.risk_level in (RiskLevel.SAFE, RiskLevel.LOW)
+
+    # 3. Replay UNCERTAIN (probability None, confidence 0.0)
+    ac_unc_rp = AcousticIntelligenceResult(
+        call_id="call-rp-03",
+        chunk_index=0,
+        timestamp=now_iso,
+        overall_assessment="INCONCLUSIVE",
+        deepfake={"status": DeepfakeStatus.AUTHENTIC.value, "spoof_score": 0.10, "confidence": 0.90, "uncertainty": 0.10, "model_version": "v3"},
+        speaker={"status": SpeakerVerificationStatus.MATCH.value, "similarity_score": 0.85, "confidence": 0.90, "model_version": "v3"},
+        replay={
+            "status": ReplayStatus.UNCERTAIN.value,
+            "replay_probability": None,
+            "confidence": 0.0,
+            "model_version": "replay_spectral_decay_v3",
+            "explainability": ["[DSP_FALLBACK] Insufficient audio duration"]
+        },
+        manipulation={"level": "NO_INDICATOR"},
+        vad={"state": "SPEECH", "speech_probability": 0.95, "energy_rms": 0.05, "zero_crossing_rate": 0.05, "spectral_centroid": 1500.0, "confidence": 0.95, "processing_latency_ms": 1.0},
+        quality={"rating": "GOOD", "rms_dbfs": -20.0, "peak_amplitude": 0.6, "clipping_ratio": 0.0, "silence_ratio": 0.0, "snr_estimate_db": 25.0, "dynamic_range_db": 40.0, "sample_rate": 16000, "channels": 1, "duration_ms": 150.0, "uncertainty_penalty": 0.0, "notes": ""},
+        temporal_metrics={"window_duration_seconds": 1.0, "accumulated_speech_seconds": 0.15, "total_chunks_processed": 1, "is_warmed_up": False, "stability_confidence": 0.5},
+        total_ai_latency_ms=5.0
+    )
+
+    signals_unc = bus.normalize_signals("call-rp-03", ac_unc_rp, None)
+    unc_sig = next(s for s in signals_unc if s.category.value == "REPLAY")
+    assert unc_sig.raw_value == 0.0  # None falls back to 0.0 raw risk
+    assert unc_sig.calibrated_confidence == 0.0
+    assert unc_sig.severity.value == "LOW"
+
+
+# =====================================================================
+# Master 1 Integration: Speaker -> Fusion & Combined Risk Tests
+# =====================================================================
+
+def test_speaker_verification_and_combined_risk_fusion():
+    """Validates genuine match vs mismatch escalation and combination with replay attack cues."""
+    engine = MultiModalRiskFusionEngine()
+    now_iso = "2026-09-01T00:00:00Z"
+
+    # Case A: Genuine speaker + NOT_REPLAY -> Clean LOW/SAFE risk
+    ac_genuine_clean = AcousticIntelligenceResult(
+        call_id="call-comb-01",
+        chunk_index=0,
+        timestamp=now_iso,
+        overall_assessment="AUTHENTICITY_SUPPORTED",
+        deepfake={"status": DeepfakeStatus.AUTHENTIC.value, "spoof_score": 0.05, "confidence": 0.95, "uncertainty": 0.05, "model_version": "v3"},
+        speaker={"status": SpeakerVerificationStatus.MATCH.value, "similarity_score": 0.88, "confidence": 0.90, "threshold_applied": 0.70, "speaker_backend": "FALLBACK", "model_version": "v3"},
+        replay={"status": ReplayStatus.NOT_REPLAY.value, "replay_probability": 0.05, "confidence": 0.85, "model_version": "v3"},
+        manipulation={"level": "NO_INDICATOR"},
+        vad={"state": "SPEECH", "speech_probability": 0.95, "energy_rms": 0.05, "zero_crossing_rate": 0.05, "spectral_centroid": 1500.0, "confidence": 0.95, "processing_latency_ms": 1.0},
+        quality={"rating": "GOOD", "rms_dbfs": -20.0, "peak_amplitude": 0.6, "clipping_ratio": 0.0, "silence_ratio": 0.0, "snr_estimate_db": 25.0, "dynamic_range_db": 40.0, "sample_rate": 16000, "channels": 1, "duration_ms": 500.0, "uncertainty_penalty": 0.0, "notes": ""},
+        temporal_metrics={"window_duration_seconds": 1.0, "accumulated_speech_seconds": 1.0, "total_chunks_processed": 1, "is_warmed_up": True, "stability_confidence": 0.9},
+        total_ai_latency_ms=5.0
+    )
+
+    res_clean = engine.evaluate_risk(call_id="call-comb-01", acoustic=ac_genuine_clean, conversational=None)
+    assert res_clean.overall_risk_score < 25.0
+    assert res_clean.risk_level in (RiskLevel.SAFE, RiskLevel.LOW)
+    assert res_clean.dimensions.identity_impersonation < 10.0
+    assert res_clean.dimensions.replay_injection < 10.0
+
+    # Case B: Speaker MISMATCH + REPLAY -> Corroborated HIGH risk
+    ac_impostor_replay = AcousticIntelligenceResult(
+        call_id="call-comb-02",
+        chunk_index=0,
+        timestamp=now_iso,
+        overall_assessment="SUSPICIOUS",
+        deepfake={"status": DeepfakeStatus.AUTHENTIC.value, "spoof_score": 0.15, "confidence": 0.85, "uncertainty": 0.15, "model_version": "v3"},
+        speaker={"status": SpeakerVerificationStatus.MISMATCH.value, "similarity_score": 0.35, "confidence": 0.90, "threshold_applied": 0.70, "speaker_backend": "FALLBACK", "model_version": "v3"},
+        replay={"status": ReplayStatus.REPLAY.value, "replay_probability": 0.85, "confidence": 0.85, "model_version": "v3"},
+        manipulation={"level": "NO_INDICATOR"},
+        vad={"state": "SPEECH", "speech_probability": 0.95, "energy_rms": 0.05, "zero_crossing_rate": 0.05, "spectral_centroid": 1500.0, "confidence": 0.95, "processing_latency_ms": 1.0},
+        quality={"rating": "GOOD", "rms_dbfs": -20.0, "peak_amplitude": 0.6, "clipping_ratio": 0.0, "silence_ratio": 0.0, "snr_estimate_db": 25.0, "dynamic_range_db": 40.0, "sample_rate": 16000, "channels": 1, "duration_ms": 500.0, "uncertainty_penalty": 0.0, "notes": ""},
+        temporal_metrics={"window_duration_seconds": 1.0, "accumulated_speech_seconds": 1.0, "total_chunks_processed": 1, "is_warmed_up": True, "stability_confidence": 0.9},
+        total_ai_latency_ms=5.0
+    )
+
+    res_threat = engine.evaluate_risk(call_id="call-comb-02", acoustic=ac_impostor_replay, conversational=None)
+    assert res_threat.overall_risk_score > 65.0
+    assert res_threat.risk_level in (RiskLevel.ELEVATED, RiskLevel.HIGH, RiskLevel.CRITICAL)
+    assert res_threat.dimensions.identity_impersonation > 60.0
+    assert res_threat.dimensions.replay_injection > 60.0
+

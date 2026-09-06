@@ -14,3 +14,6 @@ class ReplayFeatureVector(BaseModel):
     channel_impulse_distortion: float
     is_narrowband: bool = False
     effective_bandwidth_hz: float = 8000.0
+    spectral_flatness: float = 0.0
+    spectral_centroid_hz: float = 0.0
+    spectral_bandwidth_hz: float = 0.0

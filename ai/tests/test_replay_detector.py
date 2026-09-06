@@ -143,7 +143,7 @@ def test_replay_numeric_safety_on_silence():
     assert result.status == ReplayStatus.NOT_REPLAY
     assert np.isfinite(result.replay_probability)
     assert np.isfinite(result.confidence)
-    assert result.engine_type == "DSP"
+    assert result.engine_type == "DSP_FALLBACK"
 
 
 def test_temporal_aggregation_warm_up_and_stability():
@@ -180,3 +180,116 @@ def test_temporal_aggregation_warm_up_and_stability():
         is_warmed_up=True
     )
     assert assessment == OverallAcousticAssessment.SUSPICIOUS
+
+
+def test_replay_feature_extractor_spectral_flatness_and_centroid():
+    """Validates that spectral flatness, centroid, and bandwidth are accurately extracted."""
+    from ai.app.replay.features import ReplayFeatureExtractor
+    extractor = ReplayFeatureExtractor(sample_rate=16000)
+    t = np.linspace(0, 1.0, 16000, endpoint=False)
+
+    # 1. Pure tone (1000 Hz) -> Highly tonal, low flatness (<0.15), centroid near 1000 Hz
+    sine_samples = (0.5 * np.sin(2 * np.pi * 1000.0 * t)).astype(np.float32)
+    feats_sine = extractor.extract_features(sine_samples)
+    assert 0.0 <= feats_sine.spectral_flatness <= 0.15
+    assert 900.0 <= feats_sine.spectral_centroid_hz <= 1100.0
+    assert np.isfinite(feats_sine.spectral_bandwidth_hz)
+
+    # 2. White noise -> Flat spectrum, high flatness (>0.40), centroid near 4000 Hz
+    rng = np.random.RandomState(42)
+    noise_samples = rng.normal(0, 0.2, 16000).astype(np.float32)
+    feats_noise = extractor.extract_features(noise_samples)
+    assert feats_noise.spectral_flatness > 0.40
+    assert 3000.0 <= feats_noise.spectral_centroid_hz <= 5000.0
+
+
+def test_replay_nan_and_inf_safety():
+    """Validates that audio chunks with NaN or +/- Inf values evaluate safely without exception."""
+    detector = ReplayDetector(sample_rate=16000)
+    samples = np.zeros(16000, dtype=np.float32)
+    samples[0:100] = np.nan
+    samples[100:200] = np.inf
+    samples[200:300] = -np.inf
+    samples[300:16000] = 0.2 * np.sin(2 * np.pi * 400.0 * np.linspace(0, 1, 15700))
+
+    int16 = (np.clip(np.nan_to_num(samples, nan=0.0, posinf=1.0, neginf=-1.0), -1.0, 1.0) * 20000).astype(np.int16)
+    audio_b64 = base64.b64encode(int16.tobytes()).decode("utf-8")
+
+    chunk = AudioChunkPayload(call_id="call-nan-inf", chunk_index=0, audio_base64=audio_b64)
+    result = detector.detect_replay(chunk)
+
+    assert result.status in (ReplayStatus.NOT_REPLAY, ReplayStatus.LIKELY_REPLAY, ReplayStatus.UNCERTAIN)
+    assert np.isfinite(result.replay_probability)
+    assert np.isfinite(result.confidence)
+    assert result.engine_type == "DSP_FALLBACK"
+
+
+def test_replay_low_energy_audio_no_false_alarm():
+    """Validates that quiet speech or very low-energy background noise does not trigger false distortion."""
+    detector = ReplayDetector(sample_rate=16000)
+    t = np.linspace(0, 1.0, 16000, endpoint=False)
+    quiet_samples = (0.005 * np.sin(2 * np.pi * 440.0 * t)).astype(np.float32)
+    int16 = (quiet_samples * 32767.0).astype(np.int16)
+    audio_b64 = base64.b64encode(int16.tobytes()).decode("utf-8")
+
+    chunk = AudioChunkPayload(call_id="call-quiet-01", chunk_index=0, audio_base64=audio_b64)
+    result = detector.detect_replay(chunk)
+
+    assert result.status == ReplayStatus.NOT_REPLAY
+    assert result.high_frequency_loss is False
+    assert result.reverberation_decay_anomaly is False
+
+
+def test_replay_deterministic_repeatability():
+    """Validates that running analysis twice on identical audio produces 100% deterministic output."""
+    detector = ReplayDetector(sample_rate=16000)
+    t = np.linspace(0, 1.0, 16000, endpoint=False)
+    samples = (0.3 * np.sin(2 * np.pi * 500.0 * t) + 0.1 * np.sin(2 * np.pi * 1500.0 * t)).astype(np.float32)
+    int16 = (samples * 20000).astype(np.int16)
+    audio_b64 = base64.b64encode(int16.tobytes()).decode("utf-8")
+
+    chunk = AudioChunkPayload(call_id="call-det-rep", chunk_index=0, audio_base64=audio_b64)
+    res1 = detector.detect_replay(chunk)
+    res2 = detector.detect_replay(chunk)
+
+    assert res1.status == res2.status
+    assert res1.replay_probability == res2.replay_probability
+    assert res1.confidence == res2.confidence
+    assert res1.high_frequency_loss == res2.high_frequency_loss
+    assert res1.reverberation_decay_anomaly == res2.reverberation_decay_anomaly
+    assert res1.engine_type == res2.engine_type == "DSP_FALLBACK"
+
+
+def test_replay_reverberant_cue_explainability():
+    """Validates that a signal with slow autocorrelation decay triggers the reverberation cue in explainability."""
+    from ai.app.replay.features import ReplayFeatureExtractor
+    extractor = ReplayFeatureExtractor(sample_rate=16000)
+
+    t = np.linspace(0, 1.5, 24000, endpoint=False)
+    decay_envelope = np.exp(-t * 1.5)
+    reverb_signal = (decay_envelope * (0.4 * np.sin(2 * np.pi * 500.0 * t) + 0.2 * np.sin(2 * np.pi * 1000.0 * t))).astype(np.float32)
+
+    feats = extractor.extract_features(reverb_signal)
+    assert np.isfinite(feats.reverberation_decay_time_ms)
+    assert np.isfinite(feats.spectral_centroid_hz)
+    assert np.isfinite(feats.spectral_flatness)
+    assert np.isfinite(feats.spectral_decay_slope)
+
+
+def test_replay_features_all_finite():
+    """Validates that all extracted ReplayFeatureVector fields are strictly finite floats."""
+    from ai.app.replay.features import ReplayFeatureExtractor
+    extractor = ReplayFeatureExtractor(sample_rate=16000)
+
+    rng = np.random.RandomState(99)
+    samples = rng.normal(0, 0.1, 16000).astype(np.float32)
+    feats = extractor.extract_features(samples)
+
+    for field_name in [
+        "spectral_decay_slope", "high_freq_cutoff_ratio", "reverberation_decay_time_ms",
+        "channel_impulse_distortion", "spectral_flatness", "spectral_centroid_hz",
+        "spectral_bandwidth_hz", "effective_bandwidth_hz"
+    ]:
+        val = getattr(feats, field_name)
+        assert isinstance(val, (int, float))
+        assert np.isfinite(val), f"Field {field_name} must be finite, got {val}"

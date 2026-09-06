@@ -128,18 +128,18 @@ class ModelRegistry:
             ),
             ModelMetadata(
                 model_id="replay_spectral_decay_v3",
-                name="Physical & Digital Acoustic Replay Detector",
+                name="Physical & Digital Acoustic Replay Detector (Deterministic DSP / Heuristic Fallback)",
                 version="3.0.1",
                 category="REPLAY",
                 framework="NUMPY_DSP",
                 device=device,
                 status=PipelineStatus.AVAILABLE,
-                checksum_sha256="c591240182390123901238401923840192384019238401923840192384019238",
+                checksum_sha256="NOT_APPLICABLE",
                 license="MIT",
-                training_dataset="ASVspoof 2019 Physical Access (PA) + Replayed Acoustic Corpus",
+                training_dataset="NONE (Deterministic DSP / Heuristic Rule-Based Algorithm - No Training Dataset)",
                 input_sample_rate=16000,
                 inference_latency_ms_p50=1.1,
-                known_limitations="High-end acoustic studio monitors may produce subtle replay cues.",
+                known_limitations="Trained/neural physical replay model: NOT AVAILABLE (no trained weights, ONNX checkpoint, or learned classifier exists). Active implementation: DSP/HEURISTIC FALLBACK based on deterministic NumPy signal processing (spectral roll-off, envelope autocorrelation decay, and cubic harmonic distortion). Thresholds are uncalibrated against real physical replay recordings.",
                 registered_at=now
             ),
             ModelMetadata(
@@ -243,7 +243,7 @@ class ModelRegistry:
     def verify_integrity(cls, model_id: str, content_bytes: bytes) -> bool:
         """Verifies cryptographic hash of model binary against registry."""
         model = cls.get_model(model_id)
-        if not model:
+        if not model or not model.checksum_sha256 or model.checksum_sha256.upper() in ("NOT_APPLICABLE", "NONE", ""):
             return False
         computed_sha256 = hashlib.sha256(content_bytes).hexdigest()
         return computed_sha256.lower() == model.checksum_sha256.lower()

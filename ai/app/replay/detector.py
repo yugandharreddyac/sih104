@@ -76,8 +76,23 @@ class ReplayDetector:
                 reverberation_decay_anomaly=False,
                 model_version=self.model_id,
                 engine_type=None,
-                explainability=["Insufficient audio duration for replay impulse response estimation."],
+                explainability=["[DSP_FALLBACK] Insufficient audio duration (<250ms) for replay impulse response estimation."],
                 inference_latency_ms=0.0
+            )
+
+        # Silence / near-zero energy check: return safe non-replay assessment
+        if len(samples) == 0 or float(np.max(np.abs(samples))) < 1e-4:
+            inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
+            return ReplayAnalysisResult(
+                status=ReplayStatus.NOT_REPLAY,
+                replay_probability=0.0,
+                confidence=0.80,
+                high_frequency_loss=False,
+                reverberation_decay_anomaly=False,
+                model_version=self.model_id,
+                engine_type="DSP_FALLBACK",
+                explainability=["[DSP_FALLBACK] Silent or zero-energy audio payload; no physical playback cues observed."],
+                inference_latency_ms=inference_latency_ms
             )
 
         # Quality check: POOR quality increases uncertainty
@@ -89,15 +104,14 @@ class ReplayDetector:
                 high_frequency_loss=False,
                 reverberation_decay_anomaly=False,
                 model_version=self.model_id,
-                engine_type="DSP",
-                explainability=["Audio quality POOR; replay analysis reliability compromised."],
+                engine_type="DSP_FALLBACK",
+                explainability=["[DSP_FALLBACK] Audio quality POOR; replay analysis reliability compromised (uncalibrated heuristic fallback)."],
                 inference_latency_ms=round((time.perf_counter() - start_time) * 1000.0, 3)
             )
 
         features = self.feature_extractor.extract_features(samples)
 
         explainability: List[str] = []
-        replay_cues = 0
 
         # Cue 1: High-Frequency Spectral Roll-off Evaluation
         # If the channel is detected as narrowband telephony (<4 kHz), high-frequency loss
@@ -112,7 +126,6 @@ class ReplayDetector:
         else:
             has_hf_loss = raw_hf_loss
             if has_hf_loss:
-                replay_cues += 1
                 explainability.append(
                     f"Severe high-frequency attenuation slope ({features.spectral_decay_slope}) "
                     "consistent with loudspeaker acoustic playback."
@@ -121,7 +134,6 @@ class ReplayDetector:
         # Cue 2: Extended double reverberation decay time
         has_reverb_anomaly = features.reverberation_decay_time_ms > 120.0
         if has_reverb_anomaly:
-            replay_cues += 1
             explainability.append(
                 f"Elevated secondary room acoustic reverberation ({features.reverberation_decay_time_ms}ms)."
             )
@@ -129,22 +141,52 @@ class ReplayDetector:
         # Cue 3: High transducer harmonic distortion
         has_distortion = features.channel_impulse_distortion > 8.0
         if has_distortion:
-            replay_cues += 1
             explainability.append("Non-linear transducer harmonic impulse distortion detected.")
+
+        # Cue 4: Spectral Flatness (Wiener entropy) Anomaly
+        has_flatness_anomaly = features.spectral_flatness > 0.45
+        if has_flatness_anomaly:
+            explainability.append(
+                f"Elevated spectral flatness / Wiener entropy ({features.spectral_flatness:.3f} > 0.45), "
+                "indicating diffuse acoustic spread."
+            )
 
         inference_latency_ms = round((time.perf_counter() - start_time) * 1000.0, 3)
 
-        # Decision & Heuristic Evidence Strength Assignment
-        if replay_cues >= 2:
+        # Multi-Cue Decision & Heuristic Evidence Strength Assignment
+        # Physical playback cues: has_hf_loss, has_reverb_anomaly, has_distortion
+        # Corroborating cue: has_flatness_anomaly
+        if (has_hf_loss and (has_reverb_anomaly or has_distortion)) or (has_reverb_anomaly and has_distortion):
             status = ReplayStatus.REPLAY
             replay_prob = 0.88
             confidence = 0.80 if features.is_narrowband else 0.85
             explainability.append("Multiple independent acoustic playback cues confirmed physical or digital replay.")
-        elif replay_cues == 1:
+        elif has_flatness_anomaly and (has_reverb_anomaly or has_distortion or has_hf_loss):
+            status = ReplayStatus.LIKELY_REPLAY
+            replay_prob = 0.65
+            confidence = 0.55 if features.is_narrowband else 0.60
+            explainability.append("Acoustic playback cue corroborated by diffuse spectral flatness; moderate replay suspicion.")
+        elif has_hf_loss or has_distortion:
             status = ReplayStatus.LIKELY_REPLAY
             replay_prob = 0.65
             confidence = 0.55 if features.is_narrowband else 0.60
             explainability.append("Isolated playback indicator observed; moderate replay suspicion.")
+        elif has_reverb_anomaly:
+            if features.is_narrowband:
+                status = ReplayStatus.NOT_REPLAY
+                replay_prob = 0.25
+                confidence = 0.65
+                explainability.append("Elevated room reverberation observed in isolation over narrowband channel; insufficient for replay classification.")
+            else:
+                status = ReplayStatus.LIKELY_REPLAY
+                replay_prob = 0.60
+                confidence = 0.55
+                explainability.append("Isolated playback indicator observed; moderate replay suspicion.")
+        elif has_flatness_anomaly:
+            status = ReplayStatus.NOT_REPLAY
+            replay_prob = 0.20
+            confidence = 0.70
+            explainability.append("Elevated spectral flatness observed in isolation; consistent with unvoiced speech or ambient noise without acoustic playback cues.")
         else:
             status = ReplayStatus.NOT_REPLAY
             replay_prob = 0.12
@@ -167,7 +209,7 @@ class ReplayDetector:
             high_frequency_loss=has_hf_loss,
             reverberation_decay_anomaly=has_reverb_anomaly,
             model_version=self.model_id,
-            engine_type="DSP",
+            engine_type="DSP_FALLBACK",
             explainability=explainability,
             inference_latency_ms=inference_latency_ms
         )

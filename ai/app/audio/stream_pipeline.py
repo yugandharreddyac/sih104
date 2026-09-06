@@ -178,13 +178,10 @@ class AudioStreamPipeline:
             asr_confidence=asr_result.confidence
         )
 
-        # 4. Requested Action Extraction
-        action_result = self.action_extractor.extract_action(asr_result.transcript)
-
-        # 5. Caller Claims & Contradiction Verification
+        # 4. Caller Claims & Contradiction Verification
         claims = self.claims_extractor.extract_claims(asr_result.transcript, turn_index=chunk.chunk_index)
 
-        # 6. Retrieve Bounded Turn Memory History
+        # 5. Retrieve Bounded Turn Memory History
         memory = ConversationMemoryManager.get_or_create(chunk.call_id)
         all_turns_text = memory.get_full_transcript_text(redacted=False) + " " + asr_result.transcript
         inconsistencies = self.inconsistency_verifier.verify_inconsistencies(claims, all_turns_text)
@@ -194,7 +191,7 @@ class AudioStreamPipeline:
         for t in memory.get_recent_turns(count=10):
             accumulated_tactics.extend(t.tactics)
 
-        # 7. Social Engineering & Multi-Turn Attack Progression
+        # 6. Social Engineering & Multi-Turn Attack Progression
         social_result = self.social_eng_detector.analyze_tactics(
             text_transcript=asr_result.transcript,
             current_intent=intent_result.primary_intent,
@@ -202,6 +199,16 @@ class AudioStreamPipeline:
             contains_secret_request=sensitive_result.contains_direct_request,
             asr_confidence=asr_result.confidence
         )
+
+        # 7. Requested Action Extraction & Quantitative Risk Scoring
+        from ai.app.context.contract import ContextStoreRegistry
+        ai_context = ContextStoreRegistry.get_adapter().get_context(chunk.call_id)
+        action_result = self.action_extractor.extract_action(
+            asr_result.transcript,
+            tactics=social_result.tactics_detected,
+            context=ai_context
+        )
+        act_risk_score = action_result.action_risk.risk_score if action_result.action_risk else None
 
         # 8. Record Turn in Context Engine & Update Phase State
         current_phase = self.conversation_context.process_turn(
@@ -214,7 +221,8 @@ class AudioStreamPipeline:
             intent=intent_result.primary_intent,
             tactics=social_result.tactics_detected,
             sensitive_findings=sensitive_result.findings,
-            requested_action_type=action_result.action_type.value
+            requested_action_type=action_result.action_type.value,
+            action_risk_score=act_risk_score
         )
 
         # 9. Evidence Compilation

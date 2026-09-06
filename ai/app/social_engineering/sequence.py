@@ -23,6 +23,10 @@ class MultiTurnAttackSequenceTracker:
             SocialEngineeringTactic.ISOLATION_ATTEMPT: 0.15,
             SocialEngineeringTactic.VERIFICATION_BYPASS: 0.35,
             SocialEngineeringTactic.FINANCIAL_PRESSURE: 0.30,
+            SocialEngineeringTactic.DIGITAL_ARREST_THREAT: 0.35,
+            SocialEngineeringTactic.ACCOUNT_SUSPENSION_THREAT: 0.25,
+            SocialEngineeringTactic.REFUSAL_ESCALATION: 0.30,
+            SocialEngineeringTactic.REWARD_SCAM: 0.20,
         }
 
     def evaluate_sequence(
@@ -42,7 +46,12 @@ class MultiTurnAttackSequenceTracker:
         sequence_score = min(1.0, score_sum)
 
         has_authority = SocialEngineeringTactic.AUTHORITY_EXPLOITATION in unique_tactics
-        has_fear = SocialEngineeringTactic.FEAR_COERCION in unique_tactics
+        has_fear = (
+            SocialEngineeringTactic.FEAR_COERCION in unique_tactics
+            or SocialEngineeringTactic.DIGITAL_ARREST_THREAT in unique_tactics
+            or SocialEngineeringTactic.ACCOUNT_SUSPENSION_THREAT in unique_tactics
+            or SocialEngineeringTactic.REFUSAL_ESCALATION in unique_tactics
+        )
         has_urgency = SocialEngineeringTactic.URGENCY_PRESSURE in unique_tactics
         has_bypass = SocialEngineeringTactic.VERIFICATION_BYPASS in unique_tactics
 

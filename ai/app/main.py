@@ -125,9 +125,24 @@ def get_pipeline_status():
                 "status": fusion_engine.status.value,
                 "model": fusion_engine.model_id,
                 "note": "Phase 5: Unified 10-dimensional multi-modal risk fusion & evidence graph engine active."
+            },
+            "action_risk": {
+                "status": PipelineStatus.AVAILABLE.value,
+                "model": "action_risk_multi_factor_v2",
+                "note": "Master 2: Quantitative multi-factor high-risk action scoring engine active."
+            },
+            "audio_manipulation": {
+                "status": PipelineStatus.AVAILABLE.value,
+                "model": "audio_manipulation_detector_v2",
+                "note": "Master 2: Acoustic splicing, spectral flux discontinuity, and packet loop detector active."
+            },
+            "context_engine": {
+                "status": PipelineStatus.AVAILABLE.value,
+                "model": "ai_context_store_adapter_v1",
+                "note": "Master 2: Pluggable AI conversational context and resistance tracking active."
             }
         },
-        "phase_note": "Phase 5: Decision intelligence, deterministic policies, and multi-modal risk fusion live."
+        "phase_note": "Master 2: Decision intelligence, Action Risk Scoring, Indic intelligence, and context abstraction live."
     }
 
 
@@ -242,6 +257,18 @@ def evaluate_risk(payload: AudioChunkPayload):
         stream_id=payload.stream_id,
         turn_index=payload.chunk_index
     )
+
+
+@app.post("/v1/action/score")
+def score_action_endpoint(payload: dict):
+    """
+    Scores requested action quantitatively evaluating inherent risk,
+    urgency pressure, authority coercion, and recipient resistance.
+    """
+    from ai.app.action_risk.scorer import ActionRiskScorer
+    scorer = ActionRiskScorer()
+    act_type = payload.get("action_type", "BENIGN_ACTION")
+    return scorer.score_action(act_type, payload)
 
 
 if __name__ == "__main__":

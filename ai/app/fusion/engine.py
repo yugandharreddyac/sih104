@@ -17,7 +17,8 @@ from ai.app.core.types import (
     ConversationalIntelligenceResult,
     PolicyEvaluationResult,
     PolicyAction,
-    HumanDecisionState
+    HumanDecisionState,
+    ActionType
 )
 from ai.app.core.model_registry import ModelRegistry
 from ai.app.fusion.signal_contract import CanonicalSignalBus
@@ -142,6 +143,20 @@ class MultiModalRiskFusionEngine:
                 requires_human_approval=True,
                 matched_conditions=["intent == MONEY_TRANSFER_REQUEST", "risk.financial_fraud >= 70.0"],
                 explanation="Policy POL-FIN-002 triggered: Unverified party requested high-risk financial transfer."
+            )
+        elif dimensions.account_takeover >= 75.0 or (conversational and conversational.requested_action.action_type in [
+            ActionType.INSTALL_REMOTE_SOFTWARE, ActionType.DOWNLOAD_MALICIOUS_APP
+        ]):
+            policy_rec = PolicyEvaluationResult(
+                policy_id="POL-REMOTE-004",
+                policy_name="Block Unverified Remote Access / Application Installation",
+                version="1.0.0",
+                priority="CRITICAL_ENDPOINT_PROTECTION",
+                is_triggered=True,
+                recommended_action=PolicyAction.REQUIRE_STEP_UP_VERIFICATION,
+                requires_human_approval=True,
+                matched_conditions=["action == INSTALL_REMOTE_SOFTWARE", "risk.account_takeover >= 75.0"],
+                explanation="Policy POL-REMOTE-004 triggered: Remote desktop tool or unverified application installation requested."
             )
         elif risk_level in [RiskLevel.HIGH, RiskLevel.CRITICAL]:
             policy_rec = PolicyEvaluationResult(

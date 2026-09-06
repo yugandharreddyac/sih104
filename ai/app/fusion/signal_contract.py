@@ -103,6 +103,27 @@ class CanonicalSignalBus:
                 timestamp_ms=now_ms
             ))
 
+            # Audio Manipulation & Splicing Signal
+            manip_level = acoustic.manipulation.level
+            manip_str = manip_level.value if hasattr(manip_level, "value") else str(manip_level)
+            if manip_str in ["STRONG_INDICATOR", "MODERATE_INDICATOR", "WEAK_INDICATOR"]:
+                manip_val = 0.85 if manip_str == "STRONG_INDICATOR" else (0.65 if manip_str == "MODERATE_INDICATOR" else 0.40)
+                signals.append(CanonicalRiskSignal(
+                    signal_id=f"sig_manip_{call_id}_{now_ms}",
+                    call_id=call_id,
+                    source_phase="PHASE_3_ACOUSTIC",
+                    category=SignalCategory.MANIPULATION,
+                    signal_type=f"AUDIO_MANIPULATION_{manip_str}",
+                    raw_value=manip_val,
+                    calibrated_confidence=0.85,
+                    quality_score=quality_score,
+                    uncertainty_penalty=q_penalty,
+                    severity=RiskSeverity.HIGH if manip_val >= 0.65 else RiskSeverity.MEDIUM,
+                    evidence_cues=acoustic.manipulation.explainability,
+                    model_id="audio_manipulation_detector_v2",
+                    timestamp_ms=now_ms
+                ))
+
         # 2. Conversational Signals (Phase 4)
         if conversational:
             asr_conf = conversational.asr.confidence
@@ -161,5 +182,34 @@ class CanonicalSignalBus:
                 model_id=conversational.social_engineering.model_version,
                 timestamp_ms=now_ms
             ))
+
+            # Requested Action Signal
+            req_action = conversational.requested_action
+            if req_action and req_action.action_type:
+                act_risk = getattr(req_action, "action_risk", None)
+                if act_risk:
+                    act_val = act_risk.normalized_score
+                    act_sev = act_risk.severity
+                    act_cues = act_risk.contributing_factors
+                else:
+                    act_val = 0.85 if req_action.is_high_risk else 0.05
+                    act_sev = RiskSeverity.HIGH if req_action.is_high_risk else RiskSeverity.LOW
+                    act_cues = [f"Requested action: {req_action.action_type.value}"]
+
+                signals.append(CanonicalRiskSignal(
+                    signal_id=f"sig_act_{call_id}_{now_ms}",
+                    call_id=call_id,
+                    source_phase="PHASE_4_CONVERSATIONAL",
+                    category=SignalCategory.ACTION,
+                    signal_type=f"ACTION_{req_action.action_type.value}",
+                    raw_value=float(act_val),
+                    calibrated_confidence=req_action.confidence * asr_conf,
+                    quality_score=asr_conf,
+                    uncertainty_penalty=asr_unc,
+                    severity=act_sev,
+                    evidence_cues=act_cues,
+                    model_id="action_risk_multi_factor_v2",
+                    timestamp_ms=now_ms
+                ))
 
         return signals

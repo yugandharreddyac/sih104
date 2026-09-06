@@ -26,6 +26,7 @@ export class CallSpeechBuffer {
   private currentTurnIndex = 0;
   private lastProcessedTurnIndex = -1;
   private isProcessing = false;
+  public lastActivityMs: number = Date.now();
 
   constructor(public readonly callId: string, public readonly streamId: string) {}
 
@@ -39,6 +40,7 @@ export class CallSpeechBuffer {
     isSpeech: boolean,
     forceFlush = false
   ): SpeechSegment | null {
+    this.lastActivityMs = Date.now();
     if (isSpeech) {
       this.accumulatedBuffers.push(pcmBuffer);
       this.accumulatedDurationMs += durationMs;
@@ -117,10 +119,48 @@ export class CallSpeechBuffer {
 }
 
 export class SpeechBufferManager {
+  public static readonly MAX_IDLE_MS = 15 * 60 * 1000; // 15 minutes max idle retention
+  public static readonly MAX_TOTAL_BUFFERS = 1000;       // Max simultaneous tracked speech buffers
+
   private static buffers: Map<string, CallSpeechBuffer> = new Map();
+  private static sweepTimer: NodeJS.Timeout | null = null;
+
+  private static ensureSweepTimer(): void {
+    if (!this.sweepTimer) {
+      this.sweepTimer = setInterval(() => {
+        this.sweepIdleBuffers();
+      }, 60000);
+      this.sweepTimer.unref();
+    }
+  }
+
+  public static sweepIdleBuffers(): number {
+    const now = Date.now();
+    let swept = 0;
+    for (const [callId, buf] of this.buffers.entries()) {
+      if (now - buf.lastActivityMs > this.MAX_IDLE_MS) {
+        buf.clear();
+        this.buffers.delete(callId);
+        swept++;
+      }
+    }
+    return swept;
+  }
 
   public static getOrCreate(callId: string, streamId?: string): CallSpeechBuffer {
+    this.ensureSweepTimer();
+
     if (!this.buffers.has(callId)) {
+      if (this.buffers.size >= this.MAX_TOTAL_BUFFERS) {
+        this.sweepIdleBuffers();
+        if (this.buffers.size >= this.MAX_TOTAL_BUFFERS) {
+          const oldestKey = this.buffers.keys().next().value;
+          if (oldestKey) {
+            this.remove(oldestKey);
+          }
+        }
+      }
+
       this.buffers.set(callId, new CallSpeechBuffer(callId, streamId || `stream-${Date.now()}`));
     }
     return this.buffers.get(callId)!;
@@ -147,5 +187,9 @@ export class SpeechBufferManager {
       buf.clear();
     }
     this.buffers.clear();
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
+    }
   }
 }

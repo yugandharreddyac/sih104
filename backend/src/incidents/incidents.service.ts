@@ -28,8 +28,17 @@ export interface IncidentRecord {
 
 export class IncidentsService {
   // Retained only as a degraded fallback cache
+  public static readonly MAX_FALLBACK_INCIDENTS = 2000;
   private static incidents: Map<string, IncidentRecord> = new Map();
   private static sequence = 1001;
+
+  private static recordFallbackIncident(id: string, incident: IncidentRecord): void {
+    if (this.incidents.size >= this.MAX_FALLBACK_INCIDENTS) {
+      const oldestKey = this.incidents.keys().next().value;
+      if (oldestKey) this.incidents.delete(oldestKey);
+    }
+    this.incidents.set(id, incident);
+  }
 
   public static async createIncident(params: {
     organizationId: string;
@@ -116,7 +125,7 @@ export class IncidentsService {
     } catch (err: any) {
       logger.warn(`Failed to persist incident ${id} to PostgreSQL. Falling back to degraded in-memory mode.`, { error: err.message });
       incident.metadata._degraded_persistence = true;
-      this.incidents.set(id, incident);
+      this.recordFallbackIncident(id, incident);
     }
 
     await AuditService.record({
@@ -219,11 +228,11 @@ export class IncidentsService {
       } catch (err: any) {
         logger.warn(`Failed to update escalated incident ${existingIncident.id} in DB`, { error: err.message });
         existingIncident.metadata._degraded_persistence = true;
-        this.incidents.set(existingIncident.id, existingIncident);
+        this.recordFallbackIncident(existingIncident.id, existingIncident);
       }
       
       if (this.incidents.has(existingIncident.id)) {
-        this.incidents.set(existingIncident.id, existingIncident);
+        this.recordFallbackIncident(existingIncident.id, existingIncident);
       }
 
       return { incident: existingIncident, isNew: false };

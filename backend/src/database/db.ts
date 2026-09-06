@@ -2,7 +2,11 @@ import { logger } from '../utils/logger';
 
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
 import { env } from '../config/env';
-import { dbQueryDurationSeconds } from '../health/metrics.controller';
+import {
+  dbQueryDurationSeconds,
+  dbConnectionFailuresTotal,
+  dbPoolSaturationRatio,
+} from '../health/metrics.controller';
 
 /**
  * Typed error class for database failures.
@@ -39,15 +43,27 @@ export class DatabaseService {
 
         this.pool.on('error', (err) => {
           this.connected = false;
+          dbConnectionFailuresTotal.inc();
+          this.updatePoolMetrics();
           logger.warn('PostgreSQL pool error', { error: err.message });
         });
 
         this.pool.on('connect', (client) => {
           this.connected = true;
+          this.updatePoolMetrics();
           // Set statement timeout for every new connection if pool config statement_timeout isn't fully supported by all pg versions
           client.query('SET statement_timeout = 10000').catch(() => {});
         });
+
+        this.pool.on('acquire', () => {
+          this.updatePoolMetrics();
+        });
+
+        this.pool.on('remove', () => {
+          this.updatePoolMetrics();
+        });
       } catch (err) {
+        dbConnectionFailuresTotal.inc();
         logger.warn('PostgreSQL initialization notice (running with in-memory store)', { error: (err as any).message });
       }
     }
@@ -60,11 +76,38 @@ export class DatabaseService {
     return DatabaseService.instance;
   }
 
+  private updatePoolMetrics(): void {
+    if (!this.pool) return;
+    try {
+      const active = (this.pool.totalCount - this.pool.idleCount);
+      const ratio = Math.min(Math.max(active / (this.pool.options.max || 20), 0), 1);
+      dbPoolSaturationRatio.set(ratio);
+    } catch {
+      // Ignore in tests
+    }
+  }
+
+  public getPoolStats(): { total: number; idle: number; waiting: number; isConnected: boolean } {
+    if (!this.pool) {
+      return { total: 0, idle: 0, waiting: 0, isConnected: false };
+    }
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount,
+      isConnected: this.connected,
+    };
+  }
+
   private isRecoverableError(err: any): boolean {
     const code = String(err?.code);
-    // Common connection / timeout errors in postgres
-    return ['08000', '08003', '08006', '08001', '08004', '08P01', '57P01', 'ECONNRESET', 'ETIMEDOUT'].includes(code) || 
-           err.message?.includes('timeout') || err.message?.includes('socket');
+    const msg = String(err?.message || '').toLowerCase();
+    // Common connection / timeout / saturation errors in postgres:
+    // 08000-08006: connection exceptions
+    // 53300: too_many_connections / pool exhaustion
+    // 57P01: admin_shutdown
+    return ['08000', '08003', '08006', '08001', '08004', '08P01', '57P01', '53300', 'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED'].includes(code) || 
+           msg.includes('timeout') || msg.includes('socket') || msg.includes('connection terminated') || msg.includes('client has been closed');
   }
 
   public async query<T extends QueryResultRow = any>(text: string, params?: any[]): Promise<QueryResult<T>> {
@@ -99,8 +142,10 @@ export class DatabaseService {
         if (attempt >= maxRetries || !(error instanceof DatabaseError && error.isRecoverable)) {
           throw error;
         }
-        logger.warn(`Database query failed, retrying (${attempt}/${maxRetries})...`, { error: error.message });
-        await new Promise(res => setTimeout(res, Math.pow(2, attempt) * 100)); // Exponential backoff
+        const jitter = Math.floor(Math.random() * 50);
+        const backoffMs = (Math.pow(2, attempt) * 100) + jitter;
+        logger.warn(`Database query failed, retrying (${attempt}/${maxRetries}) in ${backoffMs}ms...`, { error: error.message });
+        await new Promise(res => setTimeout(res, backoffMs));
       }
     }
     throw new Error('Unreachable');
@@ -123,9 +168,9 @@ export class DatabaseService {
     }
   }
 
-  public async checkHealth(): Promise<{ status: string; latencyMs?: number; error?: string }> {
+  public async checkHealth(): Promise<{ status: string; latencyMs?: number; error?: string; pool?: { total: number; idle: number; waiting: number; isConnected: boolean } }> {
     if (!this.pool) {
-      return { status: 'DISCONNECTED', error: 'In-Memory Testing Mode Active' };
+      return { status: 'DISCONNECTED', error: 'In-Memory Testing Mode Active', pool: this.getPoolStats() };
     }
     const start = Date.now();
     try {
@@ -135,10 +180,10 @@ export class DatabaseService {
         new Promise((_, reject) => setTimeout(() => reject(new Error('Healthcheck timeout')), 3000))
       ]);
       this.connected = true;
-      return { status: 'CONNECTED', latencyMs: Date.now() - start };
+      return { status: 'CONNECTED', latencyMs: Date.now() - start, pool: this.getPoolStats() };
     } catch (err: any) {
       this.connected = false;
-      return { status: 'DISCONNECTED', error: err.message };
+      return { status: 'DISCONNECTED', error: err.message, pool: this.getPoolStats() };
     }
   }
 

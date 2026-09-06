@@ -97,6 +97,7 @@ export class WebSocketGateway {
   private static callAsrStates: Map<string, CallAsrState> = new Map();
   private static pingInterval: NodeJS.Timeout | null = null;
   private static initPromise: Promise<void> | null = null;
+  public static readonly MAX_CONCURRENT_CONNECTIONS = 500;
 
   public static safeSend(ws: WebSocket, payload: string, isPriority: boolean = false): void {
     if (ws.readyState !== WebSocket.OPEN) return;
@@ -194,6 +195,18 @@ export class WebSocketGateway {
     this.pingInterval.unref();
 
     this.wss.on('connection', (ws: WebSocket, req) => {
+      if (this.clientStates.size >= WebSocketGateway.MAX_CONCURRENT_CONNECTIONS) {
+        wsErrorsTotal.inc({ error_type: 'MAX_CONNECTIONS_EXCEEDED' });
+        WebSocketGateway.safeSend(ws, JSON.stringify({
+          type: 'ERROR',
+          error: 'MAX_CONNECTIONS_EXCEEDED',
+          message: 'Server at maximum concurrent WebSocket connection capacity. Try again later.',
+          timestamp: new Date().toISOString(),
+        }), true);
+        ws.close(1013, 'Try Again Later');
+        return;
+      }
+
       activeWsConnections.inc();
       (ws as any).isAlive = true;
       ws.on('pong', () => {

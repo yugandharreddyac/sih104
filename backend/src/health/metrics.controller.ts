@@ -95,6 +95,61 @@ export const rateLimitEventsTotal = new client.Counter({
 });
 register.registerMetric(rateLimitEventsTotal);
 
+// --- Master 4: Reliability & Circuit Breaker Metrics ---
+
+export const circuitBreakerState = new client.Gauge({
+  name: 'circuit_breaker_state',
+  help: 'State of circuit breaker: 0=CLOSED, 1=HALF_OPEN, 2=OPEN',
+  labelNames: ['service'],
+});
+register.registerMetric(circuitBreakerState);
+
+export const circuitBreakerTripsTotal = new client.Counter({
+  name: 'circuit_breaker_trips_total',
+  help: 'Total number of times a circuit breaker has tripped to OPEN',
+  labelNames: ['service', 'reason'],
+});
+register.registerMetric(circuitBreakerTripsTotal);
+
+export const circuitBreakerFallbacksTotal = new client.Counter({
+  name: 'circuit_breaker_fallbacks_total',
+  help: 'Total number of times a circuit breaker returned a degraded fallback',
+  labelNames: ['service'],
+});
+register.registerMetric(circuitBreakerFallbacksTotal);
+
+export const webhookDeliveriesTotal = new client.Counter({
+  name: 'webhook_deliveries_total',
+  help: 'Total number of outbound webhook delivery attempts and outcomes',
+  labelNames: ['event', 'status'],
+});
+register.registerMetric(webhookDeliveriesTotal);
+
+export const webhookRetriesTotal = new client.Counter({
+  name: 'webhook_retries_total',
+  help: 'Total number of webhook retry attempts',
+  labelNames: ['event'],
+});
+register.registerMetric(webhookRetriesTotal);
+
+export const webhookReplaysRejectedTotal = new client.Counter({
+  name: 'webhook_replays_rejected_total',
+  help: 'Total number of incoming webhook requests rejected due to replay detection',
+});
+register.registerMetric(webhookReplaysRejectedTotal);
+
+export const dbPoolSaturationRatio = new client.Gauge({
+  name: 'db_pool_saturation_ratio',
+  help: 'Ratio of active database pool connections in use (0.0 to 1.0)',
+});
+register.registerMetric(dbPoolSaturationRatio);
+
+export const activeCallBuffers = new client.Gauge({
+  name: 'active_call_buffers',
+  help: 'Number of active call stream buffers currently tracked in memory',
+});
+register.registerMetric(activeCallBuffers);
+
 export class MetricsController {
   public static async getMetrics(req: Request, res: Response): Promise<void> {
     try {

@@ -36,10 +36,15 @@ class CallConversationMemory:
 
 class ConversationMemoryManager:
     _sessions: Dict[str, CallConversationMemory] = {}
+    MAX_SESSIONS: int = 500
 
     @classmethod
     def get_or_create(cls, call_id: str) -> CallConversationMemory:
         if call_id not in cls._sessions:
+            if len(cls._sessions) >= cls.MAX_SESSIONS:
+                oldest_call_id = next(iter(cls._sessions))
+                cls._sessions[oldest_call_id].clear()
+                del cls._sessions[oldest_call_id]
             cls._sessions[call_id] = CallConversationMemory(call_id)
         return cls._sessions[call_id]
 

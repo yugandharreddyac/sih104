@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
 import { redisDb } from '../../database/redis';
+import { webhookReplaysRejectedTotal } from '../../health/metrics.controller';
 
 const ALLOWED_PROVIDERS = ['GENERIC_TELEPHONY'];
 
@@ -106,6 +107,7 @@ export async function requireWebhookSignature(req: Request, res: Response, next:
       // Signature matches. Now check replay cache.
       const isUnique = await checkAndCacheSignature(signature, timestamp);
       if (!isUnique) {
+         webhookReplaysRejectedTotal.inc();
          res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Webhook payload already processed (replay detected)' });
          return;
       }

@@ -1,4 +1,4 @@
-import { audioErrorsTotal, streamBufferQueueDepth } from '../health/metrics.controller';
+import { audioErrorsTotal, streamBufferQueueDepth, activeCallBuffers } from '../health/metrics.controller';
 
 export interface BufferedChunk {
   sequenceNumber: number;
@@ -41,6 +41,7 @@ export class StreamBuffer {
   private seenSequences: Set<number> = new Set();
   private duplicatesIgnored = 0;
   private staleChunksIgnored = 0;
+  public lastActivityMs: number = Date.now();
 
   constructor(
     public readonly callId: string,
@@ -67,6 +68,7 @@ export class StreamBuffer {
     isStale: boolean;
   } {
     this.totalReceived++;
+    this.lastActivityMs = Date.now();
 
     // Check for malformed chunk data
     if (
@@ -236,7 +238,34 @@ export class StreamBuffer {
 }
 
 export class StreamBufferManager {
+  public static readonly MAX_IDLE_MS = 15 * 60 * 1000; // 15 minutes max idle retention
+  public static readonly MAX_TOTAL_BUFFERS = 1000;       // Max simultaneous tracked calls
+
   private static buffers: Map<string, StreamBuffer> = new Map();
+  private static sweepTimer: NodeJS.Timeout | null = null;
+
+  private static ensureSweepTimer(): void {
+    if (!this.sweepTimer) {
+      this.sweepTimer = setInterval(() => {
+        this.sweepIdleBuffers();
+      }, 60000);
+      this.sweepTimer.unref();
+    }
+  }
+
+  public static sweepIdleBuffers(): number {
+    const now = Date.now();
+    let swept = 0;
+    for (const [callId, buf] of this.buffers.entries()) {
+      if (now - buf.lastActivityMs > this.MAX_IDLE_MS) {
+        buf.clear();
+        this.buffers.delete(callId);
+        swept++;
+      }
+    }
+    activeCallBuffers.set(this.buffers.size);
+    return swept;
+  }
 
   public static getOrCreate(
     callId: string,
@@ -244,11 +273,25 @@ export class StreamBufferManager {
     protocol: string = 'WEBRTC',
     mediaSource: string = 'WEBSOCKET'
   ): StreamBuffer {
+    this.ensureSweepTimer();
+
     if (!this.buffers.has(callId)) {
+      if (this.buffers.size >= this.MAX_TOTAL_BUFFERS) {
+        this.sweepIdleBuffers();
+        if (this.buffers.size >= this.MAX_TOTAL_BUFFERS) {
+          // Evict oldest buffer to prevent OOM
+          const oldestKey = this.buffers.keys().next().value;
+          if (oldestKey) {
+            this.remove(oldestKey);
+          }
+        }
+      }
+
       this.buffers.set(
         callId,
         new StreamBuffer(callId, streamId || `stream-${Date.now()}`, protocol, mediaSource)
       );
+      activeCallBuffers.set(this.buffers.size);
     }
     return this.buffers.get(callId)!;
   }
@@ -262,6 +305,7 @@ export class StreamBufferManager {
     if (buffer) {
       buffer.clear();
       this.buffers.delete(callId);
+      activeCallBuffers.set(this.buffers.size);
     }
   }
 
@@ -274,5 +318,10 @@ export class StreamBufferManager {
       buf.clear();
     }
     this.buffers.clear();
+    if (this.sweepTimer) {
+      clearInterval(this.sweepTimer);
+      this.sweepTimer = null;
+    }
+    activeCallBuffers.set(0);
   }
 }

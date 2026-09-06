@@ -197,7 +197,10 @@ if (process.env.NODE_ENV !== 'test') {
   }
 }
 
-const gracefulShutdown = async (signal: string) => {
+import { StreamBufferManager } from './calls/stream_buffer';
+import { SpeechBufferManager } from './calls/speech_buffer';
+
+export const gracefulShutdown = async (signal: string): Promise<void> => {
   logger.info(`Received ${signal}. Starting graceful shutdown...`);
   
   server.close(async (err) => {
@@ -218,6 +221,13 @@ const gracefulShutdown = async (signal: string) => {
 
       await redisDb.close();
       logger.info('Redis connection closed.');
+
+      await db.close();
+      logger.info('PostgreSQL connection pool closed.');
+
+      StreamBufferManager.clearAll();
+      SpeechBufferManager.clearAll();
+      logger.info('Audio stream buffers cleared.');
 
       logger.info('Graceful shutdown completed successfully.');
       process.exit(0);

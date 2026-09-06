@@ -8,6 +8,11 @@ import crypto from 'crypto';
 import { env } from '../config/env';
 import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
+import { CircuitBreaker, CircuitBreakerOpenError } from '../utils/circuit_breaker';
+import {
+  webhookDeliveriesTotal,
+  webhookRetriesTotal,
+} from '../health/metrics.controller';
 
 export interface WebhookEventPayload {
   eventId: string;
@@ -34,7 +39,24 @@ export interface WebhookDeliveryResult {
 export class WebhookDispatcher {
   public static readonly DEFAULT_TIMEOUT_MS = 3000;
   public static readonly MAX_RETRIES = 3;
+  public static readonly MAX_HISTORY_SIZE = 1000;
   private static webhookDeliveries: Map<string, WebhookDeliveryResult> = new Map();
+
+  public static readonly circuitBreaker = new CircuitBreaker({
+    name: 'outbound_webhook',
+    failureThreshold: 4,
+    resetTimeoutMs: 5000,
+    halfOpenSuccessThreshold: 2,
+    timeoutMs: 3000,
+  });
+
+  private static recordDelivery(eventId: string, result: WebhookDeliveryResult): void {
+    if (this.webhookDeliveries.size >= this.MAX_HISTORY_SIZE) {
+      const firstKey = this.webhookDeliveries.keys().next().value;
+      if (firstKey) this.webhookDeliveries.delete(firstKey);
+    }
+    this.webhookDeliveries.set(eventId, result);
+  }
 
   /**
    * Generates canonical HMAC-SHA256 signature over stringified JSON payload and timestamp.
@@ -115,14 +137,33 @@ export class WebhookDispatcher {
         eventId,
         deliveredAt: new Date().toISOString(),
       };
-      this.webhookDeliveries.set(eventId, simulatedResult);
+      this.recordDelivery(eventId, simulatedResult);
+      webhookDeliveriesTotal.inc({ event: event.event, status: 'simulated' });
       return simulatedResult;
+    }
+
+    // Circuit Breaker Fast-Fail Check
+    if (this.circuitBreaker.getState() === 'OPEN') {
+      const openResult: WebhookDeliveryResult = {
+        success: false,
+        statusCode: 503,
+        attempts: 0,
+        eventId,
+        error: 'Outbound webhook circuit breaker is OPEN. Fast-failing dispatch.',
+      };
+      this.recordDelivery(eventId, openResult);
+      webhookDeliveriesTotal.inc({ event: event.event, status: 'circuit_open' });
+      return openResult;
     }
 
     let lastError: string | undefined = undefined;
     let statusCode: number | undefined = undefined;
 
     for (let attempt = 1; attempt <= this.MAX_RETRIES; attempt++) {
+      if (attempt > 1) {
+        webhookRetriesTotal.inc({ event: event.event });
+      }
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.DEFAULT_TIMEOUT_MS);
 
@@ -152,7 +193,8 @@ export class WebhookDispatcher {
             eventId,
             deliveredAt: new Date().toISOString(),
           };
-          this.webhookDeliveries.set(eventId, result);
+          this.recordDelivery(eventId, result);
+          webhookDeliveriesTotal.inc({ event: event.event, status: 'success' });
 
           await AuditService.record({
             organizationId: '00000000-0000-0000-0000-000000000001',
@@ -176,9 +218,9 @@ export class WebhookDispatcher {
         }
       }
 
-      // Exponential backoff wait before retry
+      // Exponential backoff wait before retry with slight jitter
       if (attempt < this.MAX_RETRIES) {
-        const backoffMs = 250 * Math.pow(2, attempt);
+        const backoffMs = (250 * Math.pow(2, attempt)) + Math.floor(Math.random() * 50);
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
@@ -190,7 +232,8 @@ export class WebhookDispatcher {
       eventId,
       error: lastError || 'Delivery failed after maximum retries',
     };
-    this.webhookDeliveries.set(eventId, failureResult);
+    this.recordDelivery(eventId, failureResult);
+    webhookDeliveriesTotal.inc({ event: event.event, status: 'failure' });
 
     await AuditService.record({
       organizationId: '00000000-0000-0000-0000-000000000001',

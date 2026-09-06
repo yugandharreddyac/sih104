@@ -22,7 +22,7 @@ const resolveSchema = z.object({
 
 export class VerificationController {
   public static async list(req: Request, res: Response): Promise<void> {
-    const list = VerificationService.listRequests(req.user?.organizationId);
+    const list = await VerificationService.listRequests(req.user?.organizationId);
     res.status(200).json({
       success: true,
       data: list,

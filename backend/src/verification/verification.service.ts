@@ -1,7 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { AuditService } from '../security/audit.service';
-import { db } from '../database/db';
+import { env, isStrictMode } from '../config/env';
+import { redisDb } from '../database/redis';
 
 export type VerificationMechanism =
   | 'AUTHENTICATOR_PUSH'
@@ -20,13 +21,16 @@ export interface VerificationRequest {
   status: VerificationStatus;
   requestedAt: Date;
   completedAt?: Date;
-  targetIdentityMasked: string; // e.g. "cfo-approval@corp.internal" or "***-***-1928"
+  targetIdentityMasked: string;
   verificationPayloadMasked: Record<string, any>;
   notes: string;
 }
 
 export class VerificationService {
+  // In-memory fallback for gracefully degraded mode
   private static requests: Map<string, VerificationRequest> = new Map();
+  private static readonly REDIS_PREFIX = 'verification:';
+  private static readonly TTL_SECONDS = 3600; // 1 hour expiration
 
   public static async createVerificationRequest(params: {
     callId: string;
@@ -39,7 +43,6 @@ export class VerificationService {
     const id = uuidv4();
     const sanitizedPayload = PrivacyFirewall.sanitizeObject(params.payload || {});
 
-    // Mask target identity for privacy
     const maskedIdentity =
       params.targetIdentity.length > 4
         ? `${params.targetIdentity.slice(0, 3)}***${params.targetIdentity.slice(-2)}`
@@ -57,7 +60,15 @@ export class VerificationService {
       notes: `Independent step-up verification initiated via ${params.mechanism}. Decoupled from active voice stream.`,
     };
 
-    this.requests.set(id, req);
+    if (redisDb.isAvailable()) {
+      await redisDb.set(`${this.REDIS_PREFIX}${id}`, JSON.stringify(req), this.TTL_SECONDS);
+    } else {
+      if (isStrictMode()) {
+        throw new Error('DATABASE_UNAVAILABLE: Cannot safely create distributed verification request.');
+      }
+      // Degraded mode fallback
+      this.requests.set(id, req);
+    }
 
     await AuditService.record({
       actorUserId: params.actorUserId,
@@ -72,17 +83,48 @@ export class VerificationService {
     return req;
   }
 
-  public static listRequests(organizationId?: string): VerificationRequest[] {
+  public static async listRequests(organizationId?: string): Promise<VerificationRequest[]> {
     this.seedSampleRequestsIfEmpty();
-    const all = Array.from(this.requests.values());
+    let all: VerificationRequest[] = [];
+
+    if (redisDb.isAvailable()) {
+      const client = redisDb.getClient();
+      if (client) {
+        try {
+          const keys = await client.keys(`${this.REDIS_PREFIX}*`);
+          for (const key of keys) {
+            const data = await client.get(key);
+            if (data) all.push(JSON.parse(data));
+          }
+        } catch {
+          // Ignore and fallback to gathering whatever is in memory
+        }
+      }
+    }
+
+    // Merge in-memory fallback items
+    for (const [id, req] of this.requests.entries()) {
+      if (!all.find((r) => r.id === id)) {
+        all.push(req);
+      }
+    }
+
     if (organizationId) {
       return all.filter((r) => r.organizationId === organizationId);
     }
     return all;
   }
 
-  public static getRequestById(id: string): VerificationRequest | null {
+  public static async getRequestById(id: string): Promise<VerificationRequest | null> {
     this.seedSampleRequestsIfEmpty();
+    
+    if (redisDb.isAvailable()) {
+      const data = await redisDb.get(`${this.REDIS_PREFIX}${id}`);
+      if (data) {
+        return JSON.parse(data);
+      }
+    }
+
     return this.requests.get(id) || null;
   }
 
@@ -92,7 +134,7 @@ export class VerificationService {
     actorUserId?: string,
     notes?: string
   ): Promise<VerificationRequest> {
-    const req = this.requests.get(id);
+    const req = await this.getRequestById(id);
     if (!req) {
       throw new Error(`Verification request ${id} not found`);
     }
@@ -101,6 +143,25 @@ export class VerificationService {
     req.completedAt = new Date();
     if (notes) {
       req.notes = `${req.notes} | Resolution note: ${notes}`;
+    }
+
+    // Persist update
+    if (redisDb.isAvailable()) {
+      const client = redisDb.getClient();
+      if (client) {
+        // Find remaining TTL so we don't accidentally make it permanent or change expiration drastically
+        let remainingTtl = this.TTL_SECONDS;
+        try {
+          const currentTtl = await client.ttl(`${this.REDIS_PREFIX}${id}`);
+          if (currentTtl > 0) remainingTtl = currentTtl;
+        } catch {}
+        await redisDb.set(`${this.REDIS_PREFIX}${id}`, JSON.stringify(req), remainingTtl);
+      }
+    }
+    
+    // Also update in memory if it was a degraded mode request
+    if (this.requests.has(id)) {
+      this.requests.set(id, req);
     }
 
     await AuditService.record({

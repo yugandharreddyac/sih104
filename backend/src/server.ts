@@ -44,7 +44,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Correlation-ID'],
   credentials: true,
 }));
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    const url = (req as any).originalUrl || req.url;
+    if (url && url.startsWith('/api/telephony/webhook')) {
+      (req as any).rawBody = buf;
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(apiRateLimiter);
 
@@ -82,6 +90,27 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 AuthService.initializeDefaultUsers();
 PoliciesService.initializeDefaultPolicies();
 CallsService.seedSampleCallsIfEmpty();
+
+import { runMigrations } from './database/migrate';
+import { db } from './database/db';
+
+import { redisDb } from './database/redis';
+
+// Ensure migrations run if DB is available
+db.probeConnection().then(async (isConnected) => {
+  if (isConnected) {
+    await runMigrations();
+  }
+}).catch((err) => {
+  logger.error('CRITICAL: Database migration failed at startup.', { error: err.message });
+  process.exit(1);
+});
+
+// Initialize Redis explicitly
+redisDb.initialize().catch((err) => {
+  logger.warn('Redis initialization notice:', { error: err.message });
+});
+
 
 // Mount API Namespaces
 app.use('/api/health', healthRoutes);
@@ -186,6 +215,9 @@ const gracefulShutdown = async (signal: string) => {
         await rtpServer.stop();
         logger.info('RTP server closed.');
       }
+
+      await redisDb.close();
+      logger.info('Redis connection closed.');
 
       logger.info('Graceful shutdown completed successfully.');
       process.exit(0);

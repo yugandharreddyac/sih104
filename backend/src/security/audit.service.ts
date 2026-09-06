@@ -57,7 +57,7 @@ export class AuditService {
     }
 
     try {
-      await db.query(
+      await db.queryWithRetry(
         `INSERT INTO audit_logs 
          (id, actor_user_id, organization_id, action, resource_type, resource_id, result, ip_address, user_agent, correlation_id, timestamp, metadata)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
@@ -88,7 +88,25 @@ export class AuditService {
     this.inMemoryLogs = [];
   }
 
-  public static getRecentLogs(limit: number = 50, organizationId?: string): Array<any> {
+  public static async getRecentLogs(limit: number = 50, organizationId?: string): Promise<Array<any>> {
+    if (db.isAvailable()) {
+      try {
+        let queryStr = 'SELECT * FROM audit_logs';
+        const params: any[] = [];
+        if (organizationId) {
+          queryStr += ' WHERE organization_id = $1';
+          params.push(organizationId);
+        }
+        queryStr += ' ORDER BY timestamp DESC LIMIT $' + (params.length + 1);
+        params.push(limit);
+        
+        const result = await db.queryWithRetry(queryStr, params);
+        return result.rows;
+      } catch (err: any) {
+        logger.warn('Failed to fetch audit logs from DB, falling back to memory', { error: err.message });
+      }
+    }
+
     if (organizationId) {
       return this.inMemoryLogs.filter((l) => l.organizationId === organizationId).slice(0, limit);
     }

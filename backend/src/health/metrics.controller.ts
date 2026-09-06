@@ -82,6 +82,19 @@ export const dbQueryDurationSeconds = new client.Histogram({
 });
 register.registerMetric(dbQueryDurationSeconds);
 
+export const redisErrorsTotal = new client.Counter({
+  name: 'redis_errors_total',
+  help: 'Total number of Redis connection or operation errors',
+});
+register.registerMetric(redisErrorsTotal);
+
+export const rateLimitEventsTotal = new client.Counter({
+  name: 'rate_limit_events_total',
+  help: 'Total number of rate limit exceeded events',
+  labelNames: ['type'],
+});
+register.registerMetric(rateLimitEventsTotal);
+
 export class MetricsController {
   public static async getMetrics(req: Request, res: Response): Promise<void> {
     try {

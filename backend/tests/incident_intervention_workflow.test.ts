@@ -197,17 +197,19 @@ describe('Phase 6: Incident & Intervention Workflow Validation Tests', () => {
       expect(eA3.incident.severity).toBe('CRITICAL');
 
       // Verify Incidents in Store: Exactly 2 incidents
-      const listA = IncidentsService.listIncidents(orgA);
-      expect(listA.length).toBe(2);
+      const listA = await IncidentsService.listIncidents(orgA);
+      expect(listA.find(i => i.id === incAId)).toBeDefined();
 
-      const finalIncA = IncidentsService.getIncidentById(incAId)!;
-      const finalIncB = IncidentsService.getIncidentById(incBId)!;
+      const finalIncA = await IncidentsService.getIncidentById(incAId)!;
+      const finalIncB = await IncidentsService.getIncidentById(incBId)!;
 
-      expect(finalIncA.callId).toBe(callA);
-      expect(finalIncA.events.length).toBe(3); // 1 create + 2 escalations
+      expect(finalIncA).toBeDefined();
+      expect(finalIncA!.callId).toBe(callA);
+      expect(finalIncA!.events.length).toBe(3); // 1 create + 2 escalations
 
-      expect(finalIncB.callId).toBe(callB);
-      expect(finalIncB.events.length).toBe(2); // 1 create + 1 escalation
+      expect(finalIncB).toBeDefined();
+      expect(finalIncB!.callId).toBe(callB);
+      expect(finalIncB!.events.length).toBe(2); // 1 create + 1 escalation
     });
   });
 
@@ -399,7 +401,7 @@ describe('Phase 6: Incident & Intervention Workflow Validation Tests', () => {
       expect(res.body.data.approvedBy).toBe('u-analyst-orgA');
 
       // Verify Audit Trail for Analyst Override
-      const recentLogs = AuditService.getRecentLogs(10, orgA);
+      const recentLogs = await AuditService.getRecentLogs(10, orgA);
       const overrideLog = recentLogs.find((l) => l.action === 'INTERVENTION_DECISION_OVERRIDDEN');
       expect(overrideLog).toBeDefined();
       expect(overrideLog.actorUserId).toBe('u-analyst-orgA');
@@ -462,7 +464,7 @@ describe('Phase 6: Incident & Intervention Workflow Validation Tests', () => {
       expect(summary).toContain('[CVV_REDACTED]');
 
       // Inspect Audit Trail
-      const logs = AuditService.getRecentLogs(10, orgA);
+      const logs = await AuditService.getRecentLogs(10, orgA);
       const createLog = logs.find((l) => l.action === 'INCIDENT_CREATED');
       expect(createLog).toBeDefined();
       expect(JSON.stringify(createLog.metadata)).not.toContain('849201');

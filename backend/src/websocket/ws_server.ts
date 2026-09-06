@@ -27,6 +27,8 @@ export interface WSClientState {
   activeStreamId?: string;
   connectedAt: Date;
   ipAddress?: string;
+  lastMessageTime: number;
+  messageCount: number;
 }
 
 export interface WSMessage {
@@ -95,6 +97,22 @@ export class WebSocketGateway {
   private static callAsrStates: Map<string, CallAsrState> = new Map();
   private static pingInterval: NodeJS.Timeout | null = null;
   private static initPromise: Promise<void> | null = null;
+
+  public static safeSend(ws: WebSocket, payload: string, isPriority: boolean = false): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    if (ws.bufferedAmount > 512 * 1024) {
+      if (!isPriority) return;
+      if (ws.bufferedAmount > 2 * 1024 * 1024) {
+        try { ws.terminate(); } catch (e) {}
+        return;
+      }
+    }
+
+    try {
+      ws.send(payload);
+    } catch (e) {}
+  }
 
   private static getOrCreateAsrState(callId: string): CallAsrState {
     let asrState = this.callAsrStates.get(callId);
@@ -188,53 +206,67 @@ export class WebSocketGateway {
         authenticated: false,
         connectedAt: new Date(),
         ipAddress,
+        lastMessageTime: Date.now(),
+        messageCount: 0,
       };
 
       this.clientStates.set(ws, state);
       logger.info(`WebSocket client connected from ${ipAddress}`);
+      ws.on('error', (err) => logger.warn(`WebSocket error: ${err.message}`));
       ws.on('message', async (message: string | Buffer) => {
         try {
+          const now = Date.now();
+          if (now - state.lastMessageTime > 1000) {
+            state.messageCount = 0;
+            state.lastMessageTime = now;
+          }
+          state.messageCount++;
+          if (state.messageCount > 100) {
+            wsErrorsTotal.inc({ error_type: 'RATE_LIMIT_EXCEEDED' });
+            WebSocketGateway.safeSend(ws, JSON.stringify({
+              type: 'ERROR',
+              error: 'RATE_LIMIT_EXCEEDED',
+              message: 'Rate limit exceeded. Connection closed.',
+              timestamp: new Date().toISOString()
+            }), true);
+            ws.terminate();
+            return;
+          }
           const msgStr = typeof message === 'string' ? message : message.toString('utf-8');
           let parsed: any;
           try {
             parsed = JSON.parse(msgStr);
           } catch (jsonErr: any) {
             wsErrorsTotal.inc({ error_type: 'INVALID_JSON' });
-            ws.send(
-              JSON.stringify({
+            WebSocketGateway.safeSend(ws, JSON.stringify({
                 type: 'ERROR',
                 error: 'INVALID_PAYLOAD',
                 message: `Malformed JSON payload: ${jsonErr.message || 'Syntax error'}`,
                 timestamp: new Date().toISOString(),
-              })
-            );
+              }), true);
             return;
           }
 
           if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') {
             wsErrorsTotal.inc({ error_type: 'MALFORMED_MESSAGE' });
-            ws.send(
-              JSON.stringify({
+            WebSocketGateway.safeSend(ws, JSON.stringify({
                 type: 'ERROR',
                 error: 'INVALID_PAYLOAD',
                 message: 'Message must be a valid JSON object with a string type property',
                 timestamp: new Date().toISOString(),
-              })
-            );
+              }), true);
             return;
           }
 
           await this.handleClientMessage(state, parsed);
         } catch (e: any) {
           wsErrorsTotal.inc({ error_type: 'INTERNAL_ERROR' });
-          ws.send(
-            JSON.stringify({
+          WebSocketGateway.safeSend(ws, JSON.stringify({
               type: 'ERROR',
               error: 'INTERNAL_ERROR',
               message: 'An internal error occurred during message processing',
               timestamp: new Date().toISOString(),
-            })
-          );
+            }), true);
         }
       });
 
@@ -249,15 +281,13 @@ export class WebSocketGateway {
       });
 
       // Send initial handshake
-      ws.send(
-        JSON.stringify({
+      WebSocketGateway.safeSend(ws, JSON.stringify({
           type: 'CONNECTED',
           message: 'VOXSHIELD Real-Time Security WebSocket Gateway Connected (Phase 2 Audio Pipeline)',
           requiresAuth: true,
           canonicalFormat: 'Linear PCM 16-bit 16kHz mono',
           timestamp: new Date().toISOString(),
-        })
-      );
+        }), true);
     });
   }
 
@@ -271,7 +301,7 @@ export class WebSocketGateway {
 
     // 1. PING / PONG (Heartbeat - Allowed unauthenticated)
     if (msg.type === 'PING') {
-      ws.send(JSON.stringify({ type: 'PONG', timestamp: new Date().toISOString() }));
+      WebSocketGateway.safeSend(ws, JSON.stringify({ type: 'PONG', timestamp: new Date().toISOString() }), true);
       return;
     }
 
@@ -279,14 +309,12 @@ export class WebSocketGateway {
     if (msg.type === 'AUTHENTICATE') {
       const token = msg.payload?.token;
       if (!token || typeof token !== 'string') {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'AUTH_REQUIRED',
             message: 'Token required for authentication',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -303,36 +331,30 @@ export class WebSocketGateway {
         };
         state.authenticated = true;
 
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'AUTHENTICATED',
             user: { email: payload.email, role: payload.role },
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), false);
       } catch (err: any) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_TOKEN',
             message: err.message || 'Invalid or expired token',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
       }
       return;
     }
 
     // Enforce server-side authentication for all subsequent streaming actions
     if (!state.authenticated) {
-      ws.send(
-        JSON.stringify({
+      WebSocketGateway.safeSend(ws, JSON.stringify({
           type: 'ERROR',
           error: 'UNAUTHENTICATED',
           message: 'Client must send AUTHENTICATE message before streaming audio',
           timestamp: new Date().toISOString(),
-        })
-      );
+        }), true);
       return;
     }
 
@@ -340,27 +362,23 @@ export class WebSocketGateway {
     if (msg.type === 'START_STREAM') {
       // Enforce RBAC permission: calls:stream
       if (!this.hasPermission(state.user, Permission.CALLS_STREAM)) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'FORBIDDEN',
             message: 'User lacks permission: calls:stream',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
       const rawCallId = msg.callId ?? msg.payload?.callId;
       if (typeof rawCallId !== 'string' || rawCallId.trim().length === 0 || rawCallId.length > 100) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_CALL_ID',
             message: 'callId is required to start audio stream and must be a non-empty string',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -369,27 +387,23 @@ export class WebSocketGateway {
       // Validate Call Existence & Tenant Isolation
       const call = CallsService.getCallById(callId);
       if (!call) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'CALL_NOT_FOUND',
             message: `Call session '${callId}' does not exist`,
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
       const isGlobalAdmin = state.user?.role === RoleName.ADMIN || state.user?.permissions.includes(Permission.ALL);
       if (!isGlobalAdmin && call.organizationId !== state.user?.organizationId) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'FORBIDDEN',
             message: 'Access to call session from another organization is denied',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -418,15 +432,13 @@ export class WebSocketGateway {
         metadata: { streamId },
       });
 
-      ws.send(
-        JSON.stringify({
+      WebSocketGateway.safeSend(ws, JSON.stringify({
           type: 'STREAM_STARTED',
           callId,
           streamId,
           format: 'PCM_16K_MONO',
           timestamp: new Date().toISOString(),
-        })
-      );
+        }), false);
       return;
     }
 
@@ -434,27 +446,23 @@ export class WebSocketGateway {
     if (msg.type === 'AUDIO_CHUNK') {
       // Enforce RBAC permission: calls:stream
       if (!this.hasPermission(state.user, Permission.CALLS_STREAM)) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'FORBIDDEN',
             message: 'User lacks permission: calls:stream',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
       const rawCallId = msg.callId ?? state.activeCallId;
       if (typeof rawCallId !== 'string' || rawCallId.trim().length === 0 || rawCallId.length > 100) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'NO_ACTIVE_CALL',
             message: 'Audio chunk received without active call session',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -463,41 +471,35 @@ export class WebSocketGateway {
       // Validate Call Existence & Tenant Isolation
       const call = CallsService.getCallById(callId);
       if (!call) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'CALL_NOT_FOUND',
             message: `Call session '${callId}' does not exist`,
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
       const isGlobalAdmin = state.user?.role === RoleName.ADMIN || state.user?.permissions.includes(Permission.ALL);
       if (!isGlobalAdmin && call.organizationId !== state.user?.organizationId) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'FORBIDDEN',
             message: 'Access to call session from another organization is denied',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
       // Validate Sequence Number
       const seq = msg.sequenceNumber;
       if (typeof seq !== 'number' || !Number.isFinite(seq) || !Number.isInteger(seq) || seq < 0) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_SEQUENCE_NUMBER',
             message: 'sequenceNumber must be a non-negative finite integer',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
       const sequenceNumber = seq;
@@ -511,14 +513,12 @@ export class WebSocketGateway {
         rawSampleRate < 8000 ||
         rawSampleRate > 48000
       ) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_SAMPLE_RATE',
             message: 'sample_rate must be an integer between 8000 and 48000 Hz',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
       const sampleRate = rawSampleRate;
@@ -531,14 +531,12 @@ export class WebSocketGateway {
         !Number.isInteger(rawChannels) ||
         (rawChannels !== 1 && rawChannels !== 2)
       ) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_CHANNELS',
             message: 'channels must be 1 (mono) or 2 (stereo)',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
       const channels = rawChannels;
@@ -546,14 +544,12 @@ export class WebSocketGateway {
       // Validate Audio Payload
       const rawAudio = msg.payload?.audio_base64 ?? msg.payload?.data ?? (typeof msg.payload === 'string' ? msg.payload : undefined);
       if (!rawAudio || (typeof rawAudio !== 'string' && !Buffer.isBuffer(rawAudio))) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'INVALID_AUDIO_FORMAT',
             message: 'Audio payload is missing or invalid. Expected base64 string or Buffer.',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -562,16 +558,14 @@ export class WebSocketGateway {
       const normalized = AudioNormalizer.normalize(rawAudio, sampleRate, channels, codecOrFormat);
       if (!normalized.isValid) {
         const isCodecError = normalized.error?.startsWith('UNSUPPORTED_CODEC_REQUIRES_PCM');
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: isCodecError ? 'UNSUPPORTED_CODEC_REQUIRES_PCM' : 'INVALID_AUDIO_FORMAT',
             message: isCodecError
               ? `Codec '${codecOrFormat}' is unsupported for live streaming. VoxShield requires uncompressed 16-bit linear PCM (pcm_s16le).`
               : normalized.error || 'Audio normalization failed',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -855,14 +849,12 @@ export class WebSocketGateway {
       const buffer = callId ? StreamBufferManager.get(callId) : undefined;
       const metrics = buffer ? buffer.getMetrics() : null;
 
-      ws.send(
-        JSON.stringify({
+      WebSocketGateway.safeSend(ws, JSON.stringify({
           type: 'STREAM_STATUS',
           callId,
           metrics,
           timestamp: new Date().toISOString(),
-        })
-      );
+        }), false);
       return;
     }
 
@@ -870,14 +862,12 @@ export class WebSocketGateway {
     if (msg.type === 'END_STREAM') {
       // Enforce RBAC permission: calls:stream
       if (!this.hasPermission(state.user, Permission.CALLS_STREAM)) {
-        ws.send(
-          JSON.stringify({
+        WebSocketGateway.safeSend(ws, JSON.stringify({
             type: 'ERROR',
             error: 'FORBIDDEN',
             message: 'User lacks permission: calls:stream',
             timestamp: new Date().toISOString(),
-          })
-        );
+          }), true);
         return;
       }
 
@@ -910,14 +900,12 @@ export class WebSocketGateway {
     }
 
     // 7. Unknown message type fallback
-    ws.send(
-      JSON.stringify({
+    WebSocketGateway.safeSend(ws, JSON.stringify({
         type: 'ERROR',
         error: 'UNKNOWN_MESSAGE_TYPE',
         message: `Unrecognized message type: '${(msg as any).type || 'undefined'}'`,
         timestamp: new Date().toISOString(),
-      })
-    );
+      }), true);
   }
 
   public static broadcast(msg: WSMessage): void {
@@ -960,7 +948,7 @@ export class WebSocketGateway {
           }
         }
 
-        ws.send(payload);
+        WebSocketGateway.safeSend(ws, payload, msg.type === 'ERROR' || msg.type === 'CONNECTED' || msg.type === 'SOC_ALERT' || msg.type === 'SOCIAL_ENGINEERING_ALERT');
       }
     }
   }

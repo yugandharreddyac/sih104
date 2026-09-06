@@ -21,6 +21,7 @@ export const envSchema = z.object({
   INTERVENTION_WEBHOOK_URL: z.string().optional(),
   WEBHOOK_SECRET: isProd ? z.string().min(16).refine(val => val !== 'voxshield_default_dev_webhook_secret_2026', { message: "Cannot use default WEBHOOK_SECRET in production" }) : z.string().min(16).default('voxshield_default_dev_webhook_secret_2026'),
   TELEPHONY_ENABLED: z.string().transform((val) => val === 'true' || val === '1').default('true'),
+  SEED_USER_PASSWORD: isProd ? z.string().min(12).refine(val => val !== 'VoxShield@2026!', { message: "Cannot use default SEED_USER_PASSWORD in production" }) : z.string().min(8).default('VoxShield@2026!'),
 });
 
 

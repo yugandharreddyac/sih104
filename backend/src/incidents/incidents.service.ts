@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { AuditService } from '../security/audit.service';
 import { PrivacyFirewall } from '../security/privacy_firewall';
 import { db } from '../database/db';
+import { logger } from '../utils/logger';
 
 export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type IncidentStatus = 'OPEN' | 'INVESTIGATING' | 'CONTAINED' | 'RESOLVED' | 'FALSE_POSITIVE';
@@ -26,6 +27,7 @@ export interface IncidentRecord {
 }
 
 export class IncidentsService {
+  // Retained only as a degraded fallback cache
   private static incidents: Map<string, IncidentRecord> = new Map();
   private static sequence = 1001;
 
@@ -70,7 +72,52 @@ export class IncidentsService {
       metadata: sanitizedMetadata,
     };
 
-    this.incidents.set(id, incident);
+    const metadataJson = {
+      triggeredPolicies: incident.triggeredPolicies,
+      actionsTaken: incident.actionsTaken,
+      evidenceReferences: incident.evidenceReferences,
+      ...incident.metadata
+    };
+
+    try {
+      if (!db.isAvailable()) throw new Error('Database is offline');
+
+      await db.transaction(async (client) => {
+        await client.query(
+          `INSERT INTO incidents 
+           (id, incident_number, call_id, organization_id, severity, attack_classification, status, summary, metadata, detected_at, assigned_to_user_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+          [
+            incident.id,
+            incident.incidentNumber,
+            incident.callId || null,
+            incident.organizationId,
+            incident.severity,
+            incident.attackClassification,
+            incident.status,
+            incident.summary,
+            JSON.stringify(metadataJson),
+            incident.detectedAt,
+            incident.assignedToUserId || null
+          ]
+        );
+
+        await client.query(
+          `INSERT INTO incident_events (incident_id, event_type, description, created_at)
+           VALUES ($1, $2, $3, $4)`,
+          [
+            incident.id,
+            'INCIDENT_CREATED',
+            incident.events[0].description,
+            incident.events[0].timestamp
+          ]
+        );
+      });
+    } catch (err: any) {
+      logger.warn(`Failed to persist incident ${id} to PostgreSQL. Falling back to degraded in-memory mode.`, { error: err.message });
+      incident.metadata._degraded_persistence = true;
+      this.incidents.set(id, incident);
+    }
 
     await AuditService.record({
       organizationId: params.organizationId,
@@ -96,30 +143,90 @@ export class IncidentsService {
     assignedToUserId?: string;
     metadata?: Record<string, any>;
   }): Promise<{ incident: IncidentRecord; isNew: boolean }> {
-    const existing = Array.from(this.incidents.values()).find(
-      (i) =>
-        i.callId === params.callId &&
-        i.organizationId === params.organizationId &&
-        (i.status === 'OPEN' || i.status === 'INVESTIGATING')
-    );
+    
+    let existingIncident: IncidentRecord | null = null;
 
-    if (existing) {
+    try {
+      if (db.isAvailable()) {
+        const result = await db.query(
+          `SELECT id, incident_number, severity, status, metadata 
+           FROM incidents 
+           WHERE call_id = $1 AND organization_id = $2 AND status IN ('OPEN', 'INVESTIGATING')
+           ORDER BY detected_at DESC LIMIT 1`,
+          [params.callId, params.organizationId]
+        );
+        
+        if (result.rows.length > 0) {
+          const row = result.rows[0];
+          // We need to fully fetch it to return a proper IncidentRecord
+          existingIncident = await this.getIncidentById(row.id);
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Failed to query existing incident for correlation', { error: err.message });
+    }
+
+    // Degraded mode fallback check
+    if (!existingIncident) {
+      existingIncident = Array.from(this.incidents.values()).find(
+        (i) =>
+          i.callId === params.callId &&
+          i.organizationId === params.organizationId &&
+          (i.status === 'OPEN' || i.status === 'INVESTIGATING')
+      ) || null;
+    }
+
+    if (existingIncident) {
       const severityRank: Record<IncidentSeverity, number> = { LOW: 1, MEDIUM: 2, HIGH: 3, CRITICAL: 4 };
-      if (severityRank[params.severity] > severityRank[existing.severity]) {
-        existing.severity = params.severity;
+      if (severityRank[params.severity] > severityRank[existingIncident.severity]) {
+        existingIncident.severity = params.severity;
       }
       if (params.triggeredPolicies) {
-        existing.triggeredPolicies = Array.from(new Set([...existing.triggeredPolicies, ...params.triggeredPolicies]));
+        existingIncident.triggeredPolicies = Array.from(new Set([...existingIncident.triggeredPolicies, ...params.triggeredPolicies]));
       }
       if (params.actionsTaken) {
-        existing.actionsTaken = Array.from(new Set([...existing.actionsTaken, ...params.actionsTaken]));
+        existingIncident.actionsTaken = Array.from(new Set([...existingIncident.actionsTaken, ...params.actionsTaken]));
       }
-      existing.events.push({
+      
+      const newEventDesc = PrivacyFirewall.sanitize(params.summary).sanitizedText;
+      const newEvent = {
         type: 'THREAT_ESCALATION',
-        description: PrivacyFirewall.sanitize(params.summary).sanitizedText,
-        timestamp: new Date(),
-      });
-      return { incident: existing, isNew: false };
+        description: newEventDesc,
+        timestamp: new Date()
+      };
+      existingIncident.events.push(newEvent);
+
+      const metadataJson = {
+        triggeredPolicies: existingIncident.triggeredPolicies,
+        actionsTaken: existingIncident.actionsTaken,
+        evidenceReferences: existingIncident.evidenceReferences,
+        ...existingIncident.metadata
+      };
+
+      try {
+        if (!existingIncident.metadata._degraded_persistence && db.isAvailable()) {
+          await db.transaction(async (client) => {
+            await client.query(
+              `UPDATE incidents SET severity = $1, metadata = $2 WHERE id = $3`,
+              [existingIncident!.severity, JSON.stringify(metadataJson), existingIncident!.id]
+            );
+            await client.query(
+              `INSERT INTO incident_events (incident_id, event_type, description, created_at) VALUES ($1, $2, $3, $4)`,
+              [existingIncident!.id, newEvent.type, newEvent.description, newEvent.timestamp]
+            );
+          });
+        }
+      } catch (err: any) {
+        logger.warn(`Failed to update escalated incident ${existingIncident.id} in DB`, { error: err.message });
+        existingIncident.metadata._degraded_persistence = true;
+        this.incidents.set(existingIncident.id, existingIncident);
+      }
+      
+      if (this.incidents.has(existingIncident.id)) {
+        this.incidents.set(existingIncident.id, existingIncident);
+      }
+
+      return { incident: existingIncident, isNew: false };
     }
 
     const newInc = await this.createIncident(params);
@@ -130,17 +237,80 @@ export class IncidentsService {
     this.incidents.clear();
   }
 
-  public static listIncidents(organizationId?: string): IncidentRecord[] {
+  private static mapDbRowToRecord(row: any, events: any[]): IncidentRecord {
+    const meta = typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {});
+    return {
+      id: row.id,
+      incidentNumber: row.incident_number,
+      callId: row.call_id,
+      organizationId: row.organization_id,
+      severity: row.severity as IncidentSeverity,
+      attackClassification: row.attack_classification,
+      status: row.status as IncidentStatus,
+      detectedAt: row.detected_at,
+      resolvedAt: row.resolved_at,
+      summary: row.summary,
+      assignedToUserId: row.assigned_to_user_id,
+      triggeredPolicies: meta.triggeredPolicies || [],
+      actionsTaken: meta.actionsTaken || [],
+      evidenceReferences: meta.evidenceReferences || [],
+      events: events.map((e: any) => ({
+        type: e.event_type,
+        actorUserId: e.actor_user_id,
+        description: e.description,
+        timestamp: e.created_at
+      })),
+      metadata: meta
+    };
+  }
+
+  public static async listIncidents(organizationId?: string): Promise<IncidentRecord[]> {
     this.seedSampleIncidentsIfEmpty();
-    const all = Array.from(this.incidents.values());
-    if (organizationId) {
-      return all.filter((i) => i.organizationId === organizationId);
+    let dbRecords: IncidentRecord[] = [];
+
+    try {
+      if (db.isAvailable()) {
+        const query = organizationId 
+          ? `SELECT * FROM incidents WHERE organization_id = $1 ORDER BY detected_at DESC`
+          : `SELECT * FROM incidents ORDER BY detected_at DESC`;
+        const params = organizationId ? [organizationId] : [];
+        const result = await db.query(query, params);
+        
+        for (const row of result.rows) {
+          const eventsResult = await db.query(`SELECT * FROM incident_events WHERE incident_id = $1 ORDER BY created_at ASC`, [row.id]);
+          dbRecords.push(this.mapDbRowToRecord(row, eventsResult.rows));
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Failed to list incidents from DB, degrading to local cache', { error: err.message });
     }
+
+    // Merge in-memory fallback items
+    const all = [...dbRecords];
+    for (const [id, req] of this.incidents.entries()) {
+      if (!all.find((r) => r.id === id) && (!organizationId || req.organizationId === organizationId)) {
+        all.push(req);
+      }
+    }
+
     return all;
   }
 
-  public static getIncidentById(id: string): IncidentRecord | null {
+  public static async getIncidentById(id: string): Promise<IncidentRecord | null> {
     this.seedSampleIncidentsIfEmpty();
+    
+    try {
+      if (db.isAvailable()) {
+        const result = await db.query(`SELECT * FROM incidents WHERE id = $1`, [id]);
+        if (result.rows.length > 0) {
+          const eventsResult = await db.query(`SELECT * FROM incident_events WHERE incident_id = $1 ORDER BY created_at ASC`, [id]);
+          return this.mapDbRowToRecord(result.rows[0], eventsResult.rows);
+        }
+      }
+    } catch (err: any) {
+      logger.warn(`Failed to get incident ${id} from DB`, { error: err.message });
+    }
+
     return this.incidents.get(id) || null;
   }
 
@@ -152,7 +322,7 @@ export class IncidentsService {
     organizationId?: string,
     isGlobalAdmin?: boolean
   ): Promise<IncidentRecord> {
-    const incident = this.incidents.get(id);
+    const incident = await this.getIncidentById(id);
     if (!incident) {
       const err: any = new Error(`Incident ${id} not found`);
       err.statusCode = 404;
@@ -175,7 +345,6 @@ export class IncidentsService {
       throw err;
     }
 
-    // Disallow reopening resolved incident back to OPEN without explicit workflow
     if ((incident.status === 'RESOLVED' || incident.status === 'FALSE_POSITIVE') && status === 'OPEN') {
       const err: any = new Error(`Cannot transition directly from ${incident.status} to OPEN`);
       err.statusCode = 400;
@@ -191,12 +360,36 @@ export class IncidentsService {
 
     const sanitizedNotes = notes ? PrivacyFirewall.sanitize(notes).sanitizedText : `Status updated from ${previousStatus} to ${status}`;
 
-    incident.events.push({
+    const newEvent = {
       type: `STATUS_CHANGED_${status}`,
       actorUserId,
       description: sanitizedNotes,
       timestamp: new Date(),
-    });
+    };
+    incident.events.push(newEvent);
+
+    try {
+      if (!incident.metadata._degraded_persistence && db.isAvailable()) {
+        await db.transaction(async (client) => {
+          await client.query(
+            `UPDATE incidents SET status = $1, resolved_at = $2 WHERE id = $3`,
+            [incident.status, incident.resolvedAt || null, incident.id]
+          );
+          await client.query(
+            `INSERT INTO incident_events (incident_id, event_type, actor_user_id, description, created_at) VALUES ($1, $2, $3, $4, $5)`,
+            [incident.id, newEvent.type, actorUserId || null, newEvent.description, newEvent.timestamp]
+          );
+        });
+      }
+    } catch (err: any) {
+      logger.warn(`Failed to update incident ${id} in DB`, { error: err.message });
+      incident.metadata._degraded_persistence = true;
+      this.incidents.set(id, incident);
+    }
+
+    if (this.incidents.has(id) || incident.metadata._degraded_persistence) {
+      this.incidents.set(id, incident);
+    }
 
     await AuditService.record({
       actorUserId,
@@ -242,7 +435,7 @@ export class IncidentsService {
           timestamp: new Date(Date.now() - 300000),
         },
       ],
-      metadata: { channel: 'INTERNAL-PBX' },
+      metadata: { channel: 'INTERNAL-PBX', _degraded_persistence: true },
     };
 
     this.incidents.set(sample.id, sample);

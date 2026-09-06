@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app } from '../src/server';
 import { TokenService } from '../src/auth/jwt';
 import { RoleName } from '../src/auth/types';
+import { env } from '../src/config/env';
 
 describe('Authentication & Token Unit Tests', () => {
   it('should generate and verify JWT correctly', () => {
@@ -26,7 +27,7 @@ describe('Authentication & Token Unit Tests', () => {
       .post('/api/auth/login')
       .send({
         email: 'admin@voxshield.security',
-        password: 'VoxShield@2026!',
+        password: env.SEED_USER_PASSWORD,
       });
 
     expect(res.status).toBe(200);

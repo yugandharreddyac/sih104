@@ -4,13 +4,14 @@ import { TokenService } from './jwt';
 import { AuthUser, RoleName, ROLE_PERMISSIONS } from './types';
 import { AuditService } from '../security/audit.service';
 import { db } from '../database/db';
+import { env } from '../config/env';
 
 export class AuthService {
   // In-memory user store for deterministic testing & standalone local running
   private static users: Map<string, any> = new Map();
 
   public static async initializeDefaultUsers(): Promise<void> {
-    const defaultPasswordHash = await PasswordService.hash('VoxShield@2026!');
+    const defaultPasswordHash = await PasswordService.hash(env.SEED_USER_PASSWORD);
     const defaultOrgId = '00000000-0000-0000-0000-000000000001';
 
     const seedUsers = [

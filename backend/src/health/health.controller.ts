@@ -1,10 +1,12 @@
 import { Request, Response } from 'express';
 import { db } from '../database/db';
+import { redisDb } from '../database/redis';
 import { env, isStrictMode } from '../config/env';
 
 export class HealthController {
   public static async check(req: Request, res: Response): Promise<void> {
     const dbHealth = await db.checkHealth();
+    const redisHealth = await redisDb.checkHealth();
 
     // Check AI Service connectivity
     let aiServiceStatus = 'UNREACHABLE';
@@ -40,6 +42,7 @@ export class HealthController {
       components: {
         backend: { status: 'HEALTHY', uptimeSeconds: process.uptime() },
         database: dbHealth,
+        redis: redisHealth,
         aiService: { status: aiServiceStatus, latencyMs: aiLatencyMs, targetUrl: env.AI_SERVICE_URL },
         privacyFirewall: { status: 'ACTIVE', redactionEngine: 'DETERMINISTIC_PRE_PERSISTENCE' },
         policyEngine: { status: 'ACTIVE', ruleEngine: 'DETERMINISTIC_RULES_V1' },

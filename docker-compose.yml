@@ -1,10 +1,19 @@
 version: '3.8'
 
+networks:
+  voxshield-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: voxshield-postgres
     restart: unless-stopped
+    networks:
+      - voxshield-net
     environment:
       POSTGRES_USER: ${POSTGRES_USER?err_missing_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD?err_missing_password}
@@ -13,7 +22,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U voxshield_user -d voxshield_db"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -22,6 +31,8 @@ services:
     image: redis:7-alpine
     container_name: voxshield-redis
     restart: unless-stopped
+    networks:
+      - voxshield-net
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD?err_missing_redis_password}"]
     environment:
       - REDIS_PASSWORD=${REDIS_PASSWORD?err_missing_redis_password}
@@ -37,6 +48,8 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.ai
     container_name: voxshield-ai
     restart: unless-stopped
+    networks:
+      - voxshield-net
     environment:
       - VOXSHIELD_AI_PORT=8000
       - VOXSHIELD_AI_HOST=0.0.0.0
@@ -53,6 +66,8 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.backend
     container_name: voxshield-backend
     restart: unless-stopped
+    networks:
+      - voxshield-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,6 +84,7 @@ services:
       - JWT_SECRET=${JWT_SECRET?err_missing_jwt}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY?err_missing_encryption}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET?err_missing_webhook}
+      - SEED_USER_PASSWORD=${SEED_USER_PASSWORD?err_missing_seed_password}
       - INTERVENTION_WEBHOOK_URL=${INTERVENTION_WEBHOOK_URL:-}
       - RTP_UDP_PORT=10000
     ports:
@@ -84,15 +100,17 @@ services:
     build:
       context: .
       dockerfile: infrastructure/docker/Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:4000/ws}
     container_name: voxshield-frontend
     restart: unless-stopped
+    networks:
+      - voxshield-net
     depends_on:
       - backend
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:4000/api
-      - NEXT_PUBLIC_WS_URL=ws://localhost:4000/ws
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:4000/api}
+      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:4000/ws}
     ports:
       - "3000:3000"
-
-volumes:
-  postgres_data:

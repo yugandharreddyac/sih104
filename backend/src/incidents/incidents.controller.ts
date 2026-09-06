@@ -21,7 +21,7 @@ const updateStatusSchema = z.object({
 export class IncidentsController {
   public static async list(req: Request, res: Response): Promise<void> {
     const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
-    const list = IncidentsService.listIncidents(isGlobalAdmin ? undefined : req.user?.organizationId);
+    const list = await IncidentsService.listIncidents(isGlobalAdmin ? undefined : req.user?.organizationId);
     res.status(200).json({
       success: true,
       data: list,
@@ -30,7 +30,7 @@ export class IncidentsController {
   }
 
   public static async getById(req: Request, res: Response): Promise<void> {
-    const incident = IncidentsService.getIncidentById(req.params.id);
+    const incident = await IncidentsService.getIncidentById(req.params.id);
     if (!incident) {
       res.status(404).json({
         success: false,

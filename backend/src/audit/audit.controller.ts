@@ -7,7 +7,7 @@ export class AuditController {
     const limit = parseInt(req.query.limit as string, 10) || 50;
     const isGlobalAdmin = req.user?.role === RoleName.ADMIN || (req.user?.permissions && req.user.permissions.includes(Permission.ALL));
     const orgId = isGlobalAdmin ? undefined : req.user?.organizationId;
-    const logs = AuditService.getRecentLogs(limit, orgId);
+    const logs = await AuditService.getRecentLogs(limit, orgId);
     res.status(200).json({
       success: true,
       data: logs,

@@ -2,15 +2,33 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { env } from '../../config/env';
 import { logger } from '../../utils/logger';
+import { redisDb } from '../../database/redis';
 
 const ALLOWED_PROVIDERS = ['GENERIC_TELEPHONY'];
 
 // Bounded in-memory replay cache: Map<signature, expiryTimestamp>
+// Used ONLY as a fallback if Redis is unavailable.
 const replayCache = new Map<string, number>();
 const MAX_CACHE_SIZE = 10000;
 
-function checkAndCacheSignature(signature: string, timestampMs: number): boolean {
+async function checkAndCacheSignature(signature: string, timestampMs: number): Promise<boolean> {
   const now = Date.now();
+  // Keep in cache for 6 minutes (5 mins age + 1 min clock drift)
+  const ttlSeconds = 6 * 60;
+  
+  // Try Redis first for distributed atomic replay protection
+  const redisResult = await redisDb.setNX(`webhook_replay:${signature}`, now.toString(), ttlSeconds);
+  
+  if (redisResult === false) {
+    return false; // Replayed (Redis correctly identified it as a duplicate)
+  }
+  
+  if (redisResult === true) {
+    return true; // Successfully cached in Redis
+  }
+
+  // If redisResult is null, Redis is offline. Fallback to degraded local memory protection.
+  logger.warn('Redis unavailable. Webhook auth using degraded local memory replay protection.');
   
   // Bounded memory protection and cleanup
   if (replayCache.size > MAX_CACHE_SIZE) {
@@ -25,11 +43,10 @@ function checkAndCacheSignature(signature: string, timestampMs: number): boolean
   }
 
   if (replayCache.has(signature)) {
-    return false; // Replayed
+    return false; // Replayed locally
   }
 
-  // Keep in cache for 6 minutes (5 mins age + 1 min clock drift)
-  replayCache.set(signature, timestampMs + 6 * 60 * 1000);
+  replayCache.set(signature, timestampMs + (ttlSeconds * 1000));
   return true;
 }
 
@@ -37,7 +54,7 @@ function checkAndCacheSignature(signature: string, timestampMs: number): boolean
  * Generic provider-agnostic webhook authentication middleware.
  * Verifies deterministic HMAC-SHA256 signatures, timestamps, provider identity, and prevents replays.
  */
-export function requireWebhookSignature(req: Request, res: Response, next: NextFunction): void {
+export async function requireWebhookSignature(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const provider = req.header('X-Webhook-Provider');
     const signature = req.header('X-Webhook-Signature');
@@ -87,7 +104,8 @@ export function requireWebhookSignature(req: Request, res: Response, next: NextF
     
     if (expectedBuffer.length === signatureBuffer.length && crypto.timingSafeEqual(expectedBuffer, signatureBuffer)) {
       // Signature matches. Now check replay cache.
-      if (!checkAndCacheSignature(signature, timestamp)) {
+      const isUnique = await checkAndCacheSignature(signature, timestamp);
+      if (!isUnique) {
          res.status(401).json({ success: false, error: 'UNAUTHORIZED', message: 'Webhook payload already processed (replay detected)' });
          return;
       }

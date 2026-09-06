@@ -103,8 +103,8 @@ describe('Priority 6: Incident & Intervention Lifecycle', () => {
       summary: 'Org B incident',
     });
 
-    const incidentsA = IncidentsService.listIncidents(orgA);
-    const incidentsB = IncidentsService.listIncidents(orgB);
+    const incidentsA = await IncidentsService.listIncidents(orgA);
+    const incidentsB = await IncidentsService.listIncidents(orgB);
 
     expect(incidentsA.every((i) => i.organizationId === orgA)).toBe(true);
     expect(incidentsB.every((i) => i.organizationId === orgB)).toBe(true);

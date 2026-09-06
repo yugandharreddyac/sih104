@@ -45,15 +45,15 @@ router.get('/', authenticate, async (req: Request, res: Response) => {
       },
       {
         model_id: 'replay_spectral_decay_v3',
-        name: 'Physical & Digital Acoustic Replay Detector',
+        name: 'Physical & Digital Acoustic Replay Detector (Deterministic DSP / Heuristic Fallback)',
         version: '3.0.1',
         category: 'REPLAY',
         framework: 'NUMPY_DSP',
         device: 'CPU',
         status: 'AVAILABLE',
-        checksum_sha256: 'c591240182390123901238401923840192384019238401923840192384019238',
+        checksum_sha256: 'NOT_APPLICABLE',
         license: 'MIT',
-        training_dataset: 'ASVspoof 2019 Physical Access (PA) + Replayed Acoustic Corpus',
+        training_dataset: 'NONE (Deterministic DSP / Heuristic Rule-Based Algorithm - No Training Dataset)',
       },
     ],
   });

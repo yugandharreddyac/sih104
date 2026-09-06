@@ -13,7 +13,7 @@
 - **Task**: Acoustic and physical replay attack detection.
 - **Sampling Rate**: 16 kHz.
 - **License**: Open Academic Research.
-- **Usage**: Benchmark for high-frequency spectral roll-off and double reverberation decay.
+- **Usage**: Reference benchmark design for acoustic replay detection (not downloaded locally; active replay detector operates on deterministic DSP heuristics).
 
 ### VoxCeleb 1 & 2
 - **Task**: Speaker identification and biometric verification.

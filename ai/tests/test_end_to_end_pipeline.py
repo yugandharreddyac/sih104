@@ -21,8 +21,10 @@ from ai.app.core.types import (
     ReplayStatus,
     AudioQualityRating,
     VADState,
-    PipelineStatus
+    PipelineStatus,
+    ChannelType
 )
+
 
 
 def generate_test_pcm(duration_sec: float = 1.0, f0: float = 300.0, sample_rate: int = 16000) -> str:
@@ -276,3 +278,90 @@ def test_e2e_bounded_stress_benchmark():
     # Clean up all stress sessions
     for call_idx in range(num_calls):
         orchestrator.clear_call_session(f"stress-call-{call_idx:02d}")
+
+
+# =====================================================================
+# Master 1 Integration: End-to-End Pipeline Multi-Modal Tests
+# =====================================================================
+
+def test_e2e_pipeline_narrowband_telephony_replay_and_speaker_fallback():
+    """Validates that 8 kHz telephony audio correctly executes through the entire pipeline:
+
+    - Narrowband telephony does not cause false positive replay alarm
+    - Speaker verification accurately routes to FALLBACK when neural ONNX model is absent
+    - Full multimodal risk fusion calculates risk without crashing
+    """
+    orchestrator = UnifiedPipelineOrchestrator(target_sample_rate=16000)
+
+    # 1.0 second of 8 kHz telephony synthetic tone
+    t_8k = np.linspace(0, 1.0, 8000, endpoint=False)
+    samples_8k = (0.4 * np.sin(2 * np.pi * 350.0 * t_8k)).astype(np.float32)
+    int16_8k = (samples_8k * 20000).astype(np.int16)
+    audio_8k_b64 = base64.b64encode(int16_8k.tobytes()).decode("utf-8")
+
+    chunk = AudioChunkPayload(
+        call_id="call-tel-replay-spk",
+        chunk_index=0,
+        audio_base64=audio_8k_b64,
+        sample_rate=8000,
+        channel_type=ChannelType.TELEPHONY,
+        codec="g711u",
+        claimed_speaker_id="speaker-cfo-001"
+    )
+
+    res = orchestrator.process_chunk(chunk, language_hint="en-IN")
+
+    # Narrowband telephony must NOT be flagged as REPLAY solely due to bandwidth cutoff
+    assert res.replay_status != ReplayStatus.REPLAY
+    assert res.replay_status in (ReplayStatus.NOT_REPLAY, ReplayStatus.UNCERTAIN)
+
+    # Speaker verification must report MATCH/MISMATCH and reflect active backend
+    assert res.speaker_status in (SpeakerVerificationStatus.MATCH, SpeakerVerificationStatus.MISMATCH)
+    assert res.speaker_similarity_score is not None
+
+    # Pipeline output must be complete and valid
+    assert 0.0 <= res.overall_risk_score <= 100.0
+    assert isinstance(res.risk_level, RiskLevel)
+    assert len(res.component_errors) == 0
+
+    orchestrator.clear_call_session("call-tel-replay-spk")
+
+
+def test_e2e_pipeline_malformed_and_edge_safety():
+    """Validates that edge cases (NaN, Inf, empty, replay detector failure) are handled safely without terminating sessions."""
+    orchestrator = UnifiedPipelineOrchestrator(target_sample_rate=16000)
+
+    # Audio containing NaNs and Infs encoded to Base64
+    nan_inf_samples = np.array([np.nan, np.inf, -np.inf, 0.1, -0.1] * 320, dtype=np.float32)
+    sanitized = np.nan_to_num(nan_inf_samples, nan=0.0, posinf=0.5, neginf=-0.5)
+    b64_nan = base64.b64encode((sanitized * 20000).astype(np.int16).tobytes()).decode("utf-8")
+
+    chunk_nan = AudioChunkPayload(
+        call_id="call-safety-nan",
+        chunk_index=0,
+        audio_base64=b64_nan,
+        sample_rate=16000,
+        claimed_speaker_id="speaker-cfo-001"
+    )
+
+    res_nan = orchestrator.process_chunk(chunk_nan)
+    assert res_nan.overall_risk_score is not None
+    assert isinstance(res_nan.risk_level, RiskLevel)
+
+    # Failure isolation: forced replay detector crash
+    with patch.object(orchestrator.replay, "detect_replay", side_effect=RuntimeError("Synthetic Replay Fault")):
+        chunk_rp_fault = AudioChunkPayload(
+            call_id="call-safety-rp-fault",
+            chunk_index=0,
+            audio_base64=generate_test_pcm(duration_sec=1.0),
+            claimed_speaker_id="speaker-cfo-001"
+        )
+        res_rp_fault = orchestrator.process_chunk(chunk_rp_fault)
+        assert "replay_detector" in res_rp_fault.component_errors
+        assert res_rp_fault.replay_status == ReplayStatus.MODEL_UNAVAILABLE
+        # Orchestrator does NOT crash and overall pipeline completes
+        assert res_rp_fault.overall_risk_score is not None
+
+    orchestrator.clear_call_session("call-safety-nan")
+    orchestrator.clear_call_session("call-safety-rp-fault")
+

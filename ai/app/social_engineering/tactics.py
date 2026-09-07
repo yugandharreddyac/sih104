@@ -34,7 +34,7 @@ TACTIC_PATTERNS: Dict[SocialEngineeringTactic, List[re.Pattern]] = {
     SocialEngineeringTactic.VERIFICATION_BYPASS: [
         re.compile(r'\b(no\s+need\s+to\s+call|don\'t\s+use\s+the\s+official\s+number|i\s+will\s+verify\s+you\s+here|i\s+will\s+verify\s+you\s+right\s+here)\b', re.I),
         re.compile(r'\b(do\s+not|don\'t)\s+(call|contact)\s+(the\s+)?(branch|bank|official|official\s+number)\b', re.I),
-        re.compile(r'\b(bypass|skip\s+the|manual\s+override\s+code|direct\s+verification)\b', re.I),
+        re.compile(r'\b(bypass|skip(\s+the)?|manual\s+override\s+code|direct\s+verification)\b', re.I),
     ],
     SocialEngineeringTactic.FINANCIAL_PRESSURE: [
         re.compile(r'\b(transfer|wire|send)\s+(money|funds|balance|payment)\s+(to\s+secure\s+account|immediately|via\s+upi)\b', re.I),

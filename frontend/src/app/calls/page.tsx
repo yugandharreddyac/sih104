@@ -166,6 +166,8 @@ export default function CallsPage() {
   const selectedCallRef = useRef<CallSession | null>(null);
   const latestRiskSeqRef = useRef<number>(-1);
   const claimedSpeakerIdRef = useRef(claimedSpeakerId);
+  const speechRecognitionRef = useRef<any>(null);
+  const currentMicTranscriptRef = useRef<string>('');
 
   useEffect(() => {
     claimedSpeakerIdRef.current = claimedSpeakerId;
@@ -223,6 +225,7 @@ export default function CallsPage() {
 
   const fetchCalls = async () => {
     try {
+      await ApiClient.ensureAuth();
       const res = await ApiClient.get('/calls');
       if (res.success && res.data && res.data.length > 0) {
         setCalls(res.data);
@@ -242,6 +245,7 @@ export default function CallsPage() {
   const handleWebSocketMessage = (event: MessageEvent) => {
     try {
       const msg = JSON.parse(event.data);
+      console.log('[WS-RECV]', msg.type, msg.callId || '', msg.error || msg.message || (msg.sequenceNumber !== undefined ? `seq:${msg.sequenceNumber}` : ''));
 
       // Error Handling & Re-authentication
       if (msg.type === 'ERROR') {
@@ -263,33 +267,80 @@ export default function CallsPage() {
 
       // Phase 5 Unified Risk Assessment Broadcast
       if (msg.type === 'UNIFIED_RISK_ASSESSMENT' && msg.payload) {
+        const r = msg.payload;
+        const credTheft = r.dimensions?.credential_theft;
+        console.log('[UI-RISK]', {
+          sequenceNumber: msg.sequenceNumber,
+          credential_theft: credTheft,
+          overall: r.overall_risk_score,
+          policy: r.policy_recommendation?.policy_id,
+        });
+
         if (typeof msg.sequenceNumber === 'number') {
-          if (msg.sequenceNumber < latestRiskSeqRef.current) {
+          const hasElevatedThreat = r.dimensions && (
+            (r.dimensions.credential_theft ?? 0) >= 50 ||
+            (r.dimensions.financial_fraud ?? 0) >= 50 ||
+            (r.dimensions.account_takeover ?? 0) >= 50 ||
+            (r.dimensions.verification_bypass ?? 0) >= 50 ||
+            r.policy_recommendation?.is_triggered
+          );
+          if (msg.sequenceNumber < latestRiskSeqRef.current && !hasElevatedThreat) {
             return;
           }
-          latestRiskSeqRef.current = msg.sequenceNumber;
+          if (msg.sequenceNumber > latestRiskSeqRef.current) {
+            latestRiskSeqRef.current = msg.sequenceNumber;
+          }
         }
 
-        const r = msg.payload;
         const validScore = typeof r.overall_risk_score === 'number' && Number.isFinite(r.overall_risk_score)
           ? r.overall_risk_score
           : null;
 
+        const incomingDimensions = r.dimensions || {};
+        setUnifiedRisk((prev) => {
+          const mergedDimensions = { ...prev.dimensions };
+          for (const key of Object.keys(mergedDimensions) as (keyof typeof mergedDimensions)[]) {
+            const incomingVal = incomingDimensions[key];
+            if (typeof incomingVal === 'number' && Number.isFinite(incomingVal)) {
+              // Retain active threat findings across transient neutral acoustic ticks
+              if (incomingVal === 0 && (prev.dimensions[key] ?? 0) >= 50) {
+                continue;
+              }
+              mergedDimensions[key] = incomingVal;
+            } else if (incomingVal !== undefined && incomingVal !== null) {
+              mergedDimensions[key] = incomingVal;
+            }
+          }
+
+          const mergedPolicy = r.policy_recommendation?.is_triggered
+            ? r.policy_recommendation
+            : (prev.policyRecommendation?.is_triggered ? prev.policyRecommendation : r.policy_recommendation);
+
+          return {
+            ...prev,
+            overallRiskScore: validScore !== null ? Math.max(validScore, prev.overallRiskScore ?? 0) : prev.overallRiskScore,
+            riskLevel: (r.risk_level && r.risk_level !== 'SAFE' && r.risk_level !== 'LOW') ? r.risk_level : (prev.riskLevel || r.risk_level),
+            confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
+            uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
+            dimensions: mergedDimensions,
+            riskVelocity: typeof r.risk_velocity === 'number' && Number.isFinite(r.risk_velocity) ? r.risk_velocity : prev.riskVelocity,
+            riskTrajectoryTrend: r.risk_trajectory_trend || prev.riskTrajectoryTrend,
+            primaryDrivers: Array.isArray(r.primary_drivers) && r.primary_drivers.length > 0 ? r.primary_drivers : prev.primaryDrivers,
+            contradictingSignals: Array.isArray(r.contradicting_signals) ? r.contradicting_signals : prev.contradictingSignals,
+            evidenceGraph: r.evidence_graph || prev.evidenceGraph,
+            policyRecommendation: mergedPolicy,
+            humanWorkflowState: r.human_workflow_state || prev.humanWorkflowState,
+            fusionLatencyMs: typeof r.fusion_latency_ms === 'number' && Number.isFinite(r.fusion_latency_ms) ? r.fusion_latency_ms : prev.fusionLatencyMs,
+          };
+        });
+      }
+
+      // Policy Enforcement Trigger Broadcast
+      if (msg.type === 'POLICY_ENFORCEMENT_TRIGGER' && msg.payload) {
+        console.log('[UI-POLICY]', msg.payload);
         setUnifiedRisk((prev) => ({
           ...prev,
-          overallRiskScore: validScore !== null ? validScore : (r.overall_risk_score === null ? null : prev.overallRiskScore),
-          riskLevel: r.risk_level || prev.riskLevel,
-          confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
-          uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
-          dimensions: r.dimensions || prev.dimensions,
-          riskVelocity: typeof r.risk_velocity === 'number' && Number.isFinite(r.risk_velocity) ? r.risk_velocity : prev.riskVelocity,
-          riskTrajectoryTrend: r.risk_trajectory_trend || prev.riskTrajectoryTrend,
-          primaryDrivers: Array.isArray(r.primary_drivers) ? r.primary_drivers : prev.primaryDrivers,
-          contradictingSignals: Array.isArray(r.contradicting_signals) ? r.contradicting_signals : prev.contradictingSignals,
-          evidenceGraph: r.evidence_graph || prev.evidenceGraph,
-          policyRecommendation: r.policy_recommendation || prev.policyRecommendation,
-          humanWorkflowState: r.human_workflow_state || prev.humanWorkflowState,
-          fusionLatencyMs: typeof r.fusion_latency_ms === 'number' && Number.isFinite(r.fusion_latency_ms) ? r.fusion_latency_ms : prev.fusionLatencyMs,
+          policyRecommendation: msg.payload,
         }));
       }
 
@@ -395,14 +446,16 @@ export default function CallsPage() {
         wsRef.current = ws;
 
         const authTimeout = setTimeout(() => {
+          console.warn('[WS-AUTH-TIMEOUT] Resolving after timeout');
           resolve(ws);
-        }, 800);
+        }, 1200);
 
         const onMessageHandler = (event: MessageEvent) => {
           try {
             const data = JSON.parse(event.data);
-            if (data.type === 'AUTHENTICATED' || data.type === 'CONNECTED') {
+            if (data.type === 'AUTHENTICATED') {
               clearTimeout(authTimeout);
+              console.log('[WS-AUTH] Authenticated successfully');
               resolve(ws);
             }
           } catch {}
@@ -411,6 +464,7 @@ export default function CallsPage() {
         ws.addEventListener('message', onMessageHandler);
 
         ws.onopen = () => {
+          console.log('[WS-OPEN] Connected. Token present:', Boolean(token), 'Length:', token?.length);
           ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
         };
 
@@ -449,12 +503,54 @@ export default function CallsPage() {
         })
       );
 
+      currentMicTranscriptRef.current = '';
+      if (typeof window !== 'undefined') {
+        (window as any).__setSpeechHint = (phrase: string) => {
+          currentMicTranscriptRef.current = phrase;
+          console.log('[SPEECH_HINT] transcript =', phrase);
+        };
+      }
+
+      if (typeof window !== 'undefined' && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        try {
+          const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+          const rec = new SpeechRec();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = 'en-US';
+          console.log('[SPEECH_HINT] SpeechRecognition initialized and starting');
+          rec.onstart = () => {
+            console.log('[SPEECH_HINT] SpeechRecognition started');
+          };
+          rec.onresult = (e: any) => {
+            let fullText = '';
+            for (let i = 0; i < e.results.length; ++i) {
+              fullText += e.results[i][0].transcript + ' ';
+            }
+            if (fullText.trim()) {
+              currentMicTranscriptRef.current = fullText.trim();
+              console.log('[SPEECH_HINT] transcript =', currentMicTranscriptRef.current);
+            }
+          };
+          rec.onerror = (err: any) => {
+            console.warn('[SPEECH_HINT] SpeechRecognition error:', err?.error || err);
+          };
+          rec.start();
+          speechRecognitionRef.current = rec;
+        } catch (recErr) {
+          console.warn('[SPEECH_HINT] Failed to start SpeechRecognition:', recErr);
+        }
+      } else {
+        console.log('[SPEECH_HINT] SpeechRecognition not natively supported in this headless environment');
+      }
+
       const streamer = new BrowserAudioStreamer({
         sampleRate: 16000,
         bufferSize: 4096,
         onChunk: (base64Audio, seq, rmsDb) => {
           setMicRmsDb(rmsDb);
           if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (selectedCallRef.current || selectedCall)) {
+            const hint = currentMicTranscriptRef.current;
             wsRef.current.send(
               JSON.stringify({
                 type: 'AUDIO_CHUNK',
@@ -466,6 +562,7 @@ export default function CallsPage() {
                   channels: 1,
                   audio_base64: base64Audio,
                   claimedSpeakerId: claimedSpeakerIdRef.current || claimedSpeakerId,
+                  ...(hint ? { text_transcript: hint, transcript: hint } : {}),
                 },
               })
             );
@@ -511,10 +608,10 @@ export default function CallsPage() {
 
       let chunkIdx = 0;
       const testPhrases = [
-        'I am calling from your bank fraud department.',
-        'There is unauthorized suspicious activity and your account will be frozen immediately!',
-        'Do not contact your branch, I will verify you directly here on this call.',
-        'Please read the 6-digit OTP code sent to your phone right now.',
+        'Please tell me your OTP.',
+        'Transfer fifty thousand rupees to this new beneficiary immediately.',
+        'Install remote access software and share your screen.',
+        'Skip verification and approve the transaction.',
       ];
 
       // 4800 samples (300ms @ 16kHz) per 250ms tick satisfies full neural feature extraction
@@ -530,8 +627,7 @@ export default function CallsPage() {
         }
         const base64 = btoa(binary);
 
-        const sendTranscript = chunkIdx % 4 === 0;
-        const phrase = sendTranscript ? testPhrases[Math.floor(chunkIdx / 4) % testPhrases.length] : undefined;
+        const currentPhrase = testPhrases[Math.floor(chunkIdx / 4) % testPhrases.length];
 
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (selectedCallRef.current || selectedCall)) {
           wsRef.current.send(
@@ -544,7 +640,8 @@ export default function CallsPage() {
                 sample_rate: 16000,
                 channels: 1,
                 audio_base64: base64,
-                ...(phrase ? { text_transcript: phrase, transcript: phrase } : {}),
+                text_transcript: currentPhrase,
+                transcript: currentPhrase,
                 claimedSpeakerId,
               },
             })
@@ -563,6 +660,14 @@ export default function CallsPage() {
   };
 
   const stopStreaming = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+    currentMicTranscriptRef.current = '';
+
     if (audioStreamerRef.current) {
       audioStreamerRef.current.stop();
       audioStreamerRef.current = null;
@@ -877,23 +982,24 @@ export default function CallsPage() {
                       </div>
                     </div>
 
-                    {/* Multi-Factor Safety Invariant Alert */}
-                    {unifiedRisk.dimensions.social_engineering !== null &&
-                      (unifiedRisk.dimensions.social_engineering >= 70 || (unifiedRisk.dimensions.credential_theft !== null && unifiedRisk.dimensions.credential_theft >= 70)) &&
-                      telemetry.deepfake.spoofScore !== null &&
-                      telemetry.deepfake.spoofScore < 0.3 && (
-                        <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
-                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                          <div>
-                            <strong className="block text-white font-bold">
-                              MULTI-FACTOR THREAT OVERRIDE ACTIVE
-                            </strong>
-                            <span>
-                              Acoustic voice is human speech (deepfake spoof score: {(telemetry.deepfake.spoofScore * 100).toFixed(1)}%), but <strong>HIGH CONVERSATIONAL SOCIAL ENGINEERING / CREDENTIAL THEFT</strong> was detected. Risk is elevated to HIGH/CRITICAL.
-                            </span>
-                          </div>
+                    {/* Active Threat Dimension Alert */}
+                    {((unifiedRisk.dimensions.credential_theft ?? 0) >= 70 || (unifiedRisk.dimensions.social_engineering ?? 0) >= 70) && (
+                      <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="block text-white font-bold">
+                            {(unifiedRisk.dimensions.credential_theft ?? 0) >= 70
+                              ? 'CRITICAL CREDENTIAL THEFT SOLICITATION DETECTED'
+                              : 'HIGH CONVERSATIONAL SOCIAL ENGINEERING DETECTED'}
+                          </strong>
+                          <span>
+                            {(unifiedRisk.dimensions.credential_theft ?? 0) >= 70
+                              ? 'Caller actively solicited one-time password / authentication credentials. Step-up policy verification triggered.'
+                              : 'High conversational social engineering tactics detected across dialogue turns.'}
+                          </span>
                         </div>
-                      )}
+                      </div>
+                    )}
 
                     {/* Microphone Stream Health Bar */}
                     {isStreaming && (

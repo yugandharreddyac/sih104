@@ -85,6 +85,8 @@ export interface CallAsrState {
   pendingChunk?: CallAsrPendingChunk;
   lastCommittedSeq: number;
   latestConvResult?: any;
+  latestTranscript?: string;
+  latestRiskAssessment?: any;
 }
 
 export class WebSocketGateway {
@@ -244,6 +246,7 @@ export class WebSocketGateway {
         if (state.activeCallId) {
           StreamBufferManager.remove(state.activeCallId);
           SpeechBufferManager.remove(state.activeCallId);
+          WebSocketGateway.callAsrStates.delete(state.activeCallId);
         }
         this.clientStates.delete(ws);
         console.info(`🔌 WebSocket client disconnected`);
@@ -671,6 +674,11 @@ export class WebSocketGateway {
         WebSocketGateway.acousticInFlightCalls.delete(callId);
       }
 
+      const asrState = WebSocketGateway.getOrCreateAsrState(callId);
+      if (textTranscript) {
+        asrState.latestTranscript = textTranscript;
+      }
+
       let convResult: any;
       if (textTranscript) {
         // Direct text provided (test fixture or client hint): process synchronously
@@ -684,6 +692,7 @@ export class WebSocketGateway {
           timestampMs: Date.now(),
           claimedSpeakerId,
         });
+        asrState.latestConvResult = convResult;
       } else {
         // Asynchronous VAD-based Speech Buffer (2-3s speech accumulator for Whisper)
         const speechBuf = SpeechBufferManager.getOrCreate(callId, streamId);
@@ -706,6 +715,8 @@ export class WebSocketGateway {
 
               if (speechBuf.markProcessingComplete(speechSegment.turnIndex)) {
                 if (asyncConv.asr?.transcript) {
+                  asrState.latestTranscript = asyncConv.asr.transcript;
+                  asrState.latestConvResult = asyncConv;
                   const sanitized = PrivacyFirewall.sanitize(asyncConv.asr.transcript).sanitizedText;
                   this.broadcast({
                     type: 'ASR_FINAL',
@@ -745,11 +756,13 @@ export class WebSocketGateway {
                   },
                   state.user?.id
                 );
+                asrState.latestRiskAssessment = asyncRisk;
 
+                const asyncBroadcastSeq = Math.max(sequenceNumber, speechSegment.turnIndex);
                 this.broadcast({
                   type: 'UNIFIED_RISK_ASSESSMENT',
                   callId,
-                  sequenceNumber: speechSegment.turnIndex,
+                  sequenceNumber: asyncBroadcastSeq,
                   payload: asyncRisk,
                   timestamp: new Date().toISOString(),
                 });
@@ -840,17 +853,22 @@ export class WebSocketGateway {
       }
 
       // Execute Phase 5 Unified Multi-Modal Risk Fusion
+      const effectiveTranscript = textTranscript || asrState.latestTranscript;
+      if (effectiveTranscript) {
+        console.log(`[BACKEND-RISK-EVAL] seq=${sequenceNumber} callId=${callId} effectiveTranscript="${effectiveTranscript}"`);
+      }
       const unifiedRisk = await RiskService.evaluateUnifiedRisk(
         {
           callId,
           streamId,
           chunkIndex: sequenceNumber,
           audioBase64: normalized.base64Data,
-          textTranscript,
+          textTranscript: effectiveTranscript,
           claimedSpeakerId,
         },
         state.user?.id
       );
+      asrState.latestRiskAssessment = unifiedRisk;
 
       this.broadcast({
         type: 'UNIFIED_RISK_ASSESSMENT',
@@ -928,6 +946,7 @@ export class WebSocketGateway {
       if (callId) {
         StreamBufferManager.remove(callId);
         SpeechBufferManager.remove(callId);
+        WebSocketGateway.callAsrStates.delete(callId);
         state.activeCallId = undefined;
         state.activeStreamId = undefined;
 

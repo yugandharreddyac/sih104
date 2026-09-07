@@ -470,13 +470,20 @@ class UnifiedPipelineOrchestrator:
         # Build risk dimensions dictionary
         dim_dict = {}
         if fusion_result.dimensions:
-            for k in [
-                "acoustic_spectral", "biometric_speaker", "replay_channel",
-                "transport_manipulation", "linguistic_language", "intent_adversarial",
-                "sensitive_data_request", "social_engineering_tactic", "requested_action",
-                "situational_inconsistency"
-            ]:
-                dim_dict[k] = getattr(fusion_result.dimensions, k, 0.0)
+            dim_dict = fusion_result.dimensions.model_dump()
+            # Also include legacy aliases for backward compatibility
+            dim_dict.update({
+                "acoustic_spectral": fusion_result.dimensions.deepfake_synthetic,
+                "biometric_speaker": fusion_result.dimensions.identity_impersonation,
+                "replay_channel": fusion_result.dimensions.replay_injection,
+                "transport_manipulation": 0.0,
+                "linguistic_language": 0.0,
+                "intent_adversarial": fusion_result.dimensions.financial_fraud,
+                "sensitive_data_request": fusion_result.dimensions.credential_theft,
+                "social_engineering_tactic": fusion_result.dimensions.social_engineering,
+                "requested_action": fusion_result.dimensions.account_takeover,
+                "situational_inconsistency": fusion_result.dimensions.inconsistency,
+            })
 
         # Recommendation
         policy_rec = fusion_result.policy_recommendation

@@ -221,6 +221,17 @@ class HumanDecisionState(str, Enum):
     EXECUTED = "EXECUTED"
 
 
+class DimensionProvenance(BaseModel):
+    dimension: str
+    score: Optional[float] = None
+    confidence: float = 0.0
+    status: str = "EVALUATED"  # "EVALUATED", "NOT_EVALUATED", "UNAVAILABLE", "INSUFFICIENT_DATA"
+    source_detector: str = ""
+    model_version: str = ""
+    evidence: List[str] = Field(default_factory=list)
+    timestamp: Optional[str] = None
+
+
 class UnifiedRiskFusionResult(BaseModel):
     status: PipelineStatus = PipelineStatus.AVAILABLE
     call_id: str
@@ -231,6 +242,7 @@ class UnifiedRiskFusionResult(BaseModel):
     confidence: float = Field(..., ge=0.0, le=1.0)
     uncertainty: float = Field(..., ge=0.0, le=1.0)
     dimensions: RiskDimensions
+    dimension_provenance: Dict[str, DimensionProvenance] = Field(default_factory=dict)
     risk_velocity: float = 0.0  # ΔRisk/sec
     risk_trajectory_trend: str = "STABLE"  # "ESCALATING", "STABLE", "DECAYING"
     primary_drivers: List[str] = Field(default_factory=list)
@@ -358,10 +370,10 @@ class ActionType(str, Enum):
 
 class RequestedActionResult(BaseModel):
     action_type: ActionType
-    target_object: str
+    target_object: str = ""
     is_high_risk: bool = False
     confidence: float = Field(..., ge=0.0, le=1.0)
-    raw_action_text_redacted: str
+    raw_action_text_redacted: str = ""
 
 
 class CallerClaimType(str, Enum):

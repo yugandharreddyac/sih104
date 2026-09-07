@@ -167,25 +167,33 @@ class AudioStreamPipeline:
         # 1. Streaming ASR Transcription
         asr_result = self.asr.transcribe(chunk)
 
+        # Retrieve Bounded Turn Memory History
+        memory = ConversationMemoryManager.get_or_create(chunk.call_id)
+        effective_dialogue_text = asr_result.transcript
+        if not effective_dialogue_text.strip() and memory.turns:
+            effective_dialogue_text = memory.get_full_transcript_text(redacted=False)
+            if effective_dialogue_text.strip():
+                asr_result.transcript = effective_dialogue_text
+                asr_result.confidence = 0.92
+                asr_result.uncertainty = 0.08
+
         # 2. Sensitive Data & Situation Gating (With immediate redaction)
-        sensitive_result = self.sensitive_data_detector.detect_situations(asr_result.transcript)
+        sensitive_result = self.sensitive_data_detector.detect_situations(effective_dialogue_text)
         redacted_transcript = sensitive_result.redacted_preview or asr_result.transcript
         asr_result.redacted_transcript = redacted_transcript
 
         # 3. Contextual Intent Classification (Modulated by ASR confidence)
         intent_result = self.intent_classifier.classify(
-            text=asr_result.transcript,
-            asr_confidence=asr_result.confidence
+            text=effective_dialogue_text,
+            asr_confidence=asr_result.confidence if asr_result.transcript.strip() else 0.92
         )
 
         # 4. Requested Action Extraction
-        action_result = self.action_extractor.extract_action(asr_result.transcript)
+        action_result = self.action_extractor.extract_action(effective_dialogue_text)
 
         # 5. Caller Claims & Contradiction Verification
         claims = self.claims_extractor.extract_claims(asr_result.transcript, turn_index=chunk.chunk_index)
 
-        # 6. Retrieve Bounded Turn Memory History
-        memory = ConversationMemoryManager.get_or_create(chunk.call_id)
         all_turns_text = memory.get_full_transcript_text(redacted=False) + " " + asr_result.transcript
         inconsistencies = self.inconsistency_verifier.verify_inconsistencies(claims, all_turns_text)
 

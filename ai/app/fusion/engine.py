@@ -79,8 +79,8 @@ class MultiModalRiskFusionEngine:
         raw_signals = self.signal_bus.normalize_signals(call_id, acoustic, conversational)
         valid_signals, val_errors = SignalValidator.validate_signals(raw_signals)
 
-        # 2. Compute 10-dimensional matrix, overall score, confidence, uncertainty
-        dimensions, overall_score, confidence, uncertainty = self.matrix_calculator.compute_dimensions(valid_signals)
+        # 2. Compute 10-dimensional matrix, overall score, confidence, uncertainty, and provenance
+        dimensions, overall_score, confidence, uncertainty, dimension_provenance = self.matrix_calculator.compute_dimensions(valid_signals)
         risk_level = self.matrix_calculator.classify_risk_level(overall_score, confidence)
 
         # 3. Temporal velocity and trajectory tracking
@@ -119,7 +119,7 @@ class MultiModalRiskFusionEngine:
 
         # 6. Advisory Policy Recommendation
         policy_rec: Optional[PolicyEvaluationResult] = None
-        if (dimensions.credential_theft is not None and dimensions.credential_theft >= 75.0) or (conversational and conversational.sensitive_data.contains_direct_request):
+        if (dimensions.credential_theft is not None and dimensions.credential_theft >= 70.0) or (conversational and conversational.sensitive_data.contains_direct_request):
             policy_rec = PolicyEvaluationResult(
                 policy_id="POL-CRED-001",
                 policy_name="Enforce Out-of-Band Step-Up on Credential Harvesting",
@@ -128,7 +128,7 @@ class MultiModalRiskFusionEngine:
                 is_triggered=True,
                 recommended_action=PolicyAction.REQUIRE_STEP_UP_VERIFICATION,
                 requires_human_approval=True,
-                matched_conditions=["intent == OTP_REQUEST", "risk.credential_theft >= 75.0"],
+                matched_conditions=["intent == OTP_REQUEST", "risk.credential_theft >= 70.0"],
                 explanation="Policy POL-CRED-001 triggered: High-confidence credential solicitation detected under active social engineering pressure."
             )
         elif dimensions.financial_fraud is not None and dimensions.financial_fraud >= 70.0:
@@ -168,6 +168,7 @@ class MultiModalRiskFusionEngine:
             confidence=confidence,
             uncertainty=uncertainty,
             dimensions=dimensions,
+            dimension_provenance=dimension_provenance,
             risk_velocity=velocity,
             risk_trajectory_trend=trend,
             primary_drivers=primary_drivers,
@@ -178,3 +179,7 @@ class MultiModalRiskFusionEngine:
             fusion_latency_ms=latency_ms,
             timestamp=now_iso
         )
+
+    # Alias for caller flexibility
+    evaluate = evaluate_risk
+

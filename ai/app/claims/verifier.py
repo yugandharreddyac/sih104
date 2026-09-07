@@ -30,3 +30,15 @@ class ConversationInconsistencyVerifier:
             inconsistencies.append("Severe behavioral contradiction: Caller stated they would not request an OTP, but later solicited the OTP directly.")
 
         return inconsistencies
+
+    def compute_inconsistency_score(self, inconsistencies: List[str]) -> float:
+        """
+        Derives normalized score [0.0 - 1.0] from detected inconsistencies.
+        """
+        if not inconsistencies:
+            return 0.0
+        return round(min(1.0, 0.70 + 0.15 * len(inconsistencies)), 2)
+
+
+# Alias for compatibility
+InconsistencyVerifier = ConversationInconsistencyVerifier

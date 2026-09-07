@@ -4,7 +4,7 @@ Tracks risk trajectory, escalation rate (ΔRisk/sec), and rolling window stabili
 """
 
 import time
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from collections import deque
 
 
@@ -19,10 +19,13 @@ class TemporalRiskEngine:
         self.max_history = max_history_turns
         self._history: Dict[str, deque] = {}
 
-    def track_risk(self, call_id: str, current_score: float) -> Tuple[float, str]:
+    def track_risk(self, call_id: str, current_score: Optional[float]) -> Tuple[float, str]:
         """
         Updates call temporal risk history and returns (risk_velocity, trajectory_trend).
         """
+        if current_score is None:
+            return 0.0, "STABLE"
+
         now = time.time()
         if call_id not in self._history:
             self._history[call_id] = deque(maxlen=self.max_history)

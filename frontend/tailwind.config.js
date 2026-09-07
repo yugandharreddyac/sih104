@@ -7,9 +7,13 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-ibm-plex-sans)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-ibm-plex-mono)', 'ui-monospace', 'monospace'],
+      },
       colors: {
-        background: '#090d16',
-        card: '#0f172a',
+        background: '#070b14',
+        card: '#0c1222',
         'card-border': '#1e293b',
         primary: {
           50: '#eef2ff',

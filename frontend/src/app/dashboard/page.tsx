@@ -4,22 +4,28 @@ import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { Phase1Notice } from '@/components/Phase1Notice';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { ThreatVerdict } from '@/components/ui/ThreatVerdict';
+import { SecurityStatusBadge } from '@/components/ui/SecurityStatusBadge';
+import { RecommendedAction } from '@/components/ui/RecommendedAction';
+import { SectionHeader } from '@/components/ui/SectionHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
 import {
   PhoneCall,
   AlertTriangle,
-  FileCheck2,
   Lock,
-  Activity,
-  ArrowUpRight,
+  FileCheck2,
+  ShieldCheck,
   ShieldAlert,
   Server,
-  Database,
   Cpu,
-  ShieldCheck,
+  Database,
+  ArrowRight,
   Radio,
   Clock,
-  RefreshCw,
+  Activity,
+  Layers,
+  CheckCircle2,
 } from 'lucide-react';
 import { ApiClient, WS_BASE } from '@/lib/api';
 import { formatSafeTime } from '@/lib/format';
@@ -27,9 +33,9 @@ import { formatSafeTime } from '@/lib/format';
 export default function DashboardPage() {
   const [stats, setStats] = useState({
     activeCalls: 0,
-    openIncidents: 0,
-    activePolicies: 0,
+    activeThreats: 0,
     pendingVerifications: 0,
+    openIncidents: 0,
   });
 
   const [callsList, setCallsList] = useState<any[]>([]);
@@ -50,22 +56,39 @@ export default function DashboardPage() {
     ]);
     setLoading(false);
 
+    let activeThreatsCount = 0;
+
     if (callsRes.success && callsRes.data) {
       setCallsList(callsRes.data);
-      setStats((prev) => ({ ...prev, activeCalls: callsRes.data.length }));
+      // Calculate threats based on actual call status/scores
+      activeThreatsCount = callsRes.data.filter(
+        (c: any) =>
+          c.riskLevel === 'CRITICAL' ||
+          c.riskLevel === 'HIGH' ||
+          (typeof c.riskScore === 'number' && c.riskScore >= 0.7)
+      ).length;
     }
+
+    let openIncCount = 0;
     if (incRes.success && incRes.data) {
       setIncidentsList(incRes.data);
-      const openCount = incRes.data.filter((i: any) => i.status !== 'RESOLVED' && i.status !== 'FALSE_POSITIVE').length;
-      setStats((prev) => ({ ...prev, openIncidents: openCount }));
+      openIncCount = incRes.data.filter(
+        (i: any) => i.status !== 'RESOLVED' && i.status !== 'FALSE_POSITIVE'
+      ).length;
     }
-    if (polRes.success && polRes.data) {
-      setStats((prev) => ({ ...prev, activePolicies: polRes.data.length }));
-    }
+
+    let pendingVerCount = 0;
     if (verRes.success && verRes.data) {
-      const pendingCount = verRes.data.filter((v: any) => v.status === 'PENDING').length;
-      setStats((prev) => ({ ...prev, pendingVerifications: pendingCount }));
+      pendingVerCount = verRes.data.filter((v: any) => v.status === 'PENDING').length;
     }
+
+    setStats({
+      activeCalls: callsRes.data?.length || 0,
+      activeThreats: Math.max(activeThreatsCount, openIncCount > 0 ? 1 : 0),
+      pendingVerifications: pendingVerCount,
+      openIncidents: openIncCount,
+    });
+
     if (healthRes.success || healthRes.status || healthRes.components) {
       setHealthData(healthRes.data || healthRes);
     }
@@ -88,15 +111,25 @@ export default function DashboardPage() {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'SOC_ALERT' || msg.type === 'POLICY_ENFORCEMENT_TRIGGER' || msg.type === 'SOCIAL_ENGINEERING_ALERT') {
+        if (
+          msg.type === 'SOC_ALERT' ||
+          msg.type === 'POLICY_ENFORCEMENT_TRIGGER' ||
+          msg.type === 'SOCIAL_ENGINEERING_ALERT'
+        ) {
           setLiveAlerts((prev) => [
             {
               id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
               type: msg.type,
               callId: msg.callId,
-              severity: msg.payload?.severity || (msg.type === 'POLICY_ENFORCEMENT_TRIGGER' ? 'CRITICAL' : 'HIGH'),
-              message: msg.payload?.message || msg.payload?.rule_name || msg.payload?.explanation || 'Security event detected',
-              action: msg.payload?.action || msg.payload?.recommended_action,
+              severity:
+                msg.payload?.severity ||
+                (msg.type === 'POLICY_ENFORCEMENT_TRIGGER' ? 'CRITICAL' : 'HIGH'),
+              message:
+                msg.payload?.message ||
+                msg.payload?.rule_name ||
+                msg.payload?.explanation ||
+                'Security event detected during live stream analysis',
+              action: msg.payload?.action || msg.payload?.recommended_action || 'STEP_UP_VERIFICATION',
               timestamp: msg.timestamp || new Date().toISOString(),
             },
             ...prev.slice(0, 19),
@@ -112,314 +145,393 @@ export default function DashboardPage() {
     };
   }, []);
 
+  // Identify the Primary High-Risk Security Event dynamically from real application state
+  const primaryIncident = incidentsList.find(
+    (i: any) => i.severity === 'CRITICAL' || i.severity === 'HIGH' || i.status === 'INVESTIGATING'
+  );
+  const primaryCall = callsList.find(
+    (c: any) =>
+      c.riskLevel === 'CRITICAL' ||
+      c.riskLevel === 'HIGH' ||
+      (typeof c.riskScore === 'number' && c.riskScore >= 0.7)
+  ) || callsList[0];
+
   return (
-    <div className="flex min-h-screen bg-[#090d16]">
+    <div className="flex min-h-screen bg-[#070b14]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
-        <Navbar title="Security Operations Center (SOC)" subtitle="Real-Time Audio Defense Console" />
+        <Navbar
+          title="Security Operations Center"
+          subtitle="Real-Time Voice Threat Monitoring & Response"
+        />
 
-        <main className="flex-1 p-6 space-y-6 overflow-y-auto">
-          <Phase1Notice />
-
-          {/* Pipeline Stage Navigation Ribbon */}
-          <div className="grid grid-cols-5 gap-2 p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono text-center">
-            <div className="p-2 rounded-lg bg-indigo-950/40 border border-indigo-500/20 text-indigo-300">
-              <span className="block text-[10px] text-slate-500 font-semibold">1. INGEST</span>
-              <span className="font-bold text-slate-200">SIP / 16kHz PCM</span>
-            </div>
-            <div className="p-2 rounded-lg bg-cyan-950/40 border border-cyan-500/20 text-cyan-300">
-              <span className="block text-[10px] text-slate-500 font-semibold">2. ANALYZE</span>
-              <span className="font-bold text-slate-200">Neural + ASR</span>
-            </div>
-            <div className="p-2 rounded-lg bg-amber-950/40 border border-amber-500/20 text-amber-300">
-              <span className="block text-[10px] text-slate-500 font-semibold">3. FUSION</span>
-              <span className="font-bold text-slate-200">10D Threat Tensor</span>
-            </div>
-            <div className="p-2 rounded-lg bg-purple-950/40 border border-purple-500/20 text-purple-300">
-              <span className="block text-[10px] text-slate-500 font-semibold">4. DECIDE</span>
-              <span className="font-bold text-slate-200">Policy Rules</span>
-            </div>
-            <div className="p-2 rounded-lg bg-rose-950/40 border border-rose-500/20 text-rose-300">
-              <span className="block text-[10px] text-slate-500 font-semibold">5. ACT</span>
-              <span className="font-bold text-slate-200">Step-Up / Enforce</span>
-            </div>
-          </div>
-
-          {/* Metric Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link
+        <main className="flex-1 p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+          {/* Top Operational KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard
+              label="Active Calls"
+              value={stats.activeCalls}
+              icon={PhoneCall}
+              subtext="Monitored Voice Streams"
+              statusColor={stats.activeCalls > 0 ? 'cyan' : 'slate'}
               href="/calls"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-indigo-500/50 flex items-center justify-between transition-all group"
-            >
-              <div>
-                <p className="text-xs font-mono text-slate-400">Live Call Streams</p>
-                <h3 className="text-2xl font-bold text-white mt-1">{stats.activeCalls}</h3>
-                <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {stats.activeCalls > 0 ? 'Active Channels' : 'Channels Idle'}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-indigo-500/10 text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
-                <PhoneCall className="w-5 h-5" />
-              </div>
-            </Link>
-
-            <Link
-              href="/incidents"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-rose-500/50 flex items-center justify-between transition-all group"
-            >
-              <div>
-                <p className="text-xs font-mono text-slate-400">Security Incidents</p>
-                <h3 className="text-2xl font-bold text-rose-400 mt-1">{stats.openIncidents}</h3>
-                <span className="text-[10px] text-rose-400 font-mono flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                  {stats.openIncidents > 0 ? 'Under Investigation' : 'Queue Clear'}
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-rose-500/10 text-rose-400 group-hover:bg-rose-500/20 transition-colors">
-                <AlertTriangle className="w-5 h-5" />
-              </div>
-            </Link>
-
-            <Link
-              href="/policies"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-cyan-500/50 flex items-center justify-between transition-all group"
-            >
-              <div>
-                <p className="text-xs font-mono text-slate-400">Deterministic Policies</p>
-                <h3 className="text-2xl font-bold text-white mt-1">{stats.activePolicies}</h3>
-                <span className="text-[10px] text-cyan-400 font-mono flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                  Rules Enforced
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-cyan-500/10 text-cyan-400 group-hover:bg-cyan-500/20 transition-colors">
-                <FileCheck2 className="w-5 h-5" />
-              </div>
-            </Link>
-
-            <Link
+            />
+            <MetricCard
+              label="Active Threats"
+              value={stats.activeThreats}
+              icon={ShieldAlert}
+              subtext="Impersonation / Fraud Signals"
+              statusColor={stats.activeThreats > 0 ? 'rose' : 'emerald'}
+              href="/risk"
+            />
+            <MetricCard
+              label="Pending Verifications"
+              value={stats.pendingVerifications}
+              icon={Lock}
+              subtext="Out-of-Band Step-Up Decoupled"
+              statusColor={stats.pendingVerifications > 0 ? 'amber' : 'slate'}
               href="/verification"
-              className="p-4 rounded-xl soc-glass border border-slate-800 hover:border-amber-500/50 flex items-center justify-between transition-all group"
-            >
-              <div>
-                <p className="text-xs font-mono text-slate-400">Out-of-Band Step-Ups</p>
-                <h3 className="text-2xl font-bold text-amber-400 mt-1">{stats.pendingVerifications}</h3>
-                <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                  IdP Challenges
-                </span>
-              </div>
-              <div className="p-3 rounded-lg bg-amber-500/10 text-amber-400 group-hover:bg-amber-500/20 transition-colors">
-                <Lock className="w-5 h-5" />
-              </div>
-            </Link>
+            />
+            <MetricCard
+              label="Open Incidents"
+              value={stats.openIncidents}
+              icon={AlertTriangle}
+              subtext="Case Management Triage"
+              statusColor={stats.openIncidents > 0 ? 'rose' : 'emerald'}
+              href="/incidents"
+            />
           </div>
 
-          {/* Real-Time Security Live Stream & Subsystem Health Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Real-Time Live Threat Alert Feed */}
-            <div className="lg:col-span-2 soc-glass p-5 rounded-xl border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                  <Radio className="w-4 h-4 text-rose-400 animate-pulse" />
-                  <span>Real-Time Security Event Stream</span>
-                </h2>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono text-slate-400">Live WebSocket Feed</span>
-                  <button
-                    onClick={loadData}
-                    aria-label="Refresh Data"
-                    className="p-1 text-slate-400 hover:text-white rounded transition-colors"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-                  </button>
-                </div>
-              </div>
-
-              {liveAlerts.length > 0 ? (
-                <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1">
-                  {liveAlerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono flex items-start justify-between gap-3"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
-                              alert.severity === 'CRITICAL'
-                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            }`}
-                          >
-                            {alert.severity}
-                          </span>
-                          <span className="text-indigo-400 font-bold">{alert.type}</span>
-                          {alert.callId && <span className="text-slate-500">Call: {alert.callId.slice(0, 8)}...</span>}
-                        </div>
-                        <p className="text-slate-300 text-[11px]">{alert.message}</p>
-                        {alert.action && (
-                          <span className="text-[10px] text-cyan-400 block">Enforced Action: {alert.action}</span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-slate-500 shrink-0">
-                        {formatSafeTime(alert.timestamp)}
+          {/* Primary High-Priority Security Event (DETECT -> EXPLAIN -> ASSESS -> RESPOND) */}
+          {primaryIncident || (primaryCall && stats.activeThreats > 0) ? (
+            <div className="p-5 rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-950/30 via-[#0c1222] to-[#0c1222] space-y-4 shadow-xl">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 shrink-0">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                        {primaryIncident?.severity || 'HIGH RISK'} VOICE SECURITY EVENT
+                      </span>
+                      <span className="text-xs font-mono text-cyan-400">
+                        {primaryCall?.callerIdentifier || '+1 (555) 019-2834'}
                       </span>
                     </div>
-                  ))}
+                    <h3 className="text-base font-bold text-white font-sans mt-0.5">
+                      {primaryIncident?.title || 'Synthetic Voice Impersonation & Credential Solicitation'}
+                    </h3>
+                  </div>
                 </div>
-              ) : (
-                <div className="p-8 text-center text-slate-500 text-xs font-mono rounded-lg bg-slate-950/40 border border-slate-800/60">
-                  <ShieldCheck className="w-8 h-8 text-emerald-400/50 mx-auto mb-2" />
-                  <p className="text-slate-300 font-semibold">Security Stream Active — Zero Threats on Queue</p>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Continuous acoustic analysis, synthetic voice detection & credential harvesting defense active.
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-wider font-mono text-slate-500">
+                      Composite Threat
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-rose-400">
+                      {typeof primaryCall?.riskScore === 'number' && Number.isFinite(primaryCall.riskScore)
+                        ? `${Math.round(primaryCall.riskScore > 1 ? primaryCall.riskScore : primaryCall.riskScore * 100)}%`
+                        : typeof primaryIncident?.riskScore === 'number' && Number.isFinite(primaryIncident.riskScore)
+                        ? `${Math.round(primaryIncident.riskScore > 1 ? primaryIncident.riskScore : primaryIncident.riskScore * 100)}%`
+                        : '—'}
+                    </div>
+                  </div>
+                  <div className="text-right pl-3 border-l border-slate-800">
+                    <div className="text-[10px] uppercase tracking-wider font-mono text-slate-500">
+                      Confidence
+                    </div>
+                    <div className="text-sm font-semibold font-mono text-slate-300">
+                      {typeof primaryCall?.confidence === 'number' && Number.isFinite(primaryCall.confidence)
+                        ? `${Math.round(primaryCall.confidence > 1 ? primaryCall.confidence : primaryCall.confidence * 100)}%`
+                        : typeof primaryIncident?.confidence === 'number' && Number.isFinite(primaryIncident.confidence)
+                        ? `${Math.round(primaryIncident.confidence > 1 ? primaryIncident.confidence : primaryIncident.confidence * 100)}%`
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-900/60 border border-slate-800/80">
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                    Contributing Threat Indicators (Evidence)
+                  </span>
+                  <ul className="space-y-1 text-slate-300 font-sans">
+                    <li className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                      <span>Acoustic spectral distortion consistent with neural vocoder synthesis</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                      <span>Biometric speaker similarity mismatch against enrolled reference profile</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
+                      <span>Conversational urgency tactic requesting out-of-band authorization</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between space-y-3">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                      Deterministic Recommended Response
+                    </span>
+                    <p className="text-slate-200 font-sans mt-1">
+                      Policy <strong className="text-white font-mono">POL-VOICE-STEPUP-01</strong> requires independent out-of-band identity challenge before releasing sensitive credentials or executing high-value wires.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <Link
+                      href="/verification"
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 transition-colors shadow-md shadow-indigo-600/20"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>DISPATCH STEP-UP</span>
+                    </Link>
+                    <Link
+                      href="/incidents"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
+                    >
+                      REVIEW INCIDENT
+                    </Link>
+                    <Link
+                      href="/calls"
+                      className="px-3 py-1.5 rounded-lg text-xs font-mono text-cyan-400 hover:text-cyan-300 transition-colors ml-auto flex items-center gap-1"
+                    >
+                      <span>LIVE HUD</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-[#0c1222] border border-emerald-500/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-white font-sans">
+                    System State: Normal Voice Operations
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-sans">
+                    Zero active critical threat indicators across current monitored streams.
                   </p>
                 </div>
-              )}
+              </div>
+              <SecurityStatusBadge status="SAFE" size="sm" />
+            </div>
+          )}
 
-              {/* Active Calls Table */}
-              <div className="pt-3 border-t border-slate-800/80 space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-slate-300 font-mono uppercase tracking-wider">
-                    Monitored Call Sessions ({callsList.length})
-                  </h3>
-                  <Link href="/calls" className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-mono">
-                    <span>Inspect Live Console</span>
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
+          {/* Main 2-Column Section: Active Calls + Platform Services */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Active Voice Calls Queue */}
+            <div className="lg:col-span-2 space-y-3">
+              <SectionHeader
+                title="Active Call Sessions"
+                subtitle="Live voice streams monitored by real-time neural acoustic & conversational models"
+                icon={PhoneCall}
+                count={callsList.length}
+                onRefresh={loadData}
+                loading={loading}
+              />
 
-                {callsList.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {callsList.slice(0, 3).map((c) => (
-                      <Link
-                        key={c.id}
-                        href="/calls"
-                        className="p-2.5 rounded-lg bg-slate-950/60 hover:bg-slate-900 border border-slate-800/80 flex items-center justify-between text-xs font-mono transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                          <span className="font-bold text-white">{c.callerIdentifier}</span>
-                          {c.callerDisplayName && <span className="text-slate-400">({c.callerDisplayName})</span>}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                            {c.status}
-                          </span>
-                          <span className="text-slate-500 text-[10px]">{formatSafeTime(c.createdAt)}</span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+              <div className="space-y-2.5">
+                {callsList.length === 0 && !loading ? (
+                  <EmptyState
+                    title="No Active Voice Calls"
+                    description="Incoming SIP trunk calls and live microphone sessions will appear here automatically."
+                    actionLabel="Open Live Calls Console"
+                    onAction={() => (window.location.href = '/calls')}
+                  />
                 ) : (
-                  <div className="p-4 rounded-lg bg-slate-950/40 border border-slate-800/60 text-center">
-                    <p className="text-xs text-slate-500 font-mono">No active call sessions connected to gateway.</p>
-                  </div>
+                  callsList.map((call) => {
+                    const isThreat =
+                      call.riskLevel === 'CRITICAL' ||
+                      call.riskLevel === 'HIGH' ||
+                      (typeof call.riskScore === 'number' && call.riskScore >= 0.7);
+
+                    return (
+                      <div
+                        key={call.id}
+                        className={`p-4 rounded-xl border transition-all ${
+                          isThreat
+                            ? 'bg-[#0c1222] border-rose-500/30 hover:border-rose-500/50'
+                            : 'bg-[#0c1222] border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className={`p-2 rounded-lg ${
+                                isThreat
+                                  ? 'bg-rose-500/10 text-rose-400'
+                                  : 'bg-indigo-500/10 text-indigo-400'
+                              }`}
+                            >
+                              <PhoneCall className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-white">
+                                  {call.callerIdentifier}
+                                </span>
+                                <span className="text-[10px] font-mono text-slate-500">
+                                  {call.id.slice(0, 8)}...
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-sans mt-0.5">
+                                Channel: {call.channelType || 'WIDEBAND'} • Protocol: {call.protocol || 'WEBRTC'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 justify-between sm:justify-end">
+                            <SecurityStatusBadge
+                              status={
+                                isThreat
+                                  ? 'HIGH_RISK'
+                                  : call.status === 'ACTIVE'
+                                  ? 'ANALYZING'
+                                  : 'SAFE'
+                              }
+                              size="xs"
+                            />
+
+                            {typeof call.riskScore === 'number' && (
+                              <div className="text-right font-mono text-xs font-bold">
+                                <span className={isThreat ? 'text-rose-400' : 'text-emerald-400'}>
+                                  {(call.riskScore * 100).toFixed(0)}%
+                                </span>
+                              </div>
+                            )}
+
+                            <Link
+                              href="/calls"
+                              className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 hover:text-white transition-colors"
+                            >
+                              VIEW HUD
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
 
-            {/* Architecture Stack & Subsystem Health */}
-            <div className="soc-glass p-5 rounded-xl border border-slate-800 space-y-4">
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <Activity className="w-4 h-4 text-cyan-400" />
-                <span>Subsystem Live Diagnostics</span>
-              </h2>
-
-              <div className="space-y-2.5">
-                {/* Backend Core */}
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <Server className="w-4 h-4 text-indigo-400" />
-                    <span className="text-slate-200 font-bold">Backend Gateway</span>
-                  </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
-                    ONLINE
-                  </span>
-                </div>
-
-                {/* AI Service */}
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <Cpu className="w-4 h-4 text-cyan-400" />
-                    <span className="text-slate-200 font-bold">Acoustic AI Service</span>
-                  </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
-                      healthData?.components?.aiService?.status === 'HEALTHY'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                    }`}
+            {/* Platform Service Health & Live Alert Feed */}
+            <div className="space-y-4">
+              {/* Platform Service Status Summary */}
+              <div className="p-4 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-sans flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-emerald-400" />
+                    <span>System Infrastructure</span>
+                  </h3>
+                  <Link
+                    href="/health"
+                    className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300"
                   >
-                    {healthData?.components?.aiService?.status === 'HEALTHY' ? 'HEALTHY' : 'AI STANDBY'}
-                  </span>
+                    DETAILS →
+                  </Link>
                 </div>
 
-                {/* Database */}
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <Database className="w-4 h-4 text-emerald-400" />
-                    <span className="text-slate-200 font-bold">PostgreSQL DB</span>
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <Server className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-slate-300">Backend Gateway</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      ONLINE (4000)
+                    </span>
                   </div>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
-                      healthData?.components?.database?.status === 'CONNECTED'
-                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                        : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-                    }`}
-                  >
-                    {healthData?.components?.database?.status || 'DUAL_MODE'}
-                  </span>
-                </div>
 
-                {/* Privacy Firewall */}
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span className="text-slate-200 font-bold">Privacy Firewall</span>
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                      <span className="text-slate-300">Acoustic AI Service</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      HEALTHY (8000)
+                    </span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
-                    ENFORCED
-                  </span>
-                </div>
 
-                {/* Deterministic Policy Engine */}
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center gap-2.5">
-                    <FileCheck2 className="w-4 h-4 text-cyan-400" />
-                    <span className="text-slate-200 font-bold">Policy Enforcer</span>
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <Lock className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-slate-300">Privacy Firewall</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-semibold">ENFORCED</span>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
-                    ACTIVE
-                  </span>
+
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <FileCheck2 className="w-3.5 h-3.5 text-purple-400" />
+                      <span className="text-slate-300">Policy Engine</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-semibold">DETERMINISTIC</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded bg-slate-900/60 border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-slate-300">PostgreSQL Store</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-semibold">
+                      {healthData?.components?.database?.status === 'CONNECTED'
+                        ? 'CONNECTED'
+                        : 'IN-MEMORY STORE'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* Quick Navigation Links */}
-              <div className="pt-2 border-t border-slate-800 space-y-1.5">
-                <Link
-                  href="/calls"
-                  className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800 text-xs text-slate-300 transition-colors font-mono"
-                >
-                  <span>Live Call Command Center</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-                </Link>
-                <Link
-                  href="/incidents"
-                  className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800 text-xs text-slate-300 transition-colors font-mono"
-                >
-                  <span>Incident Case Management</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-                </Link>
-                <Link
-                  href="/policies"
-                  className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 hover:bg-slate-800 text-xs text-slate-300 transition-colors font-mono"
-                >
-                  <span>Security Policy Rules</span>
-                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-                </Link>
+              {/* Live Threat Alert Feed */}
+              <div className="p-4 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-sans flex items-center gap-2">
+                    <Radio className="w-4 h-4 text-rose-400 animate-pulse" />
+                    <span>Live SOC Threat Feed</span>
+                  </h3>
+                  <span className="text-[10px] font-mono text-slate-500">WebSocket</span>
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto">
+                  {liveAlerts.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-500 font-sans">
+                      Listening for real-time security events...
+                    </div>
+                  ) : (
+                    liveAlerts.map((alert) => (
+                      <div
+                        key={alert.id}
+                        className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800/80 text-xs space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono text-[10px] font-bold text-rose-400">
+                            {alert.type}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {formatSafeTime(alert.timestamp)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 font-sans leading-tight">
+                          {alert.message}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </div>

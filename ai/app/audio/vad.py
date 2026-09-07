@@ -91,10 +91,13 @@ class VoiceActivityDetector:
         # State Decision Boundaries
         if speech_probability >= 0.55 and energy_rms > 0.01:
             state = VADState.SPEECH
-            confidence = min(1.0, 0.5 + (speech_probability - 0.55) * 1.1)
+            confidence = float(np.clip(0.5 + (speech_probability - 0.55) * 1.1, 0.0, 1.0))
         elif speech_probability <= 0.30 or energy_rms < 0.004:
             state = VADState.NON_SPEECH
-            confidence = min(1.0, 0.5 + (0.30 - speech_probability) * 1.5)
+            if energy_rms < 0.004:
+                confidence = float(np.clip(0.5 + (1.0 - energy_rms / 0.004) * 0.5, 0.0, 1.0))
+            else:
+                confidence = float(np.clip(0.5 + (0.30 - speech_probability) * 1.5, 0.0, 1.0))
         else:
             state = VADState.UNCERTAIN
             confidence = 0.45
@@ -103,10 +106,10 @@ class VoiceActivityDetector:
 
         return VADResult(
             state=state,
-            speech_probability=round(speech_probability, 4),
+            speech_probability=round(float(np.clip(speech_probability, 0.0, 1.0)), 4),
             energy_rms=round(energy_rms, 5),
             zero_crossing_rate=round(zcr, 4),
             spectral_centroid=round(spectral_centroid, 1),
-            confidence=round(confidence, 3),
+            confidence=round(float(np.clip(confidence, 0.0, 1.0)), 3),
             processing_latency_ms=round(elapsed_ms, 3)
         )

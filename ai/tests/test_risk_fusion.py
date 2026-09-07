@@ -129,3 +129,11 @@ def test_quality_degradation_dampens_confidence():
     # Poor quality must reduce fusion confidence
     assert result.confidence < 0.50
     assert result.uncertainty > 0.50
+
+
+def test_empty_signals_yields_none_overall_and_inconclusive():
+    engine = MultiModalRiskFusionEngine()
+    result = engine.evaluate_risk(call_id="call-empty-03", acoustic=None, conversational=None)
+    assert result.overall_risk_score is None
+    assert result.risk_level == RiskLevel.INCONCLUSIVE
+    assert result.dimensions.overall is None

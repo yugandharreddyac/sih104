@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -13,26 +13,46 @@ import {
   ScrollText,
   Activity,
   LogOut,
+  Radio,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 
-
-const NAV_ITEMS = [
-  { name: 'SOC Overview', href: '/dashboard', icon: Shield },
-  { name: 'Live Calls', href: '/calls', icon: PhoneCall },
-  { name: 'Incidents', href: '/incidents', icon: AlertTriangle },
-  { name: 'Policy Engine', href: '/policies', icon: FileCheck2 },
-  { name: 'Step-Up Verification', href: '/verification', icon: Lock },
-  { name: 'Risk Assessment', href: '/risk', icon: BarChart3 },
-  { name: 'Audit Logs', href: '/audit', icon: ScrollText },
-  { name: 'System Health', href: '/health', icon: Activity },
+const NAV_GROUPS = [
+  {
+    group: 'MONITOR',
+    items: [
+      { name: 'SOC Overview', href: '/dashboard', icon: Shield },
+      { name: 'Live Calls', href: '/calls', icon: PhoneCall, isLive: true },
+    ],
+  },
+  {
+    group: 'RESPOND',
+    items: [
+      { name: 'Incidents', href: '/incidents', icon: AlertTriangle },
+      { name: 'Step-Up Verification', href: '/verification', icon: Lock },
+    ],
+  },
+  {
+    group: 'ANALYZE',
+    items: [
+      { name: 'Risk Assessment', href: '/risk', icon: BarChart3 },
+      { name: 'Policy Engine', href: '/policies', icon: FileCheck2 },
+    ],
+  },
+  {
+    group: 'GOVERN',
+    items: [
+      { name: 'Audit Logs', href: '/audit', icon: ScrollText },
+      { name: 'System Health', href: '/health', icon: Activity },
+    ],
+  },
 ];
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
-  const [user, setUser] = React.useState<any>(null);
+  const [user, setUser] = useState<any>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const localUser = ApiClient.getUser();
     if (localUser) {
       setUser(localUser);
@@ -63,62 +83,90 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 bg-[#0c1222] border-r border-slate-800 flex flex-col h-screen sticky top-0 shrink-0 select-none">
+    <aside className="w-64 bg-[#0c1222] border-r border-slate-800/80 flex flex-col h-screen sticky top-0 shrink-0 select-none z-40">
       {/* Brand Header */}
-      <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
-          <Shield className="w-5 h-5 text-white" />
+      <div className="p-4 border-b border-slate-800/80 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+          <Shield className="w-4 h-4 text-white" />
         </div>
         <div>
-          <div className="font-bold text-base tracking-wider text-white flex items-center gap-1.5">
+          <div className="font-bold text-sm tracking-wider text-white flex items-center gap-1.5 font-sans">
             <span>VOXSHIELD</span>
-            <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-mono">SOC</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20">
+              SOC
+            </span>
           </div>
-          <p className="text-[10px] text-slate-400 font-mono tracking-tight">AI Voice Security</p>
+          <p className="text-[10px] text-slate-400 font-sans tracking-tight">
+            AI Voice Security Operations
+          </p>
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500 font-mono">
-          Security Operations
-        </div>
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname?.startsWith(item.href));
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-all ${
-                isActive
-                  ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-400'}`} />
-              <span>{item.name}</span>
-            </Link>
-          );
-        })}
+      {/* Categorized Navigation */}
+      <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto">
+        {NAV_GROUPS.map((group) => (
+          <div key={group.group} className="space-y-1">
+            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+              {group.group}
+            </div>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive =
+                pathname === item.href ||
+                (item.href !== '/dashboard' && pathname?.startsWith(item.href));
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm font-semibold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/60 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Icon
+                      className={`w-4 h-4 shrink-0 ${
+                        isActive ? 'text-indigo-400' : 'text-slate-400'
+                      }`}
+                    />
+                    <span className="font-sans truncate">{item.name}</span>
+                  </div>
+
+                  {item.isLive && (
+                    <span className="flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                      <span>LIVE</span>
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
-      {/* Footer / User Profile */}
-      <div className="p-3 border-t border-slate-800 bg-[#0a0f1d]">
-        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/60 border border-slate-800/80">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-7 h-7 rounded-full bg-indigo-500/30 border border-indigo-400/30 flex items-center justify-center text-xs font-bold text-indigo-300">
+      {/* User Session Footer */}
+      <div className="p-3 border-t border-slate-800/80 bg-[#080d1a]">
+        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-300 font-mono shrink-0">
               {getInitials(user?.fullName)}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-200 truncate">{user?.fullName || 'SOC Operator'}</p>
-              <p className="text-[10px] text-indigo-400 font-mono truncate">{user?.role || 'AUTHENTICATED'}</p>
+              <p className="text-xs font-semibold text-slate-200 font-sans truncate">
+                {user?.fullName || 'SOC Operator'}
+              </p>
+              <p className="text-[10px] text-indigo-400 font-mono truncate">
+                {user?.role || 'AUTHENTICATED'}
+              </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            title="Logout"
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
+            title="Logout Session"
+            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors shrink-0"
           >
             <LogOut className="w-4 h-4" />
           </button>
@@ -127,4 +175,5 @@ export const Sidebar: React.FC = () => {
     </aside>
   );
 };
+
 

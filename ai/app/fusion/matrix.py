@@ -3,7 +3,7 @@
 Computes quality-aware weighted scores, corroboration multipliers, and contradiction penalties.
 """
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from ai.app.core.types import (
     CanonicalRiskSignal,
     RiskDimensions,
@@ -84,36 +84,42 @@ class RiskMatrixCalculator:
             total_weight += eff_conf * w
             confidence_sum += eff_conf
 
-        # Calculate cross-modal corroboration multiplier
-        # 1 signal = 1.0x, 2 signals = 1.25x, 3 signals = 1.50x, 4+ signals = 1.80x
-        if active_threat_signals >= 4:
-            corrob_multiplier = 1.80
-        elif active_threat_signals == 3:
-            corrob_multiplier = 1.50
-        elif active_threat_signals == 2:
-            corrob_multiplier = 1.25
+        if total_weight == 0.0:
+            overall_score = None
+            dim_scores["overall"] = None
+            avg_confidence = 0.0
+            uncertainty = 1.0
         else:
-            corrob_multiplier = 1.0
+            # Calculate cross-modal corroboration multiplier
+            # 1 signal = 1.0x, 2 signals = 1.25x, 3 signals = 1.50x, 4+ signals = 1.80x
+            if active_threat_signals >= 4:
+                corrob_multiplier = 1.80
+            elif active_threat_signals == 3:
+                corrob_multiplier = 1.50
+            elif active_threat_signals == 2:
+                corrob_multiplier = 1.25
+            else:
+                corrob_multiplier = 1.0
 
-        base_overall = (weighted_sum / total_weight) if total_weight > 0 else 0.0
-        overall_score = min(100.0, max(0.0, base_overall * corrob_multiplier))
-        dim_scores["overall"] = round(overall_score, 1)
+            base_overall = weighted_sum / total_weight
+            overall_score = round(min(100.0, max(0.0, base_overall * corrob_multiplier)), 1)
+            dim_scores["overall"] = overall_score
+            avg_confidence = round(confidence_sum / max(1, len(signals)), 3) if signals else 0.0
+            uncertainty = round(1.0 - avg_confidence, 3)
 
         for k in dim_scores:
-            dim_scores[k] = round(min(100.0, max(0.0, dim_scores[k])), 1)
-
-        avg_confidence = round(confidence_sum / max(1, len(signals)), 3) if signals else 0.50
-        uncertainty = round(1.0 - avg_confidence, 3)
+            if dim_scores[k] is not None:
+                dim_scores[k] = round(min(100.0, max(0.0, dim_scores[k])), 1)
 
         dimensions = RiskDimensions(**dim_scores)
-        return dimensions, round(overall_score, 1), avg_confidence, uncertainty
+        return dimensions, overall_score, avg_confidence, uncertainty
 
     @staticmethod
-    def classify_risk_level(score: float, confidence: float) -> RiskLevel:
+    def classify_risk_level(score: Optional[float], confidence: float) -> RiskLevel:
         """
         Classifies risk level based on score and confidence thresholding.
         """
-        if confidence < 0.35:
+        if score is None or confidence < 0.35:
             return RiskLevel.INCONCLUSIVE
 
         if score >= 80.0:

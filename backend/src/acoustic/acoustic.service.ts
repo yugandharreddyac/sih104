@@ -22,7 +22,7 @@ export type AcousticFailureReason =
   | 'AI_UNAVAILABLE';
 
 export class AcousticService {
-  public static readonly AI_TIMEOUT_MS = 1200;
+  public static readonly AI_TIMEOUT_MS = 3500;
 
   /**
    * Validates that the AI service returned a valid object containing required sub-objects and finite values.
@@ -222,6 +222,8 @@ export class AcousticService {
     } finally {
       clearTimeout(timeoutId);
     }
+
+    console.error('[ACOUSTIC_SERVICE ERROR]', failureReason, 'httpStatus:', httpStatus, 'callId:', payload.callId);
 
     // Record audit event safely without leaking raw audio
     try {

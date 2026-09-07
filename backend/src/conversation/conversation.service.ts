@@ -21,7 +21,7 @@ export type ConversationFailureReason =
   | 'AI_UNAVAILABLE';
 
 export class ConversationService {
-  public static readonly AI_TIMEOUT_MS = 1200;
+  public static readonly AI_TIMEOUT_MS = 4000;
 
   /**
    * Validates that the AI service returned a valid object containing required sub-objects and finite values.

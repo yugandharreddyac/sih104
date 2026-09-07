@@ -143,16 +143,16 @@ class CanonicalRiskSignal(BaseModel):
 # --- Phase 5 10-Dimensional Risk Model ---
 
 class RiskDimensions(BaseModel):
-    overall: float = Field(0.0, ge=0.0, le=100.0)
-    identity_impersonation: float = Field(0.0, ge=0.0, le=100.0)
-    deepfake_synthetic: float = Field(0.0, ge=0.0, le=100.0)
-    replay_injection: float = Field(0.0, ge=0.0, le=100.0)
-    social_engineering: float = Field(0.0, ge=0.0, le=100.0)
-    credential_theft: float = Field(0.0, ge=0.0, le=100.0)
-    financial_fraud: float = Field(0.0, ge=0.0, le=100.0)
-    account_takeover: float = Field(0.0, ge=0.0, le=100.0)
-    verification_bypass: float = Field(0.0, ge=0.0, le=100.0)
-    inconsistency: float = Field(0.0, ge=0.0, le=100.0)
+    overall: Optional[float] = Field(None, ge=0.0, le=100.0)
+    identity_impersonation: Optional[float] = Field(None, ge=0.0, le=100.0)
+    deepfake_synthetic: Optional[float] = Field(None, ge=0.0, le=100.0)
+    replay_injection: Optional[float] = Field(None, ge=0.0, le=100.0)
+    social_engineering: Optional[float] = Field(None, ge=0.0, le=100.0)
+    credential_theft: Optional[float] = Field(None, ge=0.0, le=100.0)
+    financial_fraud: Optional[float] = Field(None, ge=0.0, le=100.0)
+    account_takeover: Optional[float] = Field(None, ge=0.0, le=100.0)
+    verification_bypass: Optional[float] = Field(None, ge=0.0, le=100.0)
+    inconsistency: Optional[float] = Field(None, ge=0.0, le=100.0)
 
 
 # --- Phase 5 Evidence Graph Types ---
@@ -226,7 +226,7 @@ class UnifiedRiskFusionResult(BaseModel):
     call_id: str
     stream_id: Optional[str] = None
     turn_index: int = 0
-    overall_risk_score: float = Field(0.0, ge=0.0, le=100.0)
+    overall_risk_score: Optional[float] = Field(None, ge=0.0, le=100.0)
     risk_level: RiskLevel = RiskLevel.SAFE
     confidence: float = Field(..., ge=0.0, le=1.0)
     uncertainty: float = Field(..., ge=0.0, le=1.0)

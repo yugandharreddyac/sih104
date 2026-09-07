@@ -30,6 +30,8 @@ export class BrowserAudioStreamer {
   private isRunning = false;
   private config: AudioStreamerConfig;
 
+  private pcmAccumulator: number[] = [];
+
   constructor(config: AudioStreamerConfig) {
     this.config = {
       sampleRate: 16000,
@@ -70,16 +72,24 @@ export class BrowserAudioStreamer {
       }
 
       this.audioContext = new AudioCtxClass();
+      if (this.audioContext.state === 'suspended') {
+        await this.audioContext.resume();
+      }
       const actualSampleRate = this.audioContext.sampleRate;
 
       this.sourceNode = this.audioContext.createMediaStreamSource(this.mediaStream);
       this.sequenceNumber = 0;
+      this.pcmAccumulator = [];
       this.isRunning = true;
 
       // 3. ScriptProcessor / Audio Processing Node
       const bufferSize = this.config.bufferSize || 4096;
       const processor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
       this.processorNode = processor;
+
+      // Target chunk size: 4800 samples (300ms @ 16kHz), hop: 4000 samples (250ms)
+      const TARGET_CHUNK_SAMPLES = 4800;
+      const HOP_SAMPLES = 4000;
 
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (!this.isRunning) return;
@@ -97,28 +107,50 @@ export class BrowserAudioStreamer {
         // Resample to 16,000 Hz if AudioContext native rate differs
         const resampledData = this.resampleTo16k(inputChannelData, actualSampleRate);
 
-        // Convert Float32 [-1.0, 1.0] to Signed 16-bit Linear PCM
-        const pcm16 = new Int16Array(resampledData.length);
+        // Accumulate 16kHz audio samples
         for (let i = 0; i < resampledData.length; i++) {
-          const s = Math.max(-1.0, Math.min(1.0, resampledData[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          this.pcmAccumulator.push(resampledData[i]);
         }
 
-        // Convert to Base64
-        const uint8 = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        const len = uint8.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(uint8[i]);
-        }
-        const base64Chunk = btoa(binary);
+        // Emit framed 300ms analysis chunks whenever accumulator has enough samples
+        while (this.pcmAccumulator.length >= TARGET_CHUNK_SAMPLES) {
+          const frameSamples = this.pcmAccumulator.slice(0, TARGET_CHUNK_SAMPLES);
 
-        // Dispatch framed chunk
-        this.config.onChunk(base64Chunk, this.sequenceNumber++, rmsDb);
+          // Advance by hop (250ms stride, 50ms overlap)
+          this.pcmAccumulator = this.pcmAccumulator.slice(HOP_SAMPLES);
+
+          // Convert Float32 [-1.0, 1.0] to Signed 16-bit Linear PCM
+          const pcm16 = new Int16Array(TARGET_CHUNK_SAMPLES);
+          for (let i = 0; i < TARGET_CHUNK_SAMPLES; i++) {
+            const s = Math.max(-1.0, Math.min(1.0, frameSamples[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+          }
+
+          // Convert to Base64
+          const uint8 = new Uint8Array(pcm16.buffer);
+          let binary = '';
+          const len = uint8.byteLength;
+          for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(uint8[i]);
+          }
+          const base64Chunk = btoa(binary);
+
+          // Dispatch framed 300ms chunk
+          this.config.onChunk(base64Chunk, this.sequenceNumber++, rmsDb);
+        }
+
+        // Bounded accumulator protection (drop oldest if accumulated beyond 1 second)
+        if (this.pcmAccumulator.length > 16000) {
+          this.pcmAccumulator = this.pcmAccumulator.slice(this.pcmAccumulator.length - 8000);
+        }
       };
 
+      // Mute gain node avoids echoing microphone audio to speakers while keeping ScriptProcessor alive
+      const muteGain = this.audioContext.createGain();
+      muteGain.gain.setValueAtTime(0, this.audioContext.currentTime);
       this.sourceNode.connect(processor);
-      processor.connect(this.audioContext.destination);
+      processor.connect(muteGain);
+      muteGain.connect(this.audioContext.destination);
 
       this.config.onStateChange('STREAMING');
     } catch (err: any) {
@@ -138,6 +170,7 @@ export class BrowserAudioStreamer {
 
   public stop(): void {
     this.isRunning = false;
+    this.pcmAccumulator = [];
 
     if (this.processorNode) {
       try {

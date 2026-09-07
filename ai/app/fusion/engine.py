@@ -60,7 +60,7 @@ class MultiModalRiskFusionEngine:
                 call_id=call_id,
                 stream_id=stream_id,
                 turn_index=turn_index,
-                overall_risk_score=0.0,
+                overall_risk_score=None,
                 risk_level=RiskLevel.INCONCLUSIVE,
                 confidence=0.0,
                 uncertainty=1.0,
@@ -68,7 +68,7 @@ class MultiModalRiskFusionEngine:
                 risk_velocity=0.0,
                 risk_trajectory_trend="STABLE",
                 primary_drivers=["Risk Fusion Engine is currently UNAVAILABLE in Model Registry."],
-                evidence_graph=self.graph_builder.build_graph(acoustic, conversational, 0.0) if (acoustic and conversational) else None,
+                evidence_graph=self.graph_builder.build_graph(acoustic, conversational, None) if (acoustic and conversational) else None,
                 policy_recommendation=None,
                 human_workflow_state=HumanDecisionState.AI_RECOMMENDED,
                 fusion_latency_ms=0.0,
@@ -119,7 +119,7 @@ class MultiModalRiskFusionEngine:
 
         # 6. Advisory Policy Recommendation
         policy_rec: Optional[PolicyEvaluationResult] = None
-        if dimensions.credential_theft >= 75.0 or (conversational and conversational.sensitive_data.contains_direct_request):
+        if (dimensions.credential_theft is not None and dimensions.credential_theft >= 75.0) or (conversational and conversational.sensitive_data.contains_direct_request):
             policy_rec = PolicyEvaluationResult(
                 policy_id="POL-CRED-001",
                 policy_name="Enforce Out-of-Band Step-Up on Credential Harvesting",
@@ -131,7 +131,7 @@ class MultiModalRiskFusionEngine:
                 matched_conditions=["intent == OTP_REQUEST", "risk.credential_theft >= 75.0"],
                 explanation="Policy POL-CRED-001 triggered: High-confidence credential solicitation detected under active social engineering pressure."
             )
-        elif dimensions.financial_fraud >= 70.0:
+        elif dimensions.financial_fraud is not None and dimensions.financial_fraud >= 70.0:
             policy_rec = PolicyEvaluationResult(
                 policy_id="POL-FIN-002",
                 policy_name="Hold High-Value Transaction on Unverified Identity",

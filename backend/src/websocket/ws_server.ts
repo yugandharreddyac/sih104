@@ -92,6 +92,7 @@ export class WebSocketGateway {
   private static serverInstance: http.Server | null = null;
   private static clientStates: Map<WebSocket, WSClientState> = new Map();
   private static callAsrStates: Map<string, CallAsrState> = new Map();
+  private static acousticInFlightCalls: Set<string> = new Set();
   private static pingInterval: NodeJS.Timeout | null = null;
   private static initPromise: Promise<void> | null = null;
 
@@ -277,7 +278,7 @@ export class WebSocketGateway {
 
     // 2. AUTHENTICATE
     if (msg.type === 'AUTHENTICATE') {
-      const token = msg.payload?.token;
+      const token = msg.payload?.token || (msg as any).token;
       if (!token || typeof token !== 'string') {
         ws.send(
           JSON.stringify({
@@ -351,7 +352,7 @@ export class WebSocketGateway {
         return;
       }
 
-      const rawCallId = msg.callId ?? msg.payload?.callId;
+      const rawCallId = msg.callId ?? msg.payload?.callId ?? (msg as any).call_id ?? (msg.payload as any)?.call_id;
       if (typeof rawCallId !== 'string' || rawCallId.trim().length === 0 || rawCallId.length > 100) {
         ws.send(
           JSON.stringify({
@@ -393,7 +394,7 @@ export class WebSocketGateway {
         return;
       }
 
-      const rawStreamId = msg.streamId ?? msg.payload?.streamId;
+      const rawStreamId = msg.streamId ?? msg.payload?.streamId ?? (msg as any).stream_id ?? (msg.payload as any)?.stream_id;
       const streamId =
         typeof rawStreamId === 'string' && rawStreamId.trim().length > 0
           ? rawStreamId.trim().slice(0, 100)
@@ -445,7 +446,7 @@ export class WebSocketGateway {
         return;
       }
 
-      const rawCallId = msg.callId ?? state.activeCallId;
+      const rawCallId = msg.callId ?? (msg as any).call_id ?? (msg.payload as any)?.callId ?? (msg.payload as any)?.call_id ?? state.activeCallId;
       if (typeof rawCallId !== 'string' || rawCallId.trim().length === 0 || rawCallId.length > 100) {
         ws.send(
           JSON.stringify({
@@ -488,7 +489,7 @@ export class WebSocketGateway {
       }
 
       // Validate Sequence Number
-      const seq = msg.sequenceNumber;
+      const seq = msg.sequenceNumber ?? (msg as any).sequence_number ?? (msg.payload as any)?.sequenceNumber ?? (msg.payload as any)?.sequence_number;
       if (typeof seq !== 'number' || !Number.isFinite(seq) || !Number.isInteger(seq) || seq < 0) {
         ws.send(
           JSON.stringify({
@@ -503,7 +504,7 @@ export class WebSocketGateway {
       const sequenceNumber = seq;
 
       // Validate Sample Rate
-      const rawSampleRate = msg.payload?.sample_rate ?? msg.payload?.sampleRate ?? 16000;
+      const rawSampleRate = msg.payload?.sample_rate ?? msg.payload?.sampleRate ?? (msg as any).sample_rate ?? (msg as any).sampleRate ?? 16000;
       if (
         typeof rawSampleRate !== 'number' ||
         !Number.isFinite(rawSampleRate) ||
@@ -524,7 +525,7 @@ export class WebSocketGateway {
       const sampleRate = rawSampleRate;
 
       // Validate Channels
-      const rawChannels = msg.payload?.channels ?? 1;
+      const rawChannels = msg.payload?.channels ?? (msg as any).channels ?? 1;
       if (
         typeof rawChannels !== 'number' ||
         !Number.isFinite(rawChannels) ||
@@ -544,7 +545,15 @@ export class WebSocketGateway {
       const channels = rawChannels;
 
       // Validate Audio Payload
-      const rawAudio = msg.payload?.audio_base64 ?? msg.payload?.data ?? (typeof msg.payload === 'string' ? msg.payload : undefined);
+      const rawAudio =
+        msg.payload?.audio_base64 ??
+        msg.payload?.data ??
+        msg.payload?.audio_data ??
+        msg.payload?.audioData ??
+        (msg as any).audio_data ??
+        (msg as any).audio_base64 ??
+        (msg as any).audioData ??
+        (typeof msg.payload === 'string' ? msg.payload : undefined);
       if (!rawAudio || (typeof rawAudio !== 'string' && !Buffer.isBuffer(rawAudio))) {
         ws.send(
           JSON.stringify({
@@ -616,19 +625,51 @@ export class WebSocketGateway {
       const channel_type = msg.payload?.channel_type || msg.payload?.channelType;
       const codec = msg.payload?.codec;
 
-      // Execute Fast Acoustic Intelligence (Immediate 256ms Path)
-      const acousticResult = await AcousticService.analyze({
-        callId,
-        streamId,
-        chunkIndex: sequenceNumber,
-        sampleRate: 16000,
-        channels: 1,
-        audioBase64: normalized.base64Data,
-        claimedSpeakerId,
-        channel_type,
-        codec,
-        metadata: { sequenceNumber, durationMs: normalized.durationMs },
-      });
+      let acousticAudioBase64 = normalized.base64Data;
+      let acousticDurationMs = normalized.durationMs;
+
+      // Ensure acoustic AI models receive at least 300ms (4800 samples @ 16kHz) for reliable inference
+      if (acousticDurationMs < 300) {
+        const queue = buffer.getQueue();
+        if (queue.length > 1) {
+          const recentChunks: Buffer[] = [];
+          let accumulatedMs = 0;
+          for (let i = queue.length - 1; i >= 0; i--) {
+            recentChunks.unshift(queue[i].data);
+            accumulatedMs += queue[i].durationMs;
+            if (accumulatedMs >= 300) break;
+          }
+          if (recentChunks.length > 0) {
+            acousticAudioBase64 = Buffer.concat(recentChunks).toString('base64');
+            acousticDurationMs = accumulatedMs;
+          }
+        }
+      }
+
+      // Gate concurrent acoustic analysis calls per call session
+      if (WebSocketGateway.acousticInFlightCalls.has(callId)) {
+        return;
+      }
+      WebSocketGateway.acousticInFlightCalls.add(callId);
+
+      let acousticResult: any;
+      try {
+        // Execute Fast Acoustic Intelligence (Immediate Path)
+        acousticResult = await AcousticService.analyze({
+          callId,
+          streamId,
+          chunkIndex: sequenceNumber,
+          sampleRate: 16000,
+          channels: 1,
+          audioBase64: acousticAudioBase64,
+          claimedSpeakerId,
+          channel_type,
+          codec,
+          metadata: { sequenceNumber, durationMs: acousticDurationMs },
+        });
+      } finally {
+        WebSocketGateway.acousticInFlightCalls.delete(callId);
+      }
 
       let convResult: any;
       if (textTranscript) {

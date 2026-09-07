@@ -29,7 +29,7 @@ export interface TransactionContextPayload {
 }
 
 export class RiskService {
-  public static readonly AI_TIMEOUT_MS = 1200;
+  public static readonly AI_TIMEOUT_MS = 4000;
   private static assessments: Map<string, any> = new Map();
   private static timelineHistory: Map<string, any[]> = new Map();
   private static transactionContexts: Map<string, TransactionContextPayload> = new Map();
@@ -62,13 +62,15 @@ export class RiskService {
       }
     }
 
-    if (
-      typeof data.overall_risk_score !== 'number' ||
-      !Number.isFinite(data.overall_risk_score) ||
-      data.overall_risk_score < 0 ||
-      data.overall_risk_score > 100
-    ) {
-      return false;
+    if (data.overall_risk_score !== null && data.overall_risk_score !== undefined) {
+      if (
+        typeof data.overall_risk_score !== 'number' ||
+        !Number.isFinite(data.overall_risk_score) ||
+        data.overall_risk_score < 0 ||
+        data.overall_risk_score > 100
+      ) {
+        return false;
+      }
     }
     if (typeof data.risk_level !== 'string' || !this.VALID_RISK_LEVELS.has(data.risk_level)) {
       return false;
@@ -181,7 +183,7 @@ export class RiskService {
               timestamp: data.timestamp || new Date().toISOString(),
             });
 
-            if (data.overall_risk_score >= 80.0) {
+            if (typeof data.overall_risk_score === 'number' && data.overall_risk_score >= 80.0) {
               try {
                 await AuditService.record({
                   actorUserId,
@@ -399,7 +401,7 @@ export class RiskService {
     }, actorUserId);
 
     // If transaction creates high risk or triggers policy, dispatch outbound signed intervention webhook
-    if (updatedRisk.overall_risk_score >= 70.0 || updatedRisk.policy_recommendation?.is_triggered) {
+    if ((typeof updatedRisk.overall_risk_score === 'number' && updatedRisk.overall_risk_score >= 70.0) || updatedRisk.policy_recommendation?.is_triggered) {
       const action = updatedRisk.policy_recommendation?.recommended_action || 'REQUIRE_STEP_UP_VERIFICATION';
       const reasons = [
         ...contextSignals,

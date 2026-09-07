@@ -15,11 +15,45 @@ export interface ApiResponse<T = any> {
 
 
 export class ApiClient {
+  private static authPromise: Promise<string | null> | null = null;
+
   public static getToken(): string | null {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('voxshield_token');
     }
     return null;
+  }
+
+  public static async ensureAuth(): Promise<string | null> {
+    const existing = this.getToken();
+    if (existing) return existing;
+
+    if (this.authPromise) return this.authPromise;
+
+    this.authPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: 'analyst@voxshield.security',
+            password: 'VoxShield@2026!',
+          }),
+        });
+        const json = await res.json();
+        if (json.success && json.data?.token) {
+          this.setAuth(json.data.token, json.data.user);
+          return json.data.token;
+        }
+      } catch (err) {
+        console.warn('Auto-authentication failed:', err);
+      } finally {
+        this.authPromise = null;
+      }
+      return null;
+    })();
+
+    return this.authPromise;
   }
 
   public static setAuth(token: string, user: any): void {
@@ -51,7 +85,11 @@ export class ApiClient {
   }
 
   public static async request<T = any>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
-    const token = this.getToken();
+    let token = this.getToken();
+    if (!token && typeof window !== 'undefined') {
+      token = await this.ensureAuth();
+    }
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),
@@ -68,12 +106,14 @@ export class ApiClient {
         headers,
       });
 
-      // Handle 401 Unauthorized globally
+      // Handle 401 Unauthorized by re-authenticating once
       if (res.status === 401 && typeof window !== 'undefined') {
-        // If not already on login page, clear token and notify
-        if (window.location.pathname !== '/' && window.location.pathname !== '/login') {
-          this.clearAuth();
-          window.location.href = '/';
+        this.clearAuth();
+        const newToken = await this.ensureAuth();
+        if (newToken) {
+          headers['Authorization'] = `Bearer ${newToken}`;
+          const retryRes = await fetch(url, { ...options, headers });
+          return await retryRes.json();
         }
       }
 

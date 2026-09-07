@@ -1,0 +1,49 @@
+{
+  "evaluation_target": "VOXSHIELD MiniAcousticCNN (Held-Out Test Set)",
+  "total_samples": 300,
+  "bona_fide_count": 150,
+  "spoof_count": 150,
+  "confusion_matrix": {
+    "tn": 128,
+    "fp": 22,
+    "fn": 40,
+    "tp": 110
+  },
+  "metrics": {
+    "accuracy": 0.7933,
+    "precision": 0.8333,
+    "recall": 0.7333,
+    "f1_score": 0.7801,
+    "fpr": 0.1467,
+    "fnr": 0.2667,
+    "roc_auc": 0.8876,
+    "eer": 0.1867
+  },
+  "baseline_comparison": {
+    "random_forest_baseline": {
+      "accuracy": 0.6433,
+      "precision": 0.7792,
+      "recall": 0.4,
+      "f1_score": 0.5286,
+      "roc_auc": 0.8106,
+      "eer": 0.27,
+      "inference_latency_ms": 0.59
+    },
+    "voxshield_mini_acoustic_cnn": {
+      "accuracy": 0.7933,
+      "precision": 0.8333,
+      "recall": 0.7333,
+      "f1_score": 0.7801,
+      "roc_auc": 0.8876,
+      "eer": 0.1867,
+      "inference_latency_ms": 6.57
+    },
+    "delta_improvement": {
+      "accuracy_gain": 0.15,
+      "recall_gain": 0.3333,
+      "f1_gain": 0.2515,
+      "roc_auc_gain": 0.077,
+      "eer_reduction": 0.0833
+    }
+  }
+}

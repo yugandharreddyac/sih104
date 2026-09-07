@@ -42,6 +42,76 @@ interface CallSession {
   createdAt: string;
 }
 
+const INITIAL_TELEMETRY = {
+  overallAssessment: 'AWAITING_STREAM',
+  deepfake: {
+    status: 'READY',
+    spoofScore: null as number | null,
+    confidence: 0.0,
+    uncertainty: 1.0,
+    artifacts: [] as string[],
+    explainability: ['Awaiting audio stream for acoustic neural evaluation.'],
+    latencyMs: 0,
+  },
+  speaker: {
+    status: 'READY',
+    similarityScore: null as number | null,
+    confidence: 0.0,
+    isEnrolled: false,
+    enrolledSpeakerId: '',
+    explainability: ['Awaiting voice sample for biometric enrollment matching.'],
+  },
+  replay: {
+    status: 'READY',
+    replayProbability: null as number | null,
+    confidence: 0.0,
+    explainability: ['Awaiting spectral frequency frames.'],
+  },
+  manipulation: {
+    level: 'NO_INDICATOR',
+    indicators: [] as string[],
+  },
+  vad: {
+    state: 'IDLE',
+    speechProbability: null as number | null,
+  },
+  quality: {
+    rating: 'INITIALIZING',
+    rmsDbfs: -96.0,
+    peakAmplitude: 0.0,
+    clippingRatio: 0.0,
+    snrEstimateDb: 0.0,
+    notes: 'No audio packets received yet',
+  },
+  temporal: {
+    accumulatedSpeechSec: 0.0,
+    isWarmedUp: false,
+  },
+  conversation: {
+    transcript: '',
+    redactedTranscript: 'Awaiting speech recognition transcript...',
+    language: 'EN',
+    languageConfidence: 0.0,
+    asrConfidence: 0.0,
+    asrUncertainty: 1.0,
+    intent: 'NONE',
+    isAdversarialIntent: false,
+    requestedAction: 'NONE',
+    actionType: 'NONE',
+    isHighRiskAction: false,
+    tactics: [] as string[],
+    progressionState: 'IDLE',
+    sequenceScore: 0.0,
+    highestSeverity: 'LOW',
+    claims: [] as Array<{ identity: string; org: string; turn: number }>,
+    inconsistencies: [] as string[],
+    currentPhase: 'INITIALIZATION',
+    nlpLatencyMs: 0,
+  },
+  totalAiLatencyMs: 0,
+  evidenceSummary: [] as string[],
+};
+
 export default function CallsPage() {
   const [calls, setCalls] = useState<CallSession[]>([]);
   const [selectedCall, setSelectedCall] = useState<CallSession | null>(null);
@@ -49,76 +119,8 @@ export default function CallsPage() {
   const [streamSource, setStreamSource] = useState<'MIC' | 'SYNTHETIC'>('SYNTHETIC');
   const [claimedSpeakerId, setClaimedSpeakerId] = useState('speaker-cfo-001');
 
-  // Live Telemetry State (Starts clean / waiting for stream)
-  const [telemetry, setTelemetry] = useState({
-    overallAssessment: 'AWAITING_STREAM',
-    deepfake: {
-      status: 'NOT_AVAILABLE',
-      spoofScore: null as number | null,
-      confidence: 0.0,
-      uncertainty: 1.0,
-      artifacts: [] as string[],
-      explainability: ['Awaiting audio stream for acoustic neural evaluation.'],
-      latencyMs: 0,
-    },
-    speaker: {
-      status: 'NOT_AVAILABLE',
-      similarityScore: null as number | null,
-      confidence: 0.0,
-      isEnrolled: false,
-      enrolledSpeakerId: '',
-      explainability: ['Awaiting voice sample for biometric enrollment matching.'],
-    },
-    replay: {
-      status: 'NOT_AVAILABLE',
-      replayProbability: null as number | null,
-      confidence: 0.0,
-      explainability: ['Awaiting spectral frequency frames.'],
-    },
-    manipulation: {
-      level: 'NO_INDICATOR',
-      indicators: [] as string[],
-    },
-    vad: {
-      state: 'IDLE',
-      speechProbability: null as number | null,
-    },
-    quality: {
-      rating: 'INITIALIZING',
-      rmsDbfs: -96.0,
-      peakAmplitude: 0.0,
-      clippingRatio: 0.0,
-      snrEstimateDb: 0.0,
-      notes: 'No audio packets received yet',
-    },
-    temporal: {
-      accumulatedSpeechSec: 0.0,
-      isWarmedUp: false,
-    },
-    conversation: {
-      transcript: '',
-      redactedTranscript: 'Awaiting speech recognition transcript...',
-      language: 'EN',
-      languageConfidence: 0.0,
-      asrConfidence: 0.0,
-      asrUncertainty: 1.0,
-      intent: 'NONE',
-      isAdversarialIntent: false,
-      requestedAction: 'NONE',
-      actionType: 'NONE',
-      isHighRiskAction: false,
-      tactics: [] as string[],
-      progressionState: 'IDLE',
-      sequenceScore: 0.0,
-      highestSeverity: 'LOW',
-      claims: [] as Array<{ identity: string; org: string; turn: number }>,
-      inconsistencies: [] as string[],
-      currentPhase: 'INITIALIZATION',
-      nlpLatencyMs: 0,
-    },
-    totalAiLatencyMs: 0,
-    evidenceSummary: [] as string[],
-  });
+  // Live Telemetry State (Starts clean / ready for stream)
+  const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY);
 
   // Unified Multi-Modal Decision & Policy State
   const [unifiedRisk, setUnifiedRisk] = useState({
@@ -138,26 +140,16 @@ export default function CallsPage() {
       verification_bypass: null as number | null,
       inconsistency: null as number | null,
     },
-    riskVelocity: 0.0,
-    riskTrajectoryTrend: 'STABLE',
-    primaryDrivers: ['Awaiting multi-modal signals for composite risk evaluation.'],
+    riskVelocity: 0,
+    riskTrajectoryTrend: 'STEADY',
+    primaryDrivers: [] as string[],
     contradictingSignals: [] as string[],
     evidenceGraph: {
-      nodes: [] as Array<{ node_id: string; layer: string; cue: string; confidence: number }>,
-      edges: [] as Array<{ source_node_id: string; target_node_id: string; relationship: string }>,
-      primary_findings: [] as string[],
+      nodes: [] as any[],
+      edges: [] as any[],
     },
-    policyRecommendation: {
-      policy_id: 'POL-DEFAULT',
-      policy_name: 'Baseline Monitoring',
-      version: '1.0.0',
-      priority: 'MONITOR',
-      is_triggered: false,
-      recommended_action: 'MONITOR',
-      requires_human_approval: false,
-      explanation: 'System monitoring call stream in baseline posture.',
-    },
-    humanWorkflowState: 'IDLE',
+    policyRecommendation: null as any,
+    humanWorkflowState: 'PENDING_EVALUATION',
     fusionLatencyMs: 0,
   });
 
@@ -173,12 +165,18 @@ export default function CallsPage() {
   const audioIntervalRef = useRef<any>(null);
   const selectedCallRef = useRef<CallSession | null>(null);
   const latestRiskSeqRef = useRef<number>(-1);
+  const claimedSpeakerIdRef = useRef(claimedSpeakerId);
+
+  useEffect(() => {
+    claimedSpeakerIdRef.current = claimedSpeakerId;
+  }, [claimedSpeakerId]);
 
   useEffect(() => {
     selectedCallRef.current = selectedCall;
     latestRiskSeqRef.current = -1;
     if (selectedCall) {
-      // Reset risk state when switching call
+      // Reset telemetry and risk state when switching call
+      setTelemetry(INITIAL_TELEMETRY);
       setUnifiedRisk((prev) => ({
         ...prev,
         overallRiskScore: null,
@@ -220,6 +218,7 @@ export default function CallsPage() {
 
   useEffect(() => {
     fetchCalls();
+    ApiClient.ensureAuth();
   }, []);
 
   const fetchCalls = async () => {
@@ -240,168 +239,233 @@ export default function CallsPage() {
     }
   };
 
-  const connectWebSocket = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
+  const handleWebSocketMessage = (event: MessageEvent) => {
+    try {
+      const msg = JSON.parse(event.data);
 
-    const ws = new WebSocket(WS_BASE);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      const token = ApiClient.getToken() || '';
-      ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
-      if (selectedCallRef.current) {
-        ws.send(
-          JSON.stringify({
-            type: 'START_STREAM',
-            callId: selectedCallRef.current.id,
-            streamId: `stream-${Date.now()}`,
-          })
-        );
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-
-        // Strict Session Isolation: Drop events destined for other call sessions
-        if (msg.callId && selectedCallRef.current && msg.callId !== selectedCallRef.current.id) {
-          return;
-        }
-
-        // Phase 5 Unified Risk Assessment Broadcast
-        if (msg.type === 'UNIFIED_RISK_ASSESSMENT' && msg.payload) {
-          if (typeof msg.sequenceNumber === 'number') {
-            if (msg.sequenceNumber < latestRiskSeqRef.current) {
-              return;
+      // Error Handling & Re-authentication
+      if (msg.type === 'ERROR') {
+        console.warn('WS Server Event Error:', msg.error, msg.message);
+        if (msg.error === 'UNAUTHENTICATED' || msg.error === 'AUTH_REQUIRED') {
+          ApiClient.ensureAuth().then((freshToken) => {
+            if (freshToken && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token: freshToken } }));
             }
-            latestRiskSeqRef.current = msg.sequenceNumber;
+          });
+        }
+        return;
+      }
+
+      // Strict Session Isolation: Drop events destined for other call sessions
+      if (msg.callId && selectedCallRef.current && msg.callId !== selectedCallRef.current.id) {
+        return;
+      }
+
+      // Phase 5 Unified Risk Assessment Broadcast
+      if (msg.type === 'UNIFIED_RISK_ASSESSMENT' && msg.payload) {
+        if (typeof msg.sequenceNumber === 'number') {
+          if (msg.sequenceNumber < latestRiskSeqRef.current) {
+            return;
           }
-
-          const r = msg.payload;
-          const validScore = typeof r.overall_risk_score === 'number' && Number.isFinite(r.overall_risk_score)
-            ? r.overall_risk_score
-            : null;
-
-          setUnifiedRisk((prev) => ({
-            ...prev,
-            overallRiskScore: validScore !== null ? validScore : (r.overall_risk_score === null ? null : prev.overallRiskScore),
-            riskLevel: r.risk_level || prev.riskLevel,
-            confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
-            uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
-            dimensions: r.dimensions || prev.dimensions,
-            riskVelocity: typeof r.risk_velocity === 'number' && Number.isFinite(r.risk_velocity) ? r.risk_velocity : prev.riskVelocity,
-            riskTrajectoryTrend: r.risk_trajectory_trend || prev.riskTrajectoryTrend,
-            primaryDrivers: Array.isArray(r.primary_drivers) ? r.primary_drivers : prev.primaryDrivers,
-            contradictingSignals: Array.isArray(r.contradicting_signals) ? r.contradicting_signals : prev.contradictingSignals,
-            evidenceGraph: r.evidence_graph || prev.evidenceGraph,
-            policyRecommendation: r.policy_recommendation || prev.policyRecommendation,
-            humanWorkflowState: r.human_workflow_state || prev.humanWorkflowState,
-            fusionLatencyMs: typeof r.fusion_latency_ms === 'number' && Number.isFinite(r.fusion_latency_ms) ? r.fusion_latency_ms : prev.fusionLatencyMs,
-          }));
+          latestRiskSeqRef.current = msg.sequenceNumber;
         }
 
-        // Telemetry Broadcast
-        if (msg.type === 'AUDIO_TELEMETRY' && msg.payload) {
-          const p = msg.payload;
-          const conv = p.conversation || {};
-          setTelemetry((prev) => ({
-            ...prev,
-            overallAssessment: p.overall_assessment || prev.overallAssessment,
-            deepfake: {
-              status: p.deepfake?.status || prev.deepfake.status,
-              spoofScore: typeof p.deepfake?.spoof_score === 'number' ? p.deepfake.spoof_score : prev.deepfake.spoofScore,
-              confidence: p.deepfake?.confidence ?? prev.deepfake.confidence,
-              uncertainty: p.deepfake?.uncertainty ?? prev.deepfake.uncertainty,
-              artifacts: p.deepfake?.artifacts_detected || [],
-              explainability: p.deepfake?.explainability || prev.deepfake.explainability,
-              latencyMs: p.deepfake?.inference_latency_ms || 1.8,
-            },
-            speaker: {
-              status: p.speaker?.status || prev.speaker.status,
-              similarityScore: typeof p.speaker?.similarity_score === 'number' ? p.speaker.similarity_score : prev.speaker.similarityScore,
-              confidence: p.speaker?.confidence ?? prev.speaker.confidence,
-              isEnrolled: p.speaker?.is_enrolled ?? prev.speaker.isEnrolled,
-              enrolledSpeakerId: p.speaker?.enrolled_speaker_id || prev.speaker.enrolledSpeakerId,
-              explainability: p.speaker?.explainability || prev.speaker.explainability,
-            },
-            replay: {
-              status: p.replay?.status || prev.replay.status,
-              replayProbability: typeof p.replay?.replay_probability === 'number' ? p.replay.replay_probability : prev.replay.replayProbability,
-              confidence: p.replay?.confidence ?? prev.replay.confidence,
-              explainability: p.replay?.explainability || prev.replay.explainability,
-            },
-            manipulation: {
-              level: p.manipulation?.level || prev.manipulation.level,
-              indicators: p.manipulation?.indicators || [],
-            },
-            vad: {
-              state: p.vad?.state || prev.vad.state,
-              speechProbability: typeof p.vad?.speech_probability === 'number' ? p.vad.speech_probability : prev.vad.speechProbability,
-            },
-            quality: {
-              rating: p.quality?.rating || prev.quality.rating,
-              rmsDbfs: p.quality?.rms_dbfs ?? prev.quality.rmsDbfs,
-              peakAmplitude: p.quality?.peak_amplitude ?? prev.quality.peakAmplitude,
-              clippingRatio: p.quality?.clipping_ratio ?? prev.quality.clippingRatio,
-              snrEstimateDb: p.quality?.snr_estimate_db ?? prev.quality.snrEstimateDb,
-              notes: p.quality?.notes || prev.quality.notes,
-            },
-            temporal: {
-              accumulatedSpeechSec: p.temporal_metrics?.accumulated_speech_seconds ?? prev.temporal.accumulatedSpeechSec,
-              isWarmedUp: p.temporal_metrics?.is_warmed_up ?? prev.temporal.isWarmedUp,
-            },
-            conversation: {
-              transcript: conv.asr?.transcript || prev.conversation.transcript,
-              redactedTranscript: conv.asr?.redacted_transcript || prev.conversation.redactedTranscript,
-              language: conv.asr?.language ? `${conv.asr.language.toUpperCase()}` : prev.conversation.language,
-              languageConfidence: conv.asr?.language_confidence ?? prev.conversation.languageConfidence,
-              asrConfidence: conv.asr?.confidence ?? prev.conversation.asrConfidence,
-              asrUncertainty: conv.asr?.uncertainty ?? prev.conversation.asrUncertainty,
-              intent: conv.intent?.primary_intent || prev.conversation.intent,
-              isAdversarialIntent: conv.intent?.is_adversarial ?? prev.conversation.isAdversarialIntent,
-              requestedAction: conv.requested_action?.target_object || prev.conversation.requestedAction,
-              actionType: conv.requested_action?.action_type || prev.conversation.actionType,
-              isHighRiskAction: conv.requested_action?.is_high_risk ?? prev.conversation.isHighRiskAction,
-              tactics: conv.social_engineering?.tactics_detected || prev.conversation.tactics,
-              progressionState: conv.social_engineering?.progression_state || prev.conversation.progressionState,
-              sequenceScore: conv.social_engineering?.attack_sequence_score ?? prev.conversation.sequenceScore,
-              highestSeverity: conv.sensitive_data?.highest_severity || prev.conversation.highestSeverity,
-              claims: conv.caller_claims?.map((c: any) => ({ identity: c.claimed_identity, org: c.organization, turn: c.stated_turn_index })) || prev.conversation.claims,
-              inconsistencies: conv.inconsistencies || prev.conversation.inconsistencies,
-              currentPhase: conv.current_phase || prev.conversation.currentPhase,
-              nlpLatencyMs: conv.total_nlp_latency_ms || prev.conversation.nlpLatencyMs,
-            },
-            totalAiLatencyMs: p.pipeline_latency_ms || prev.totalAiLatencyMs,
-            evidenceSummary: p.evidence_summary || prev.evidenceSummary,
-          }));
-        }
-      } catch {}
-    };
+        const r = msg.payload;
+        const validScore = typeof r.overall_risk_score === 'number' && Number.isFinite(r.overall_risk_score)
+          ? r.overall_risk_score
+          : null;
+
+        setUnifiedRisk((prev) => ({
+          ...prev,
+          overallRiskScore: validScore !== null ? validScore : (r.overall_risk_score === null ? null : prev.overallRiskScore),
+          riskLevel: r.risk_level || prev.riskLevel,
+          confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
+          uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
+          dimensions: r.dimensions || prev.dimensions,
+          riskVelocity: typeof r.risk_velocity === 'number' && Number.isFinite(r.risk_velocity) ? r.risk_velocity : prev.riskVelocity,
+          riskTrajectoryTrend: r.risk_trajectory_trend || prev.riskTrajectoryTrend,
+          primaryDrivers: Array.isArray(r.primary_drivers) ? r.primary_drivers : prev.primaryDrivers,
+          contradictingSignals: Array.isArray(r.contradicting_signals) ? r.contradicting_signals : prev.contradictingSignals,
+          evidenceGraph: r.evidence_graph || prev.evidenceGraph,
+          policyRecommendation: r.policy_recommendation || prev.policyRecommendation,
+          humanWorkflowState: r.human_workflow_state || prev.humanWorkflowState,
+          fusionLatencyMs: typeof r.fusion_latency_ms === 'number' && Number.isFinite(r.fusion_latency_ms) ? r.fusion_latency_ms : prev.fusionLatencyMs,
+        }));
+      }
+
+      // Telemetry Broadcast
+      if (msg.type === 'AUDIO_TELEMETRY' && msg.payload) {
+        const p = msg.payload;
+        const conv = p.conversation || {};
+        setTelemetry((prev) => ({
+          ...prev,
+          overallAssessment: p.overall_assessment || prev.overallAssessment,
+          deepfake: {
+            status: p.deepfake?.status || prev.deepfake.status,
+            spoofScore: typeof p.deepfake?.spoof_score === 'number' ? p.deepfake.spoof_score : prev.deepfake.spoofScore,
+            confidence: p.deepfake?.confidence ?? prev.deepfake.confidence,
+            uncertainty: p.deepfake?.uncertainty ?? prev.deepfake.uncertainty,
+            artifacts: p.deepfake?.artifacts_detected || [],
+            explainability: p.deepfake?.explainability || prev.deepfake.explainability,
+            latencyMs: p.deepfake?.inference_latency_ms || 1.8,
+          },
+          speaker: {
+            status: p.speaker?.status || prev.speaker.status,
+            similarityScore: typeof p.speaker?.similarity_score === 'number' ? p.speaker.similarity_score : prev.speaker.similarityScore,
+            confidence: p.speaker?.confidence ?? prev.speaker.confidence,
+            isEnrolled: p.speaker?.is_enrolled ?? prev.speaker.isEnrolled,
+            enrolledSpeakerId: p.speaker?.enrolled_speaker_id || prev.speaker.enrolledSpeakerId,
+            explainability: p.speaker?.explainability || prev.speaker.explainability,
+          },
+          replay: {
+            status: p.replay?.status || prev.replay.status,
+            replayProbability: typeof p.replay?.replay_probability === 'number' ? p.replay.replay_probability : prev.replay.replayProbability,
+            confidence: p.replay?.confidence ?? prev.replay.confidence,
+            explainability: p.replay?.explainability || prev.replay.explainability,
+          },
+          manipulation: {
+            level: p.manipulation?.level || prev.manipulation.level,
+            indicators: p.manipulation?.indicators || [],
+          },
+          vad: {
+            state: p.vad?.state || prev.vad.state,
+            speechProbability: typeof p.vad?.speech_probability === 'number' ? p.vad.speech_probability : prev.vad.speechProbability,
+          },
+          quality: {
+            rating: p.quality?.rating || prev.quality.rating,
+            rmsDbfs: p.quality?.rms_dbfs ?? prev.quality.rmsDbfs,
+            peakAmplitude: p.quality?.peak_amplitude ?? prev.quality.peakAmplitude,
+            clippingRatio: p.quality?.clipping_ratio ?? prev.quality.clippingRatio,
+            snrEstimateDb: p.quality?.snr_estimate_db ?? prev.quality.snrEstimateDb,
+            notes: p.quality?.notes || prev.quality.notes,
+          },
+          temporal: {
+            accumulatedSpeechSec: p.temporal_metrics?.accumulated_speech_seconds ?? prev.temporal.accumulatedSpeechSec,
+            isWarmedUp: p.temporal_metrics?.is_warmed_up ?? prev.temporal.isWarmedUp,
+          },
+          conversation: {
+            transcript: conv.asr?.transcript || prev.conversation.transcript,
+            redactedTranscript: conv.asr?.redacted_transcript || prev.conversation.redactedTranscript,
+            language: conv.asr?.language ? `${conv.asr.language.toUpperCase()}` : prev.conversation.language,
+            languageConfidence: conv.asr?.language_confidence ?? prev.conversation.languageConfidence,
+            asrConfidence: conv.asr?.confidence ?? prev.conversation.asrConfidence,
+            asrUncertainty: conv.asr?.uncertainty ?? prev.conversation.asrUncertainty,
+            intent: conv.intent?.primary_intent || prev.conversation.intent,
+            isAdversarialIntent: conv.intent?.is_adversarial ?? prev.conversation.isAdversarialIntent,
+            requestedAction: conv.requested_action?.target_object || prev.conversation.requestedAction,
+            actionType: conv.requested_action?.action_type || prev.conversation.actionType,
+            isHighRiskAction: conv.requested_action?.is_high_risk ?? prev.conversation.isHighRiskAction,
+            tactics: conv.social_engineering?.tactics_detected || prev.conversation.tactics,
+            progressionState: conv.social_engineering?.progression_state || prev.conversation.progressionState,
+            sequenceScore: conv.social_engineering?.attack_sequence_score ?? prev.conversation.sequenceScore,
+            highestSeverity: conv.sensitive_data?.highest_severity || prev.conversation.highestSeverity,
+            claims: conv.caller_claims?.map((c: any) => ({ identity: c.claimed_identity, org: c.organization, turn: c.stated_turn_index })) || prev.conversation.claims,
+            inconsistencies: conv.inconsistencies || prev.conversation.inconsistencies,
+            currentPhase: conv.current_phase || prev.conversation.currentPhase,
+            nlpLatencyMs: conv.total_nlp_latency_ms || prev.conversation.nlpLatencyMs,
+          },
+          totalAiLatencyMs: p.pipeline_latency_ms || prev.totalAiLatencyMs,
+          evidenceSummary: p.evidence_summary || prev.evidenceSummary,
+        }));
+      }
+    } catch {}
+  };
+
+  const ensureWebSocketConnected = async (): Promise<WebSocket> => {
+    const token = (await ApiClient.ensureAuth()) || ApiClient.getToken() || '';
+
+    return new Promise((resolve, reject) => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        resolve(wsRef.current);
+        return;
+      }
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+        const existingWs = wsRef.current;
+        const onOpenHandler = () => {
+          existingWs.removeEventListener('open', onOpenHandler);
+          resolve(existingWs);
+        };
+        existingWs.addEventListener('open', onOpenHandler);
+        return;
+      }
+
+      try {
+        const ws = new WebSocket(WS_BASE);
+        wsRef.current = ws;
+
+        const authTimeout = setTimeout(() => {
+          resolve(ws);
+        }, 800);
+
+        const onMessageHandler = (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'AUTHENTICATED' || data.type === 'CONNECTED') {
+              clearTimeout(authTimeout);
+              resolve(ws);
+            }
+          } catch {}
+        };
+
+        ws.addEventListener('message', onMessageHandler);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
+        };
+
+        ws.onmessage = handleWebSocketMessage;
+
+        ws.onerror = (err) => {
+          console.warn('WebSocket connection error:', err);
+        };
+
+        ws.onclose = () => {
+          clearTimeout(authTimeout);
+          wsRef.current = null;
+        };
+      } catch (e) {
+        reject(e);
+      }
+    });
   };
 
   const startMicStreaming = async () => {
     setMicError(null);
+    const call = selectedCallRef.current || selectedCall;
+    if (!call) {
+      setMicError('No active call session selected');
+      return;
+    }
+
     try {
-      connectWebSocket();
+      const ws = await ensureWebSocketConnected();
+      const streamId = `stream-${Date.now()}`;
+      ws.send(
+        JSON.stringify({
+          type: 'START_STREAM',
+          callId: call.id,
+          streamId,
+        })
+      );
 
       const streamer = new BrowserAudioStreamer({
         sampleRate: 16000,
         bufferSize: 4096,
         onChunk: (base64Audio, seq, rmsDb) => {
           setMicRmsDb(rmsDb);
-          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedCall) {
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (selectedCallRef.current || selectedCall)) {
             wsRef.current.send(
               JSON.stringify({
                 type: 'AUDIO_CHUNK',
-                callId: selectedCall.id,
+                callId: (selectedCallRef.current || selectedCall)!.id,
                 sequenceNumber: seq,
                 payload: {
                   format: 'pcm_s16le',
                   sample_rate: 16000,
                   channels: 1,
                   audio_base64: base64Audio,
-                  claimedSpeakerId,
+                  claimedSpeakerId: claimedSpeakerIdRef.current || claimedSpeakerId,
                 },
               })
             );
@@ -426,55 +490,76 @@ export default function CallsPage() {
     }
   };
 
-  const startSyntheticToneStreaming = () => {
+  const startSyntheticToneStreaming = async () => {
     setMicError(null);
-    connectWebSocket();
-    let chunkIdx = 0;
+    const call = selectedCallRef.current || selectedCall;
+    if (!call) {
+      setMicError('No active call session selected');
+      return;
+    }
 
-    const testPhrases = [
-      'I am calling from your bank fraud department.',
-      'There is unauthorized suspicious activity and your account will be frozen immediately!',
-      'Do not contact your branch, I will verify you directly here on this call.',
-      'Please read the 6-digit OTP code sent to your phone right now.',
-    ];
+    try {
+      const ws = await ensureWebSocketConnected();
+      const streamId = `stream-${Date.now()}`;
+      ws.send(
+        JSON.stringify({
+          type: 'START_STREAM',
+          callId: call.id,
+          streamId,
+        })
+      );
 
-    audioIntervalRef.current = setInterval(() => {
-      const buffer = new Int16Array(4000);
-      for (let i = 0; i < buffer.length; i++) {
-        buffer[i] = Math.sin((2 * Math.PI * 440 * i) / 16000) * 12000;
-      }
-      const uint8 = new Uint8Array(buffer.buffer);
-      let binary = '';
-      for (let i = 0; i < uint8.length; i++) {
-        binary += String.fromCharCode(uint8[i]);
-      }
-      const base64 = btoa(binary);
+      let chunkIdx = 0;
+      const testPhrases = [
+        'I am calling from your bank fraud department.',
+        'There is unauthorized suspicious activity and your account will be frozen immediately!',
+        'Do not contact your branch, I will verify you directly here on this call.',
+        'Please read the 6-digit OTP code sent to your phone right now.',
+      ];
 
-      const phrase = testPhrases[chunkIdx % testPhrases.length];
+      // 4800 samples (300ms @ 16kHz) per 250ms tick satisfies full neural feature extraction
+      audioIntervalRef.current = setInterval(() => {
+        const buffer = new Int16Array(4800);
+        for (let i = 0; i < buffer.length; i++) {
+          buffer[i] = Math.sin((2 * Math.PI * 440 * i) / 16000) * 12000;
+        }
+        const uint8 = new Uint8Array(buffer.buffer);
+        let binary = '';
+        for (let i = 0; i < uint8.length; i++) {
+          binary += String.fromCharCode(uint8[i]);
+        }
+        const base64 = btoa(binary);
 
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedCall) {
-        wsRef.current.send(
-          JSON.stringify({
-            type: 'AUDIO_CHUNK',
-            callId: selectedCall.id,
-            sequenceNumber: chunkIdx++,
-            payload: {
-              format: 'pcm_s16le',
-              sample_rate: 16000,
-              channels: 1,
-              audio_base64: base64,
-              text_transcript: phrase,
-              transcript: phrase,
-              claimedSpeakerId,
-            },
-          })
-        );
-      }
-    }, 250);
+        const sendTranscript = chunkIdx % 4 === 0;
+        const phrase = sendTranscript ? testPhrases[Math.floor(chunkIdx / 4) % testPhrases.length] : undefined;
 
-    setIsStreaming(true);
-    setStreamSource('SYNTHETIC');
-    setMicState('STREAMING');
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (selectedCallRef.current || selectedCall)) {
+          wsRef.current.send(
+            JSON.stringify({
+              type: 'AUDIO_CHUNK',
+              callId: (selectedCallRef.current || selectedCall)!.id,
+              sequenceNumber: chunkIdx++,
+              payload: {
+                format: 'pcm_s16le',
+                sample_rate: 16000,
+                channels: 1,
+                audio_base64: base64,
+                ...(phrase ? { text_transcript: phrase, transcript: phrase } : {}),
+                claimedSpeakerId,
+              },
+            })
+          );
+        }
+      }, 250);
+
+      setIsStreaming(true);
+      setStreamSource('SYNTHETIC');
+      setMicState('STREAMING');
+    } catch (err: any) {
+      setMicState('ERROR');
+      setMicError(err.message || 'Stream initialization failed');
+      setIsStreaming(false);
+    }
   };
 
   const stopStreaming = () => {
@@ -486,12 +571,14 @@ export default function CallsPage() {
       clearInterval(audioIntervalRef.current);
       audioIntervalRef.current = null;
     }
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && selectedCall) {
-      wsRef.current.send(JSON.stringify({ type: 'END_STREAM', callId: selectedCall.id }));
+    const currentCall = selectedCallRef.current || selectedCall;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentCall) {
+      wsRef.current.send(JSON.stringify({ type: 'END_STREAM', callId: currentCall.id }));
     }
     setIsStreaming(false);
     setMicState('STOPPED');
     setMicRmsDb(-96);
+    setTelemetry(INITIAL_TELEMETRY);
   };
 
   const handleApproveIntervention = async () => {
@@ -553,6 +640,8 @@ export default function CallsPage() {
     type: 'deepfake' | 'speaker' | 'replay' | 'vad'
   ) => {
     const isUnavailable = status === 'NOT_AVAILABLE' || status === 'OFFLINE_OR_PENDING' || status === 'UNAVAILABLE';
+    const isStandby = status === 'STANDBY' || status === 'READY' || status === 'AWAITING_STREAM';
+    const isInsufficient = status === 'INSUFFICIENT_AUDIO';
     const isError = status === 'ERROR';
 
     let badgeText = status.replace(/_/g, ' ');
@@ -563,20 +652,29 @@ export default function CallsPage() {
       badgeText = 'AI NOT AVAILABLE';
       badgeClass = 'bg-slate-800/80 text-amber-300/80 border border-amber-500/20';
       scoreDisplay = '—';
+    } else if (isStandby) {
+      badgeText = 'READY';
+      badgeClass = 'bg-slate-800 text-cyan-400 border border-cyan-500/30';
+      scoreDisplay = '—';
+    } else if (isInsufficient) {
+      badgeText = 'EVALUATING...';
+      badgeClass = 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30';
+      scoreDisplay = '—';
     } else if (isError) {
       badgeText = 'ERROR';
       badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
       scoreDisplay = '—';
     } else {
       if (typeof score === 'number' && isFinite(score)) {
-        scoreDisplay = `${(score * 100).toFixed(0)}%`;
+        const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+        scoreDisplay = `${pct}%`;
       }
 
       if (type === 'deepfake') {
-        if (status === 'DETECTED' || status === 'SPOOF' || (score !== null && score >= 0.685)) {
+        if (status === 'DETECTED' || status === 'SPOOF' || status === 'SUSPICIOUS' || (score !== null && score >= 0.685)) {
           badgeText = 'DETECTED';
           badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
-        } else if (status === 'AUTHENTIC' || status === 'NOT_DETECTED') {
+        } else if (status === 'AUTHENTIC' || status === 'NOT_DETECTED' || (score !== null && score < 0.50)) {
           badgeText = 'AUTHENTIC';
           badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
         } else if (status === 'INCONCLUSIVE') {
@@ -585,22 +683,35 @@ export default function CallsPage() {
         }
       } else if (type === 'speaker') {
         if (status === 'MATCH') {
+          badgeText = 'MATCH';
           badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
         } else if (status === 'MISMATCH') {
+          badgeText = 'MISMATCH';
           badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+        } else if (status === 'NOT_ENROLLED') {
+          badgeText = 'UNENROLLED';
+          badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
         }
       } else if (type === 'replay') {
-        if (status === 'REPLAY_DETECTED' || status === 'DETECTED') {
+        if (status === 'REPLAY_DETECTED' || status === 'DETECTED' || status === 'LIKELY_REPLAY') {
           badgeText = 'REPLAY DETECTED';
           badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
         } else if (status === 'NOT_REPLAY' || status === 'AUTHENTIC') {
           badgeText = 'NOT REPLAY';
           badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+        } else if (status === 'UNCERTAIN') {
+          badgeText = 'UNCERTAIN';
+          badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
         }
       } else if (type === 'vad') {
-        if (status === 'SPEECH') {
+        if (status === 'SPEECH' || (typeof score === 'number' && score > 0.5)) {
+          badgeText = 'SPEECH';
           badgeClass = 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+        } else if (status === 'SILENCE') {
+          badgeText = 'SILENCE';
+          badgeClass = 'bg-slate-800 text-slate-400 border border-slate-700';
         } else {
+          badgeText = 'LISTENING';
           badgeClass = 'bg-slate-800 text-slate-400 border border-slate-700';
         }
       }
@@ -745,11 +856,13 @@ export default function CallsPage() {
                               <span>Stream Live Mic</span>
                             </button>
                             <button
+                              id="test-scream-btn"
                               onClick={startSyntheticToneStreaming}
                               className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
+                              title="Stream synthetic test audio scenario for real-time AI scream/speech acoustic inference"
                             >
                               <Play className="w-3.5 h-3.5" />
-                              <span>Test Scenario Stream</span>
+                              <span>Test Scream</span>
                             </button>
                           </>
                         ) : (

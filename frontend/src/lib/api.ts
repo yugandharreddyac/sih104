@@ -9,6 +9,23 @@ export interface ApiResponse<T = any> {
   details?: any;
 }
 
+export interface CallSession {
+  id: string;
+  callerIdentifier: string;
+  callerDisplayName?: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  status: 'ACTIVE' | 'RINGING' | 'TERMINATED' | 'BLOCKED';
+  organizationId: string;
+  claimedSpeakerId?: string;
+  createdAt: string;
+}
+
+export interface InterventionDecisionRequest {
+  interventionId: string;
+  decision: 'APPROVED' | 'OVERRIDDEN' | 'REJECTED';
+  reason?: string;
+}
+
 export class ApiClient {
   private static getToken(): string | null {
     if (typeof window !== 'undefined') {
@@ -19,8 +36,11 @@ export class ApiClient {
 
   public static async request<T = any>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
     const token = this.getToken();
+    const correlationId = `req-fe-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'X-Correlation-ID': correlationId,
       ...(options.headers as Record<string, string> || {}),
     };
 
@@ -49,11 +69,22 @@ export class ApiClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  public static post<T = any>(endpoint: string, body: any) {
-    return this.request<T>(endpoint, { method: 'POST', body: JSON.stringify(body) });
+  public static post<T = any>(endpoint: string, body?: any) {
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
   }
 
-  public static patch<T = any>(endpoint: string, body: any) {
-    return this.request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) });
+  public static patch<T = any>(endpoint: string, body?: any) {
+    return this.request<T>(endpoint, {
+      method: 'PATCH',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  public static delete<T = any>(endpoint: string) {
+    return this.request<T>(endpoint, { method: 'DELETE' });
   }
 }
+

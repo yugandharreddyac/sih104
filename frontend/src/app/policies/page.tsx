@@ -62,7 +62,7 @@ export default function PoliciesPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#070b14]">
+    <div className="flex min-h-screen bg-[#05070d]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
@@ -222,16 +222,20 @@ export default function PoliciesPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-slate-400">Triggered Action:</span>
                           <span className="font-bold text-rose-400">
-                            {simResult.action || simResult.triggered_action || 'REQUIRE_STEP_UP_VERIFICATION'}
+                            {simResult.action || simResult.triggered_action || 'NO_ACTION_TRIGGERED'}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
-                          <span className="text-slate-400">Policy Name:</span>
-                          <span className="text-slate-200">{simResult.policy_name || 'POL-AUTH-PROTECT-01'}</span>
+                          <span className="text-slate-400">Policy Triggered:</span>
+                          <span className="text-slate-200">
+                            {simResult.policy_name || simResult.policyId || 'NONE'}
+                          </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-slate-400">Status:</span>
-                          <span className="text-emerald-400 font-bold">DETERMINISTIC_ENFORCED</span>
+                          <span className="text-emerald-400 font-bold">
+                            {simResult.status || (simResult.action ? 'DETERMINISTIC_TRIGGERED' : 'EVALUATED_SAFE')}
+                          </span>
                         </div>
                       </div>
                     )}

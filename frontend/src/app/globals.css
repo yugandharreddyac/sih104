@@ -2,23 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-obsidian-950: #05070d;
+  --bg-obsidian-900: #070b17;
+  --bg-obsidian-850: #0b1224;
+  --panel-slate: #10182d;
+  --panel-slate-elevated: #151f38;
+  --border-subtle: #24304a;
+  --cyber-cyan: #00b8d9;
+  --cyber-cyan-bright: #22d3ee;
+  --cyber-indigo: #4f46e5;
+  --cyber-indigo-bright: #6366f1;
+  --saffron-command: #ff9933;
+  --security-safe: #22c55e;
+  --security-elevated: #f59e0b;
+  --security-high: #f97316;
+  --security-critical: #ef4444;
+}
+
 @layer base {
   body {
-    @apply bg-[#070b14] text-slate-100 antialiased font-sans;
+    @apply bg-[#05070d] text-slate-100 antialiased font-sans;
+    background-color: #05070d;
   }
 }
 
-/* Custom Enterprise SOC Styling */
+/* Custom Enterprise SOC Styling — Indian Cyber Command Identity */
 .soc-card {
-  background: #0c1222;
-  border: 1px solid #1e293b;
+  background: #10182d;
+  border: 1px solid #24304a;
+  border-radius: 0.75rem;
+}
+
+.soc-card-elevated {
+  background: #151f38;
+  border: 1px solid #2a3b5c;
   border-radius: 0.75rem;
 }
 
 .soc-glass {
-  background: rgba(12, 18, 34, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(16, 24, 45, 0.88);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(36, 48, 74, 0.9);
+}
+
+.saffron-indicator {
+  background: #ff9933;
+  box-shadow: 0 0 8px rgba(255, 153, 51, 0.45);
+}
+
+.cyan-indicator {
+  background: #00b8d9;
+  box-shadow: 0 0 8px rgba(0, 184, 217, 0.45);
 }
 
 /* Subtle enterprise scrollbar */
@@ -28,14 +63,15 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #070b14;
+  background: #05070d;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #24304a;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
 }
+

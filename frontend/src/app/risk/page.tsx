@@ -10,6 +10,7 @@ import { ThreatVerdict } from '@/components/ui/ThreatVerdict';
 import { RiskScoreGauge } from '@/components/ui/RiskScoreGauge';
 import { EvidenceList } from '@/components/ui/EvidenceList';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { RiskTensorCard } from '@/components/ui/RiskTensorCard';
 import {
   BarChart3,
   ShieldAlert,
@@ -115,7 +116,7 @@ export default function RiskPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#070b14]">
+    <div className="flex min-h-screen bg-[#05070d]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
@@ -280,77 +281,77 @@ export default function RiskPage() {
 
               {/* Expandable 10-Dimensional Threat Tensor */}
               <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-4">
-                <button
-                  onClick={() => setShowFullTensor(!showFullTensor)}
-                  className="w-full flex items-center justify-between text-left"
-                >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded bg-slate-900 border border-slate-800 text-indigo-400">
                       <Layers className="w-4 h-4" />
                     </div>
                     <div>
                       <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                        Full 10-Dimensional Threat Tensor
+                        Full 10-Dimensional Threat Tensor Decomposition
                       </h3>
                       <p className="text-[11px] text-slate-400 font-sans">
-                        Comprehensive multi-layer threat dimension decomposition
+                        Multi-layer neural, biometric, and conversational risk vector evaluation
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-xs font-mono text-cyan-400">
-                    <span>{showFullTensor ? 'COLLAPSE' : 'EXPAND ALL 10 DIMENSIONS'}</span>
-                    {showFullTensor ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  <div className="text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2.5 py-1 rounded border border-slate-800">
+                    Scores: 0–100 Operational Risk (Not a probability of guilt)
                   </div>
-                </button>
+                </div>
 
-                {showFullTensor && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-800/80">
-                    {[
-                      { name: '1. Identity Impersonation', score: dimensions.identity_impersonation, key: 'ID_IMP' },
-                      { name: '2. Deepfake / Synthetic Voice', score: dimensions.deepfake_synthetic, key: 'DEEPFAKE' },
-                      { name: '3. Replay / Injection Signal', score: dimensions.replay_injection, key: 'REPLAY' },
-                      { name: '4. Social Engineering Urgency', score: dimensions.social_engineering, key: 'SOC_ENG' },
-                      { name: '5. Credential Theft Solicitation', score: dimensions.credential_theft, key: 'CRED_THEFT' },
-                      { name: '6. Financial Fraud / Wire Risk', score: dimensions.financial_fraud, key: 'FIN_FRAUD' },
-                      { name: '7. Account Takeover Progression', score: dimensions.account_takeover, key: 'ATO' },
-                      { name: '8. Verification Bypass Attempt', score: dimensions.verification_bypass, key: 'BYPASS' },
-                      { name: '9. Signal & Channel Inconsistency', score: dimensions.inconsistency, key: 'INCONSISTENCY' },
-                      { name: '10. Overall Composite Threat Tensor', score: dimensions.overall ?? (isEvaluated ? rawScore : null), key: 'COMPOSITE' },
-                    ].map((dim) => {
-                      const hasScore = typeof dim.score === 'number' && Number.isFinite(dim.score);
-                      const normVal = hasScore ? (dim.score > 1 ? dim.score : dim.score * 100) : 0;
-                      const pct = Math.round(normVal);
-
-                      return (
-                        <div
-                          key={dim.key}
-                          className="p-3 rounded-lg bg-slate-900/80 border border-slate-800/80 space-y-1.5"
-                        >
-                          <div className="flex items-center justify-between text-xs font-sans">
-                            <span className="font-semibold text-slate-200">{dim.name}</span>
-                            <span className={`font-mono font-bold ${hasScore ? 'text-slate-300' : 'text-slate-500'}`}>
-                              {hasScore ? `${pct}%` : '—'}
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                !hasScore
-                                  ? 'bg-slate-700'
-                                  : pct >= 70
-                                  ? 'bg-rose-500'
-                                  : pct >= 40
-                                  ? 'bg-amber-400'
-                                  : 'bg-emerald-400'
-                              }`}
-                              style={{ width: hasScore ? `${pct}%` : '0%' }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <RiskTensorCard
+                    name="1. Credential Theft"
+                    score={dimensions.credential_theft}
+                    description="High Weight"
+                  />
+                  <RiskTensorCard
+                    name="2. Social Engineering"
+                    score={dimensions.social_engineering}
+                    description="High Weight"
+                  />
+                  <RiskTensorCard
+                    name="3. Financial Fraud"
+                    score={dimensions.financial_fraud}
+                    description="Critical Weight"
+                  />
+                  <RiskTensorCard
+                    name="4. Account Takeover"
+                    score={dimensions.account_takeover}
+                    description="Critical Weight"
+                  />
+                  <RiskTensorCard
+                    name="5. Verification Bypass"
+                    score={dimensions.verification_bypass}
+                    description="Elevated"
+                  />
+                  <RiskTensorCard
+                    name="6. Identity Impersonation"
+                    score={dimensions.identity_impersonation}
+                    description="Biometric"
+                  />
+                  <RiskTensorCard
+                    name="7. Deepfake / Synthetic"
+                    score={dimensions.deepfake_synthetic}
+                    description="Acoustic"
+                  />
+                  <RiskTensorCard
+                    name="8. Replay / Injection"
+                    score={dimensions.replay_injection}
+                    description="Spectral"
+                  />
+                  <RiskTensorCard
+                    name="9. Signal Inconsistency"
+                    score={dimensions.inconsistency}
+                    description="Cross-Modal"
+                  />
+                  <RiskTensorCard
+                    name="10. Overall Composite"
+                    score={dimensions.overall ?? (isEvaluated ? rawScore : null)}
+                    description="Bayesian Fusion"
+                  />
+                </div>
               </div>
             </div>
           )}

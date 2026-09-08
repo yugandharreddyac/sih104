@@ -83,21 +83,22 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="w-64 bg-[#0c1222] border-r border-slate-800/80 flex flex-col h-screen sticky top-0 shrink-0 select-none z-40">
-      {/* Brand Header */}
-      <div className="p-4 border-b border-slate-800/80 flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20">
+    <aside className="w-64 bg-[#070b17] border-r border-[#24304a] flex flex-col h-screen sticky top-0 shrink-0 select-none z-40">
+      {/* Brand Header — Indian Cyber Command Identity */}
+      <div className="p-4 border-b border-[#24304a] flex items-center gap-3 relative">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
           <Shield className="w-4 h-4 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="font-bold text-sm tracking-wider text-white flex items-center gap-1.5 font-sans">
             <span>VOXSHIELD</span>
             <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20">
               SOC
             </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#ff9933] ml-auto shrink-0" title="Indian Cyber Command Node" />
           </div>
           <p className="text-[10px] text-slate-400 font-sans tracking-tight">
-            AI Voice Security Operations
+            National Cyber Security Operations
           </p>
         </div>
       </div>
@@ -119,23 +120,27 @@ export const Sidebar: React.FC = () => {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all relative ${
                     isActive
-                      ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-850/60 border border-transparent'
+                      ? 'bg-[#151f38] text-cyan-300 border border-[#2a3b5c] shadow-sm font-semibold'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#10182d] border border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-indigo-400' : 'text-slate-400'
+                        isActive ? 'text-cyan-400' : 'text-slate-400'
                       }`}
                     />
                     <span className="font-sans truncate">{item.name}</span>
                   </div>
 
+                  {isActive && (
+                    <span className="w-1 h-3.5 rounded-full bg-cyan-400 absolute right-1.5" />
+                  )}
+
                   {item.isLive && (
-                    <span className="flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                    <span className="flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 mr-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
                       <span>LIVE</span>
                     </span>

@@ -81,7 +81,7 @@ export default function IncidentsPage() {
   });
 
   return (
-    <div className="flex min-h-screen bg-[#070b14]">
+    <div className="flex min-h-screen bg-[#05070d]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
@@ -238,35 +238,21 @@ export default function IncidentsPage() {
                   </div>
 
                   {/* Structured Evidence Trail */}
-                  <EvidenceList
-                    items={
-                      selectedIncident.evidenceSummary?.length > 0
-                        ? selectedIncident.evidenceSummary
-                        : [
-                            {
-                              category: 'ACOUSTIC',
-                              title: 'Synthetic Vocoder Artifacts',
-                              detail: 'LFCC spectral flatness deviations exceeding calibrated threshold (0.685).',
-                              severity: 'HIGH',
-                              score: 0.89,
-                            },
-                            {
-                              category: 'BIOMETRIC',
-                              title: 'Speaker Embedding Mismatch',
-                              detail: 'Voice x-vector similarity below enrolled executive voice profile.',
-                              severity: 'HIGH',
-                              score: 0.22,
-                            },
-                            {
-                              category: 'CONVERSATION',
-                              title: 'High-Risk Action Solicitation',
-                              detail: 'Caller attempted to elicit MFA device re-registration during active voice stream.',
-                              severity: 'CRITICAL',
-                            },
-                          ]
-                    }
-                    title="Why was this flagged? (Corroborated Signals)"
-                  />
+                  {selectedIncident.evidenceSummary && selectedIncident.evidenceSummary.length > 0 ? (
+                    <EvidenceList
+                      items={selectedIncident.evidenceSummary}
+                      title="Corroborated Telemetry & Signal Evidence"
+                    />
+                  ) : (
+                    <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-800/80 space-y-1">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
+                        Corroborated Evidence
+                      </span>
+                      <p className="text-xs text-slate-400 font-sans italic">
+                        No secondary acoustic or behavioral evidence recorded for this case record.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Officer Response Action Panel (What should I do?) */}
                   <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">

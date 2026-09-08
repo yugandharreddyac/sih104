@@ -28,7 +28,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { ApiClient, WS_BASE } from '@/lib/api';
-import { formatSafeTime } from '@/lib/format';
+import { formatSafeTime, formatPercentage } from '@/lib/format';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -157,7 +157,7 @@ export default function DashboardPage() {
   ) || callsList[0];
 
   return (
-    <div className="flex min-h-screen bg-[#070b14]">
+    <div className="flex min-h-screen bg-[#05070d]">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
@@ -216,11 +216,11 @@ export default function DashboardPage() {
                         {primaryIncident?.severity || 'HIGH RISK'} VOICE SECURITY EVENT
                       </span>
                       <span className="text-xs font-mono text-cyan-400">
-                        {primaryCall?.callerIdentifier || '+1 (555) 019-2834'}
+                        {primaryCall?.callerIdentifier || 'Active Voice Session'}
                       </span>
                     </div>
                     <h3 className="text-base font-bold text-white font-sans mt-0.5">
-                      {primaryIncident?.title || 'Synthetic Voice Impersonation & Credential Solicitation'}
+                      {primaryIncident?.title || 'Elevated Threat Signals Detected'}
                     </h3>
                   </div>
                 </div>
@@ -258,20 +258,20 @@ export default function DashboardPage() {
                   <span className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
                     Contributing Threat Indicators (Evidence)
                   </span>
-                  <ul className="space-y-1 text-slate-300 font-sans">
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                      <span>Acoustic spectral distortion consistent with neural vocoder synthesis</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                      <span>Biometric speaker similarity mismatch against enrolled reference profile</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shrink-0" />
-                      <span>Conversational urgency tactic requesting out-of-band authorization</span>
-                    </li>
-                  </ul>
+                  {primaryIncident?.evidenceSummary && primaryIncident.evidenceSummary.length > 0 ? (
+                    <ul className="space-y-1 text-slate-300 font-sans">
+                      {primaryIncident.evidenceSummary.map((ev: any, idx: number) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                          <span>{ev.title || ev.detail || ev.category}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-slate-400 font-sans italic">
+                      {primaryIncident?.description || 'Active multi-modal audio telemetry evaluated above safe policy thresholds.'}
+                    </p>
+                  )}
                 </div>
 
                 <div className="p-3 rounded-lg bg-slate-900/60 border border-slate-800/80 flex flex-col justify-between space-y-3">
@@ -406,7 +406,7 @@ export default function DashboardPage() {
                             {typeof call.riskScore === 'number' && (
                               <div className="text-right font-mono text-xs font-bold">
                                 <span className={isThreat ? 'text-rose-400' : 'text-emerald-400'}>
-                                  {(call.riskScore * 100).toFixed(0)}%
+                                  {formatPercentage(call.riskScore)}
                                 </span>
                               </div>
                             )}

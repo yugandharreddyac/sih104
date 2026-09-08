@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
 import { Phase1Notice } from '@/components/Phase1Notice';
 import { ApiClient, WS_BASE } from '@/lib/api';
 import { BrowserAudioStreamer, MicStreamState } from '@/lib/audio_streamer';
-import { formatSafeTime } from '@/lib/format';
+import { formatSafeTime, formatLatency } from '@/lib/format';
+import { RiskTensorCard } from '@/components/ui/RiskTensorCard';
+import { DominantThreatCard } from '@/components/ui/DominantThreatCard';
+import { EvidenceExplainer } from '@/components/ui/EvidenceExplainer';
+import { TechnicalTelemetryPanel } from '@/components/ui/TechnicalTelemetryPanel';
 import {
   PhoneCall,
   Activity,
@@ -161,6 +165,7 @@ export default function CallsPage() {
   const [micRmsDb, setMicRmsDb] = useState<number>(-96);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const isWsAuthenticatedRef = useRef<boolean>(false);
   const audioStreamerRef = useRef<BrowserAudioStreamer | null>(null);
   const audioIntervalRef = useRef<any>(null);
   const selectedCallRef = useRef<CallSession | null>(null);
@@ -218,15 +223,11 @@ export default function CallsPage() {
     }
   }, [selectedCall]);
 
-  useEffect(() => {
-    fetchCalls();
-    ApiClient.ensureAuth();
-  }, []);
-
-  const fetchCalls = async () => {
+  const fetchCalls = useCallback(async () => {
     try {
       await ApiClient.ensureAuth();
       const res = await ApiClient.get('/calls');
+      console.info('[CALLS-DEBUG] fetchCalls:', res);
       if (res.success && res.data && res.data.length > 0) {
         setCalls(res.data);
         if (!selectedCallRef.current) {
@@ -236,21 +237,40 @@ export default function CallsPage() {
         setCalls([]);
         setSelectedCall(null);
       }
-    } catch {
+    } catch (err: any) {
+      console.warn('[CALLS-DEBUG] fetchCalls error:', err);
       setCalls([]);
       setSelectedCall(null);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      await ApiClient.ensureAuth();
+      if (mounted) {
+        await fetchCalls();
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [fetchCalls]);
 
   const handleWebSocketMessage = (event: MessageEvent) => {
     try {
       const msg = JSON.parse(event.data);
       console.log('[WS-RECV]', msg.type, msg.callId || '', msg.error || msg.message || (msg.sequenceNumber !== undefined ? `seq:${msg.sequenceNumber}` : ''));
 
+      if (msg.type === 'AUTHENTICATED') {
+        isWsAuthenticatedRef.current = true;
+      }
+
       // Error Handling & Re-authentication
       if (msg.type === 'ERROR') {
         console.warn('WS Server Event Error:', msg.error, msg.message);
         if (msg.error === 'UNAUTHENTICATED' || msg.error === 'AUTH_REQUIRED') {
+          isWsAuthenticatedRef.current = false;
           ApiClient.ensureAuth().then((freshToken) => {
             if (freshToken && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token: freshToken } }));
@@ -426,56 +446,99 @@ export default function CallsPage() {
     const token = (await ApiClient.ensureAuth()) || ApiClient.getToken() || '';
 
     return new Promise((resolve, reject) => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // 1. If already OPEN and authenticated, resolve immediately
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && isWsAuthenticatedRef.current) {
         resolve(wsRef.current);
         return;
       }
 
-      if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
-        const existingWs = wsRef.current;
-        const onOpenHandler = () => {
-          existingWs.removeEventListener('open', onOpenHandler);
-          resolve(existingWs);
+      // Helper to listen for AUTHENTICATED on an existing connection
+      const waitForAuth = (targetWs: WebSocket) => {
+        let authTimer: any = null;
+        const onMsg = (event: MessageEvent) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'AUTHENTICATED') {
+              if (authTimer) clearTimeout(authTimer);
+              targetWs.removeEventListener('message', onMsg);
+              isWsAuthenticatedRef.current = true;
+              console.log('[WS-AUTH] Authenticated successfully');
+              resolve(targetWs);
+            }
+          } catch {}
         };
-        existingWs.addEventListener('open', onOpenHandler);
+        authTimer = setTimeout(() => {
+          targetWs.removeEventListener('message', onMsg);
+          console.warn('[WS-AUTH-TIMEOUT] Resolving after timeout — server may be slow');
+          resolve(targetWs);
+        }, 10000);
+        targetWs.addEventListener('message', onMsg);
+      };
+
+      // 2. If existing socket is OPEN but waiting for auth:
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
+        waitForAuth(wsRef.current);
         return;
       }
 
+      // 3. If existing socket is CONNECTING:
+      if (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING) {
+        const existingWs = wsRef.current;
+        existingWs.addEventListener(
+          'open',
+          () => {
+            existingWs.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
+            waitForAuth(existingWs);
+          },
+          { once: true }
+        );
+        return;
+      }
+
+      // 4. Create new socket
       try {
         const ws = new WebSocket(WS_BASE);
         wsRef.current = ws;
+        isWsAuthenticatedRef.current = false;
 
-        const authTimeout = setTimeout(() => {
-          console.warn('[WS-AUTH-TIMEOUT] Resolving after timeout');
-          resolve(ws);
-        }, 1200);
+        let authTimeout: any = null;
 
         const onMessageHandler = (event: MessageEvent) => {
           try {
             const data = JSON.parse(event.data);
             if (data.type === 'AUTHENTICATED') {
-              clearTimeout(authTimeout);
+              if (authTimeout) clearTimeout(authTimeout);
+              ws.removeEventListener('message', onMessageHandler);
+              isWsAuthenticatedRef.current = true;
               console.log('[WS-AUTH] Authenticated successfully');
               resolve(ws);
             }
           } catch {}
         };
 
-        ws.addEventListener('message', onMessageHandler);
-
         ws.onopen = () => {
           console.log('[WS-OPEN] Connected. Token present:', Boolean(token), 'Length:', token?.length);
           ws.send(JSON.stringify({ type: 'AUTHENTICATE', payload: { token } }));
+          // Start auth timeout only AFTER socket is actually open and AUTHENTICATE has been transmitted
+          authTimeout = setTimeout(() => {
+            console.warn('[WS-AUTH-TIMEOUT] Resolving after timeout — server may be slow');
+            resolve(ws);
+          }, 10000);
         };
 
+        // Set permanent message handler first, then auth-specific listener
         ws.onmessage = handleWebSocketMessage;
+        ws.addEventListener('message', onMessageHandler);
 
         ws.onerror = (err) => {
           console.warn('WebSocket connection error:', err);
+          isWsAuthenticatedRef.current = false;
         };
 
         ws.onclose = () => {
-          clearTimeout(authTimeout);
+          if (authTimeout) clearTimeout(authTimeout);
+          isWsAuthenticatedRef.current = false;
           wsRef.current = null;
         };
       } catch (e) {
@@ -835,7 +898,7 @@ export default function CallsPage() {
   const riskScoreText = isEvaluated ? `${unifiedRisk.overallRiskScore!.toFixed(1)}/100` : 'PENDING';
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 overflow-hidden font-sans antialiased">
+    <div className="flex h-screen bg-[#05070d] text-slate-100 overflow-hidden font-sans antialiased">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <Navbar title="Live SOC Command Center" subtitle="Real-Time Voice Defense & Multi-Modal Threat Fusion" />
@@ -905,7 +968,7 @@ export default function CallsPage() {
                       <p className="text-xs text-slate-400 mt-1">{call.callerDisplayName || 'Telephony Audio Channel'}</p>
                       <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-2 pt-2 border-t border-slate-800/60">
                         <span>{call.direction}</span>
-                        <span>{formatSafeTime(call.createdAt)}</span>
+                        <span>{formatSafeTime(call.createdAt, 'NO TELEMETRY RECORDED')}</span>
                       </div>
                     </div>
                   ))
@@ -946,7 +1009,7 @@ export default function CallsPage() {
                           )}
                         </div>
                         <p className="text-xs text-slate-400 font-mono mt-0.5">
-                          Session: {selectedCall.id} • Latency: {unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs || 0}ms
+                          Session: {selectedCall.id} • Latency: {formatLatency(unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs)}
                         </p>
                       </div>
 
@@ -994,12 +1057,23 @@ export default function CallsPage() {
                           </strong>
                           <span>
                             {(unifiedRisk.dimensions.credential_theft ?? 0) >= 70
-                              ? 'Caller actively solicited one-time password / authentication credentials. Step-up policy verification triggered.'
+                              ? 'Caller actively solicited one-time password (OTP) / authentication credentials. Step-up policy verification triggered.'
                               : 'High conversational social engineering tactics detected across dialogue turns.'}
                           </span>
                         </div>
                       </div>
                     )}
+
+                    {/* Dominant Threat Summary & Contributing Signals */}
+                    <DominantThreatCard
+                      overallRiskScore={unifiedRisk.overallRiskScore}
+                      riskLevel={unifiedRisk.riskLevel}
+                      confidence={unifiedRisk.confidence}
+                      velocity={unifiedRisk.riskVelocity}
+                      dimensions={unifiedRisk.dimensions}
+                      policyId={unifiedRisk.policyRecommendation?.policy_id}
+                      policyExplanation={unifiedRisk.policyRecommendation?.explanation}
+                    />
 
                     {/* Microphone Stream Health Bar */}
                     {isStreaming && (
@@ -1107,37 +1181,66 @@ export default function CallsPage() {
 
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
                       {[
-                        { label: 'Credential Theft', val: unifiedRisk.dimensions.credential_theft },
-                        { label: 'Social Engineering', val: unifiedRisk.dimensions.social_engineering },
-                        { label: 'Verification Bypass', val: unifiedRisk.dimensions.verification_bypass },
-                        { label: 'Financial Fraud', val: unifiedRisk.dimensions.financial_fraud },
-                        { label: 'Identity Impersonation', val: unifiedRisk.dimensions.identity_impersonation },
-                        { label: 'Account Takeover', val: unifiedRisk.dimensions.account_takeover },
-                        { label: 'Deepfake / Synthetic', val: unifiedRisk.dimensions.deepfake_synthetic },
-                        { label: 'Replay / Injection', val: unifiedRisk.dimensions.replay_injection },
-                        { label: 'Signal Inconsistency', val: unifiedRisk.dimensions.inconsistency },
-                        { label: 'Overall Composite', val: unifiedRisk.dimensions.overall },
-                      ].map((dim, i) => {
-                        const hasVal = typeof dim.val === 'number' && Number.isFinite(dim.val);
-                        const numericVal = hasVal ? dim.val! : 0;
-                        const barColor = numericVal >= 70 ? 'bg-rose-500' : numericVal >= 40 ? 'bg-amber-500' : 'bg-cyan-500';
-                        return (
-                          <div key={i} className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 space-y-1">
-                            <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                              <span className="truncate" title={dim.label}>{dim.label}</span>
-                              <span className="font-bold text-white">{hasVal ? numericVal.toFixed(0) : '—'}</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${hasVal ? barColor : 'bg-slate-700'} rounded-full transition-all duration-300`}
-                                style={{ width: `${hasVal ? Math.min(100, Math.max(0, numericVal)) : 0}%` }}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
+                        { key: 'credential_theft', name: 'Credential Theft', val: unifiedRisk.dimensions.credential_theft },
+                        { key: 'social_engineering', name: 'Social Engineering', val: unifiedRisk.dimensions.social_engineering },
+                        { key: 'verification_bypass', name: 'Verification Bypass', val: unifiedRisk.dimensions.verification_bypass },
+                        { key: 'financial_fraud', name: 'Financial Fraud', val: unifiedRisk.dimensions.financial_fraud },
+                        { key: 'identity_impersonation', name: 'Identity Impersonation', val: unifiedRisk.dimensions.identity_impersonation },
+                        { key: 'account_takeover', name: 'Account Takeover', val: unifiedRisk.dimensions.account_takeover },
+                        { key: 'deepfake_synthetic', name: 'Deepfake / Synthetic', val: unifiedRisk.dimensions.deepfake_synthetic },
+                        { key: 'replay_injection', name: 'Replay / Injection', val: unifiedRisk.dimensions.replay_injection },
+                        { key: 'inconsistency', name: 'Signal Inconsistency', val: unifiedRisk.dimensions.inconsistency },
+                        { key: 'overall', name: 'Overall Composite', val: unifiedRisk.dimensions.overall },
+                      ].map((dim) => (
+                        <RiskTensorCard
+                          key={dim.key}
+                          name={dim.name}
+                          score={dim.val}
+                          highlight={dim.key === 'overall'}
+                        />
+                      ))}
                     </div>
                   </div>
+
+                  {/* Forensic Evidence & Explainability Panel */}
+                  <EvidenceExplainer
+                    what={
+                      (unifiedRisk.dimensions.credential_theft ?? 0) >= 70
+                        ? 'Critical Credential Theft Solicitation Detected'
+                        : (unifiedRisk.dimensions.financial_fraud ?? 0) >= 70
+                        ? 'High-Risk Financial Transfer Solicitation'
+                        : (unifiedRisk.dimensions.account_takeover ?? 0) >= 70
+                        ? 'Remote Access Software Solicitation (Account Takeover)'
+                        : (unifiedRisk.dimensions.verification_bypass ?? 0) >= 60
+                        ? 'Verification Bypass Solicitation Detected'
+                        : unifiedRisk.policyRecommendation?.policy_id
+                        ? `Policy Rule Triggered: ${unifiedRisk.policyRecommendation.policy_id}`
+                        : null
+                    }
+                    why={unifiedRisk.policyRecommendation?.explanation || (unifiedRisk.primaryDrivers.length > 0 ? unifiedRisk.primaryDrivers.join('; ') : null)}
+                    evidence={
+                      currentMicTranscriptRef.current ||
+                      (unifiedRisk.evidenceGraph?.nodes?.length ? unifiedRisk.evidenceGraph.nodes.map((n: any) => n.label || n.id) : null)
+                    }
+                    action={unifiedRisk.policyRecommendation?.action || (unifiedRisk.policyRecommendation?.is_triggered ? 'Require Step-Up Out-of-Band Verification Challenge' : null)}
+                    primaryDrivers={unifiedRisk.primaryDrivers}
+                    policyRule={unifiedRisk.policyRecommendation?.policy_id}
+                  />
+
+                  {/* Technical Engineering Telemetry Panel */}
+                  <TechnicalTelemetryPanel
+                    sampleRate={16000}
+                    channels={1}
+                    chunkDurationMs={300}
+                    measuredLatencyMs={unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs}
+                    aiState={telemetry.deepfake.status !== 'NOT_AVAILABLE' ? 'ONLINE' : 'AI NOT AVAILABLE'}
+                    rmsDb={micRmsDb}
+                    streamSource={streamSource}
+                    deepfakeStatus={telemetry.deepfake.status}
+                    speakerStatus={telemetry.speaker.status}
+                    replayStatus={telemetry.replay.status}
+                    vadStatus={telemetry.vad.state}
+                  />
 
                   {/* Deterministic Policy Trigger & Decision Bar */}
                   {unifiedRisk.policyRecommendation?.is_triggered && (

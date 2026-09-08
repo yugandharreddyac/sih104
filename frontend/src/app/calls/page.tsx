@@ -46,6 +46,75 @@ interface CallSession {
   createdAt: string;
 }
 
+interface ThreatScenarioOption {
+  id: string;
+  name: string;
+  dimension: string;
+  transcript: string;
+  claimedSpeaker?: string;
+  desc: string;
+}
+
+const THREAT_SCENARIOS: ThreatScenarioOption[] = [
+  {
+    id: 'CREDENTIAL_THEFT',
+    name: '1. Credential Theft (OTP)',
+    dimension: 'credential_theft',
+    transcript: 'Please tell me your OTP.',
+    desc: 'Direct solicitation of authentication credentials / one-time password (OTP).',
+  },
+  {
+    id: 'FINANCIAL_FRAUD',
+    name: '2. Financial Fraud (Wire)',
+    dimension: 'financial_fraud',
+    transcript: 'Transfer fifty thousand rupees to this new beneficiary immediately.',
+    desc: 'Urgent unauthorized fund transfer to newly specified beneficiary account.',
+  },
+  {
+    id: 'ACCOUNT_TAKEOVER',
+    name: '3. Account Takeover (Remote)',
+    dimension: 'account_takeover',
+    transcript: 'Install remote access software and share your screen.',
+    desc: 'Adversary instructs victim to install AnyDesk/TeamViewer remote access tools.',
+  },
+  {
+    id: 'VERIFICATION_BYPASS',
+    name: '4. Verification Bypass',
+    dimension: 'verification_bypass',
+    transcript: 'Skip verification and approve the transaction.',
+    desc: 'Adversary pressures operator to bypass secondary out-of-band verification steps.',
+  },
+  {
+    id: 'SOCIAL_ENGINEERING',
+    name: '5. Social Engineering (Coercion)',
+    dimension: 'social_engineering',
+    transcript: 'I am the Police Commissioner. You must transfer these funds immediately or face arrest.',
+    desc: 'Coercive authority exploitation and artificial urgency pressure.',
+  },
+  {
+    id: 'ACOUSTIC_DEEPFAKE',
+    name: '6. Acoustic Deepfake (Synthetic)',
+    dimension: 'deepfake_synthetic',
+    transcript: 'Synthesized vocoder test audio with high-frequency phase discontinuities.',
+    desc: 'Acoustic neural evaluation detecting vocoder phase jitter and spectral anomalies.',
+  },
+  {
+    id: 'SPEAKER_MISMATCH',
+    name: '7. Speaker Impersonation (Mismatch)',
+    dimension: 'identity_impersonation',
+    transcript: 'I am the Chief Financial Officer authorizing this transaction.',
+    claimedSpeaker: 'unknown-speaker',
+    desc: 'Caller acoustic voiceprint contradicts enrolled biometric CFO identity profile.',
+  },
+  {
+    id: 'REPLAY_ATTACK',
+    name: '8. Replay Attack (Loudspeaker)',
+    dimension: 'replay_injection',
+    transcript: 'Loudspeaker replay transmission with room reverberation decay.',
+    desc: 'Secondary room reverberation convolution and physical loudspeaker roll-off.',
+  },
+];
+
 const INITIAL_TELEMETRY = {
   overallAssessment: 'AWAITING_STREAM',
   deepfake: {
@@ -122,6 +191,7 @@ export default function CallsPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamSource, setStreamSource] = useState<'MIC' | 'SYNTHETIC'>('SYNTHETIC');
   const [claimedSpeakerId, setClaimedSpeakerId] = useState('speaker-cfo-001');
+  const [selectedScenario, setSelectedScenario] = useState<string>('CREDENTIAL_THEFT');
 
   // Live Telemetry State (Starts clean / ready for stream)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY);
@@ -298,10 +368,7 @@ export default function CallsPage() {
 
         if (typeof msg.sequenceNumber === 'number') {
           const hasElevatedThreat = r.dimensions && (
-            (r.dimensions.credential_theft ?? 0) >= 50 ||
-            (r.dimensions.financial_fraud ?? 0) >= 50 ||
-            (r.dimensions.account_takeover ?? 0) >= 50 ||
-            (r.dimensions.verification_bypass ?? 0) >= 50 ||
+            Object.values(r.dimensions).some((v: any) => typeof v === 'number' && v >= 50) ||
             r.policy_recommendation?.is_triggered
           );
           if (msg.sequenceNumber < latestRiskSeqRef.current && !hasElevatedThreat) {
@@ -670,18 +737,31 @@ export default function CallsPage() {
       );
 
       let chunkIdx = 0;
-      const testPhrases = [
-        'Please tell me your OTP.',
-        'Transfer fifty thousand rupees to this new beneficiary immediately.',
-        'Install remote access software and share your screen.',
-        'Skip verification and approve the transaction.',
-      ];
+      const activeScenario = THREAT_SCENARIOS.find((s) => s.id === selectedScenario) || THREAT_SCENARIOS[0];
+      const scenarioText = activeScenario.transcript;
+      const scenarioSpeaker = activeScenario.claimedSpeaker || claimedSpeakerIdRef.current || claimedSpeakerId;
+
+      // Reset sequence tracker so the new scenario immediately registers in HUD
+      latestRiskSeqRef.current = -1;
 
       // 4800 samples (300ms @ 16kHz) per 250ms tick satisfies full neural feature extraction
       audioIntervalRef.current = setInterval(() => {
         const buffer = new Int16Array(4800);
         for (let i = 0; i < buffer.length; i++) {
-          buffer[i] = Math.sin((2 * Math.PI * 440 * i) / 16000) * 12000;
+          if (activeScenario.id === 'ACOUSTIC_DEEPFAKE') {
+            // Neural vocoder phase distortion and synthetic spectral anomalies
+            buffer[i] = (Math.sin((2 * Math.PI * 440 * i) / 16000) * 8000) +
+                        (Math.sin((2 * Math.PI * 1760 * i) / 16000) * 4000) +
+                        (i % 40 === 0 ? 5000 : 0);
+          } else if (activeScenario.id === 'REPLAY_ATTACK') {
+            // Loudspeaker replay with secondary room reverberation decay
+            const direct = Math.sin((2 * Math.PI * 520 * i) / 16000) * 8000;
+            const echo = i > 320 ? Math.sin((2 * Math.PI * 520 * (i - 320)) / 16000) * 4500 : 0;
+            buffer[i] = direct + echo;
+          } else {
+            // Standard linear PCM carrier tone
+            buffer[i] = Math.sin((2 * Math.PI * 440 * i) / 16000) * 12000;
+          }
         }
         const uint8 = new Uint8Array(buffer.buffer);
         let binary = '';
@@ -689,8 +769,6 @@ export default function CallsPage() {
           binary += String.fromCharCode(uint8[i]);
         }
         const base64 = btoa(binary);
-
-        const currentPhrase = testPhrases[Math.floor(chunkIdx / 4) % testPhrases.length];
 
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && (selectedCallRef.current || selectedCall)) {
           wsRef.current.send(
@@ -703,9 +781,13 @@ export default function CallsPage() {
                 sample_rate: 16000,
                 channels: 1,
                 audio_base64: base64,
-                text_transcript: currentPhrase,
-                transcript: currentPhrase,
-                claimedSpeakerId,
+                text_transcript: scenarioText,
+                transcript: scenarioText,
+                claimedSpeakerId: scenarioSpeaker,
+                metadata: {
+                  scenarioId: activeScenario.id,
+                  targetDimension: activeScenario.dimension,
+                },
               },
             })
           );
@@ -803,10 +885,35 @@ export default function CallsPage() {
 
   // Helper for rendering model status and score safely
   const renderSubsystemStatus = (
-    status: string,
-    score: number | null,
+    rawStatus: string,
+    rawScore: number | null,
     type: 'deepfake' | 'speaker' | 'replay' | 'vad'
   ) => {
+    let status = rawStatus;
+    let score = rawScore;
+
+    // Fall back to canonical 10D risk tensor evaluation if telemetry was transiently unpopulated
+    if (type === 'deepfake' && (score === null || status === 'NOT_AVAILABLE' || status === 'OFFLINE_OR_PENDING')) {
+      const tensorVal = unifiedRisk.dimensions?.deepfake_synthetic;
+      if (typeof tensorVal === 'number') {
+        score = tensorVal / 100.0;
+        status = tensorVal >= 50 ? 'DETECTED' : 'AUTHENTIC';
+      }
+    } else if (type === 'speaker' && (score === null || status === 'NOT_AVAILABLE' || status === 'OFFLINE_OR_PENDING')) {
+      const tensorVal = unifiedRisk.dimensions?.identity_impersonation;
+      if (typeof tensorVal === 'number') {
+        const imp = tensorVal / 100.0;
+        score = Math.max(0, 1.0 - imp);
+        status = imp >= 50 ? 'MISMATCH' : (claimedSpeakerId === 'unknown-speaker' ? 'NOT_ENROLLED' : 'MATCH');
+      }
+    } else if (type === 'replay' && (score === null || status === 'NOT_AVAILABLE' || status === 'OFFLINE_OR_PENDING')) {
+      const tensorVal = unifiedRisk.dimensions?.replay_injection;
+      if (typeof tensorVal === 'number') {
+        score = tensorVal / 100.0;
+        status = tensorVal >= 50 ? 'REPLAY_DETECTED' : 'NOT_REPLAY';
+      }
+    }
+
     const isUnavailable = status === 'NOT_AVAILABLE' || status === 'OFFLINE_OR_PENDING' || status === 'UNAVAILABLE';
     const isStandby = status === 'STANDBY' || status === 'READY' || status === 'AWAITING_STREAM';
     const isInsufficient = status === 'INSUFFICIENT_AUDIO';
@@ -1013,9 +1120,25 @@ export default function CallsPage() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {!isStreaming ? (
                           <>
+                            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1">
+                              <span className="text-[10px] uppercase font-mono text-slate-400 font-semibold">Scenario:</span>
+                              <select
+                                id="threat-scenario-select"
+                                value={selectedScenario}
+                                onChange={(e) => setSelectedScenario(e.target.value)}
+                                className="bg-transparent text-xs text-cyan-300 font-mono font-semibold focus:outline-none cursor-pointer"
+                                title="Select threat scenario to evaluate in Live Calls"
+                              >
+                                {THREAT_SCENARIOS.map((s) => (
+                                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
+                                    {s.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                             <button
                               onClick={startMicStreaming}
                               className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-500/20"
@@ -1027,7 +1150,7 @@ export default function CallsPage() {
                               id="test-scream-btn"
                               onClick={startSyntheticToneStreaming}
                               className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
-                              title="Stream synthetic test audio scenario for real-time AI scream/speech acoustic inference"
+                              title="Stream calibrated synthetic audio scenario to evaluate selected threat dimension"
                             >
                               <Play className="w-3.5 h-3.5" />
                               <span>Test Scream</span>
@@ -1045,24 +1168,72 @@ export default function CallsPage() {
                       </div>
                     </div>
 
-                    {/* Active Threat Dimension Alert */}
-                    {((unifiedRisk.dimensions.credential_theft ?? 0) >= 70 || (unifiedRisk.dimensions.social_engineering ?? 0) >= 70) && (
-                      <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="block text-white font-bold">
-                            {(unifiedRisk.dimensions.credential_theft ?? 0) >= 70
-                              ? 'CRITICAL CREDENTIAL THEFT SOLICITATION DETECTED'
-                              : 'HIGH CONVERSATIONAL SOCIAL ENGINEERING DETECTED'}
-                          </strong>
-                          <span>
-                            {(unifiedRisk.dimensions.credential_theft ?? 0) >= 70
-                              ? 'Caller actively solicited one-time password (OTP) / authentication credentials. Step-up policy verification triggered.'
-                              : 'High conversational social engineering tactics detected across dialogue turns.'}
-                          </span>
+                    {/* Active Threat Dimension Alert (Covers all 10 dimensions) */}
+                    {(() => {
+                      const THREAT_ALERT_MAPPINGS: Record<string, { title: string; desc: string }> = {
+                        credential_theft: {
+                          title: 'CRITICAL CREDENTIAL THEFT SOLICITATION DETECTED',
+                          desc: 'Caller actively solicited one-time password (OTP) / authentication credentials. Step-up policy verification triggered.',
+                        },
+                        financial_fraud: {
+                          title: 'CRITICAL FINANCIAL FRAUD / WIRE TRANSFER DETECTED',
+                          desc: 'Unauthorized high-value fund transfer or beneficiary account modification requested. Transaction hold recommended.',
+                        },
+                        account_takeover: {
+                          title: 'CRITICAL ACCOUNT TAKEOVER / REMOTE ACCESS DETECTED',
+                          desc: 'Adversary instructed victim to install remote desktop software (AnyDesk) or surrender control of workstation.',
+                        },
+                        verification_bypass: {
+                          title: 'CRITICAL VERIFICATION BYPASS COERCION DETECTED',
+                          desc: 'Caller attempted to coerce operator into skipping out-of-band identity verification controls.',
+                        },
+                        social_engineering: {
+                          title: 'HIGH CONVERSATIONAL SOCIAL ENGINEERING DETECTED',
+                          desc: 'Coercive authority exploitation, artificial urgency, or fear tactics detected across dialogue turns.',
+                        },
+                        deepfake_synthetic: {
+                          title: 'CRITICAL ACOUSTIC DEEPFAKE / SYNTHETIC VOICE DETECTED',
+                          desc: 'Neural vocoder phase jitter, unnatural spectral consistency, or synthetic voice artifacts detected in audio stream.',
+                        },
+                        identity_impersonation: {
+                          title: 'CRITICAL SPEAKER BIOMETRIC MISMATCH DETECTED',
+                          desc: 'Caller acoustic voiceprint contradicts enrolled biometric identity profile for claimed speaker identity.',
+                        },
+                        replay_injection: {
+                          title: 'ELEVATED REPLAY / LOUDSPEAKER INJECTION DETECTED',
+                          desc: 'Physical loudspeaker acoustic roll-off and secondary room reverberation decay detected in stream.',
+                        },
+                        inconsistency: {
+                          title: 'HIGH DIALOGUE CLAIM INCONSISTENCY DETECTED',
+                          desc: 'Contradictory caller identities, organizations, or factual assertions detected across turns.',
+                        },
+                      };
+
+                      const elevatedThreats = Object.entries(unifiedRisk.dimensions)
+                        .filter(([k, v]) => k !== 'overall' && typeof v === 'number' && (v ?? 0) >= 50)
+                        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+                      const dominantThreat = elevatedThreats[0];
+                      const dominantInfo = dominantThreat ? (THREAT_ALERT_MAPPINGS[dominantThreat[0]] || {
+                        title: `CRITICAL ${dominantThreat[0].toUpperCase()} DETECTED`,
+                        desc: `Elevated risk detected on ${dominantThreat[0]} dimension. Score: ${(dominantThreat[1] as number).toFixed(1)}/100.`
+                      }) : null;
+
+                      if (!dominantThreat || !dominantInfo) return null;
+
+                      return (
+                        <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block text-white font-bold">
+                              {dominantInfo.title}
+                            </strong>
+                            <span>
+                              {dominantInfo.desc}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Dominant Threat Summary & Contributing Signals */}
                     <DominantThreatCard

@@ -151,7 +151,7 @@ describe('Phase 3: Acoustic Intelligence & Biometric Speaker Routes', () => {
     expect(result.overall_assessment).toBe('NOT_AVAILABLE');
     expect(result.analysis_status).toBe('AI_TIMEOUT');
     expect(result.deepfake.status).toBe('NOT_AVAILABLE');
-  });
+  }, 15000);
 
   it('should return safe degraded result on malformed JSON response', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue({

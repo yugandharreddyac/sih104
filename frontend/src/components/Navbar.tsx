@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Menu } from 'lucide-react';
+import { Menu, Shield, ShieldCheck, Activity } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Breadcrumbs } from '@/components/Breadcrumbs';
+import { GlobalSearch } from '@/components/GlobalSearch';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 export const Navbar: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => {
   const [gatewayStatus, setGatewayStatus] = useState<boolean | null>(null);
@@ -45,7 +48,7 @@ export const Navbar: React.FC<{ title: string; subtitle?: string }> = ({ title, 
     };
 
     checkHealth();
-    const interval = setInterval(checkHealth, 15000);
+    const interval = setInterval(checkHealth, 20000);
 
     const localUser = ApiClient.getUser();
     if (localUser) setUser(localUser);
@@ -71,102 +74,104 @@ export const Navbar: React.FC<{ title: string; subtitle?: string }> = ({ title, 
   };
 
   return (
-    <header className="h-14 border-b border-border bg-surface px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 select-none">
-      {/* Left: Mobile Toggle & Page Context */}
-      <div className="flex items-center gap-3 min-w-0 pr-4">
+    <header className="h-14 border-b border-border bg-surface px-3 sm:px-5 flex items-center justify-between sticky top-0 z-30 select-none backdrop-blur-md">
+      {/* Left: Mobile Toggle, Breadcrumb, Page Context */}
+      <div className="flex items-center gap-2.5 min-w-0 pr-2">
         <button
           onClick={toggleMobileNav}
-          className="lg:hidden p-1.5 rounded text-mutedText hover:text-primaryText hover:bg-surface-elevated transition-colors"
-          aria-label="Open menu"
+          className="lg:hidden p-1.5 rounded text-mutedText hover:text-primaryText hover:bg-surface-elevated transition-colors shrink-0"
+          aria-label="Open navigation menu"
         >
           <Menu className="w-5 h-5" />
         </button>
 
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold text-primaryText font-sans tracking-tight truncate leading-tight">
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="text-xs text-mutedText font-sans truncate leading-none mt-0.5 hidden sm:block">{subtitle}</p>
-          )}
+          <Breadcrumbs />
+          <div className="flex items-center gap-2">
+            <h1 className="text-xs sm:text-sm font-semibold text-primaryText font-sans tracking-tight truncate leading-tight">
+              {title}
+            </h1>
+            {subtitle && (
+              <span className="hidden xl:inline text-[11px] text-mutedText font-sans truncate before:content-['•'] before:mr-2 before:text-border">
+                {subtitle}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Right: Operational Status Indicators & Analyst Identity */}
-      <div className="flex items-center gap-4 shrink-0">
-        {/* Gateway Status */}
-        <div className="flex flex-col items-end sm:items-start text-right sm:text-left">
-          <span className="text-[10px] text-mutedText font-sans leading-none">Gateway</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                gatewayStatus === null
-                  ? 'bg-mutedText'
-                  : gatewayStatus
-                  ? 'bg-success'
-                  : 'bg-danger'
-              }`}
-            />
-            <span className="text-xs font-medium text-secondaryText font-sans">
-              {gatewayStatus === null ? 'Connecting' : gatewayStatus ? 'Operational' : 'Offline'}
-            </span>
-          </div>
+      {/* Center: Global Search Trigger */}
+      <div className="hidden lg:flex items-center justify-center px-2">
+        <GlobalSearch />
+      </div>
+
+      {/* Right: Operational Status, Alerts, Theme, Analyst Identity */}
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Gateway Status Pill */}
+        <div className="hidden md:flex items-center gap-1.5 px-2 py-1 rounded bg-surface-elevated border border-border text-[11px] font-sans">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              gatewayStatus === null
+                ? 'bg-mutedText'
+                : gatewayStatus
+                ? 'bg-success animate-pulse'
+                : 'bg-danger'
+            }`}
+          />
+          <span className="text-secondaryText font-medium">Gateway:</span>
+          <span className="font-semibold text-primaryText">
+            {gatewayStatus === null ? 'Checking' : gatewayStatus ? 'Active' : 'Offline'}
+          </span>
         </div>
 
-        {/* AI Service Status */}
-        <div className="hidden sm:flex flex-col">
-          <span className="text-[10px] text-mutedText font-sans leading-none">AI Service</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                aiStatus === 'HEALTHY'
-                  ? 'bg-success'
-                  : aiStatus === 'DEGRADED'
-                  ? 'bg-warning'
-                  : aiStatus === 'CONNECTING'
-                  ? 'bg-mutedText'
-                  : 'bg-danger'
-              }`}
-            />
-            <span className="text-xs font-medium text-secondaryText font-sans">
-              {aiStatus === 'HEALTHY'
-                ? 'Operational'
+        {/* AI Engine Status Pill */}
+        <div className="hidden lg:flex items-center gap-1.5 px-2 py-1 rounded bg-surface-elevated border border-border text-[11px] font-sans">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              aiStatus === 'HEALTHY'
+                ? 'bg-success'
                 : aiStatus === 'DEGRADED'
-                ? 'Degraded'
-                : aiStatus === 'CONNECTING'
-                ? 'Connecting'
-                : 'Unavailable'}
-            </span>
-          </div>
+                ? 'bg-warning'
+                : 'bg-danger'
+            }`}
+          />
+          <span className="text-secondaryText font-medium">AI Engine:</span>
+          <span className="font-semibold text-primaryText">
+            {aiStatus === 'HEALTHY'
+              ? 'Online'
+              : aiStatus === 'DEGRADED'
+              ? 'Degraded'
+              : 'Unavailable'}
+          </span>
         </div>
 
-        {/* Privacy Status */}
-        <div className="hidden md:flex flex-col">
-          <span className="text-[10px] text-mutedText font-sans leading-none">Privacy</span>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-success" />
-            <span className="text-xs font-medium text-secondaryText font-sans">
-              Enforced
-            </span>
-          </div>
+        {/* Policy Guardrails Status Badge */}
+        <div className="hidden 2xl:flex items-center gap-1.5 px-2 py-1 rounded bg-surface-elevated border border-border text-[10px] font-semibold tracking-wider uppercase">
+          <ShieldCheck className="w-3 h-3 text-success" />
+          <span className="text-secondaryText">Guardrails:</span>
+          <span className="text-primaryText">Enforced</span>
         </div>
 
-        {/* Theme Mode Switcher */}
-        <div className="pl-1">
-          <ThemeToggle />
-        </div>
+        {/* Global Notifications Center */}
+        <NotificationCenter />
 
-        {/* User Identity Chip */}
-        <div className="flex items-center gap-2 pl-3 border-l border-border">
-          <div className="w-7 h-7 rounded bg-surface-elevated border border-border flex items-center justify-center text-xs font-medium text-primaryText font-sans shrink-0">
+        {/* Theme Switcher */}
+        <ThemeToggle />
+
+        {/* Analyst Identity Avatar */}
+        <div className="flex items-center gap-2 pl-2 border-l border-border">
+          <div
+            className="w-7 h-7 rounded bg-surface-elevated border border-border flex items-center justify-center text-xs font-semibold text-primaryText font-sans shrink-0 hover:border-primary transition-colors cursor-pointer"
+            title={`${user?.fullName || 'Tier-3 SOC Analyst'} (${user?.role || 'Security Analyst'})`}
+          >
             {getInitials(user?.fullName)}
           </div>
           <div className="hidden xl:block text-left">
-            <p className="text-xs font-medium text-primaryText font-sans leading-none truncate max-w-[130px]">
-              {user?.fullName || 'Tier-3 SOC Analyst'}
+            <p className="text-xs font-semibold text-primaryText font-sans leading-none truncate max-w-[120px]">
+              {user?.fullName || 'Tier-3 Analyst'}
             </p>
-            <p className="text-[11px] text-mutedText font-sans leading-none mt-1">
-              {user?.role ? user.role.replace(/_/g, ' ') : 'Security Analyst'}
+            <p className="text-[10px] text-mutedText font-mono uppercase tracking-wider leading-none mt-1">
+              {user?.role ? user.role.replace(/_/g, ' ') : 'SOC OPERATOR'}
             </p>
           </div>
         </div>

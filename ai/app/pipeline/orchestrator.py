@@ -470,19 +470,20 @@ class UnifiedPipelineOrchestrator:
         # Build risk dimensions dictionary
         dim_dict = {}
         if fusion_result.dimensions:
-            dim_dict = fusion_result.dimensions.model_dump()
+            raw_dim = fusion_result.dimensions.model_dump()
+            dim_dict = {k: (float(v) if v is not None else 0.0) for k, v in raw_dim.items()}
             # Also include legacy aliases for backward compatibility
             dim_dict.update({
-                "acoustic_spectral": fusion_result.dimensions.deepfake_synthetic,
-                "biometric_speaker": fusion_result.dimensions.identity_impersonation,
-                "replay_channel": fusion_result.dimensions.replay_injection,
+                "acoustic_spectral": float(fusion_result.dimensions.deepfake_synthetic or 0.0),
+                "biometric_speaker": float(fusion_result.dimensions.identity_impersonation or 0.0),
+                "replay_channel": float(fusion_result.dimensions.replay_injection or 0.0),
                 "transport_manipulation": 0.0,
                 "linguistic_language": 0.0,
-                "intent_adversarial": fusion_result.dimensions.financial_fraud,
-                "sensitive_data_request": fusion_result.dimensions.credential_theft,
-                "social_engineering_tactic": fusion_result.dimensions.social_engineering,
-                "requested_action": fusion_result.dimensions.account_takeover,
-                "situational_inconsistency": fusion_result.dimensions.inconsistency,
+                "intent_adversarial": float(fusion_result.dimensions.financial_fraud or 0.0),
+                "sensitive_data_request": float(fusion_result.dimensions.credential_theft or 0.0),
+                "social_engineering_tactic": float(fusion_result.dimensions.social_engineering or 0.0),
+                "requested_action": float(fusion_result.dimensions.account_takeover or 0.0),
+                "situational_inconsistency": float(fusion_result.dimensions.inconsistency or 0.0),
             })
 
         # Recommendation

@@ -181,6 +181,9 @@ export class RiskService {
               riskLevel: data.risk_level,
               velocity: data.risk_velocity,
               timestamp: data.timestamp || new Date().toISOString(),
+              primaryDrivers: data.primary_drivers || [],
+              policyId: data.policy_recommendation?.policy_id || null,
+              recommendedAction: data.policy_recommendation?.recommended_action || null,
             });
 
             if (typeof data.overall_risk_score === 'number' && data.overall_risk_score >= 80.0) {
@@ -330,6 +333,21 @@ export class RiskService {
     const callId = assessment.callId || assessment.call_id;
     if (callId) {
       this.assessments.set(callId, assessment);
+      if (!this.timelineHistory.has(callId)) {
+        this.timelineHistory.set(callId, []);
+      }
+      const history = this.timelineHistory.get(callId)!;
+      const turnIdx = assessment.turn_index ?? assessment.chunkIndex ?? history.length;
+      history.push({
+        turnIndex: turnIdx,
+        overallScore: assessment.overall_risk_score ?? assessment.compositeScore,
+        riskLevel: assessment.risk_level,
+        velocity: assessment.risk_velocity || 0,
+        timestamp: assessment.timestamp || new Date().toISOString(),
+        primaryDrivers: assessment.primary_drivers || assessment.primaryDrivers || [],
+        policyId: assessment.policy_recommendation?.policy_id || null,
+        recommendedAction: assessment.policy_recommendation?.recommended_action || null,
+      });
     }
   }
 

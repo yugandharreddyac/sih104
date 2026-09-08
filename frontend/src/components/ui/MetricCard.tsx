@@ -11,6 +11,7 @@ interface MetricCardProps {
   subtext?: string;
   statusColor?: 'emerald' | 'cyan' | 'amber' | 'rose' | 'slate';
   href?: string;
+  unboxed?: boolean;
 }
 
 export const MetricCard: React.FC<MetricCardProps> = ({
@@ -20,56 +21,75 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   subtext,
   statusColor = 'slate',
   href,
+  unboxed = false,
 }) => {
   const colorMap = {
     emerald: {
-      border: 'border-emerald-500/20 hover:border-emerald-500/40',
-      iconBg: 'bg-emerald-500/10 text-emerald-400',
-      valueColor: 'text-white',
+      border: 'border-border hover:border-success/40',
+      iconColor: 'text-success',
+      valueColor: 'text-primaryText',
     },
     cyan: {
-      border: 'border-cyan-500/20 hover:border-cyan-500/40',
-      iconBg: 'bg-cyan-500/10 text-cyan-400',
-      valueColor: 'text-white',
+      border: 'border-border hover:border-primary/40',
+      iconColor: 'text-primary',
+      valueColor: 'text-primaryText',
     },
     amber: {
-      border: 'border-amber-500/20 hover:border-amber-500/40',
-      iconBg: 'bg-amber-500/10 text-amber-300',
-      valueColor: 'text-amber-300',
+      border: 'border-border hover:border-warning/40',
+      iconColor: 'text-warning',
+      valueColor: 'text-warning',
     },
     rose: {
-      border: 'border-rose-500/20 hover:border-rose-500/40',
-      iconBg: 'bg-rose-500/10 text-rose-400',
-      valueColor: 'text-rose-400',
+      border: 'border-border hover:border-danger/40',
+      iconColor: 'text-danger',
+      valueColor: 'text-danger',
     },
     slate: {
-      border: 'border-slate-800 hover:border-slate-700',
-      iconBg: 'bg-slate-800/80 text-slate-400',
-      valueColor: 'text-white',
+      border: 'border-border hover:border-border-hover',
+      iconColor: 'text-mutedText',
+      valueColor: 'text-primaryText',
     },
   };
 
   const style = colorMap[statusColor];
 
-  const content = (
-    <div className={`p-4 rounded-xl bg-[#0c1222] border transition-all ${style.border}`}>
+  const content = unboxed ? (
+    <div className="py-2 px-1 transition-colors">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className={`p-2 rounded-lg ${style.iconBg}`}>
-            <Icon className="w-4 h-4" />
-          </div>
-          <span className="text-xs font-medium text-slate-400 font-sans uppercase tracking-wider">
+        <div className="flex items-center gap-1.5">
+          <Icon className={`w-3.5 h-3.5 shrink-0 ${style.iconColor}`} />
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-mutedText font-sans">
             {label}
           </span>
         </div>
-        {href && <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors" />}
+        {href && <ArrowUpRight className="w-3 h-3 text-mutedText group-hover:text-primaryText transition-colors" />}
       </div>
-      <div className="mt-3 flex items-baseline justify-between">
-        <span className={`text-2xl font-bold font-mono tracking-tight ${style.valueColor}`}>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className={`text-2xl font-semibold font-mono tracking-tight ${style.valueColor}`}>
           {value}
         </span>
         {subtext && (
-          <span className="text-[11px] text-slate-400 font-sans">{subtext}</span>
+          <span className="text-[11px] text-mutedText font-sans truncate">{subtext}</span>
+        )}
+      </div>
+    </div>
+  ) : (
+    <div className={`p-4 rounded bg-surface border transition-colors shadow-subtle ${style.border}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Icon className={`w-4 h-4 shrink-0 ${style.iconColor}`} />
+          <span className="text-xs font-medium text-secondaryText font-sans">
+            {label}
+          </span>
+        </div>
+        {href && <ArrowUpRight className="w-3.5 h-3.5 text-mutedText group-hover:text-primaryText transition-colors" />}
+      </div>
+      <div className="mt-2.5 flex items-baseline justify-between">
+        <span className={`text-xl font-semibold font-mono tracking-tight ${style.valueColor}`}>
+          {value}
+        </span>
+        {subtext && (
+          <span className="text-xs text-mutedText font-sans">{subtext}</span>
         )}
       </div>
     </div>
@@ -77,7 +97,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
 
   if (href) {
     return (
-      <Link href={href} className="group block">
+      <Link href={href} className="group block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded">
         {content}
       </Link>
     );

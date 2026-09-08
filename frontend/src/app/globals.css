@@ -2,76 +2,243 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg-obsidian-950: #05070d;
-  --bg-obsidian-900: #070b17;
-  --bg-obsidian-850: #0b1224;
-  --panel-slate: #10182d;
-  --panel-slate-elevated: #151f38;
-  --border-subtle: #24304a;
-  --cyber-cyan: #00b8d9;
-  --cyber-cyan-bright: #22d3ee;
-  --cyber-indigo: #4f46e5;
-  --cyber-indigo-bright: #6366f1;
-  --saffron-command: #ff9933;
-  --security-safe: #22c55e;
-  --security-elevated: #f59e0b;
-  --security-high: #f97316;
-  --security-critical: #ef4444;
+/* ==========================================================================
+   VOXSHIELD ENTERPRISE DESIGN SYSTEM: DARK & LIGHT THEME TOKENS
+   ========================================================================== */
+
+:root,
+[data-theme="dark"],
+.dark {
+  /* Dark Theme Surfaces */
+  --bg-main: #111318;
+  --bg-sidebar: #14171D;
+  --bg-surface: #171A20;
+  --bg-surface-elevated: #1D2128;
+  --bg-surface-hover: #232832;
+
+  --border-default: #2A3038;
+  --border-hover: #38404B;
+
+  /* Typography */
+  --text-primary: #F2F4F7;
+  --text-secondary: #A7AFBA;
+  --text-muted: #737C88;
+
+  /* Semantic RGB channels for opacity support */
+  --color-primary: 79 110 247;            /* #4F6EF7 */
+  --color-primary-hover: 62 93 228;      /* #3E5DE4 */
+  --color-secondary-accent: 111 99 199;  /* #6F63C7 */
+
+  --color-success: 47 158 111;           /* #2F9E6F */
+  --color-success-hover: 39 140 91;      /* #278C5B */
+
+  --color-warning: 185 133 37;           /* #B98525 */
+  --color-warning-hover: 165 118 31;     /* #A5761F */
+
+  --color-danger: 214 83 83;             /* #D65353 */
+  --color-danger-hover: 191 67 67;       /* #BF4343 */
+
+  --color-info: 79 110 247;
+  --color-info-hover: 62 93 228;
+
+  /* Shadows - Minimal & flat */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-card: none;
+  --shadow-elevated: 0 2px 4px -1px rgba(0, 0, 0, 0.25);
+
+  color-scheme: dark;
+}
+
+[data-theme="light"],
+.light {
+  /* Light Theme Surfaces */
+  --bg-main: #F5F6F8;
+  --bg-sidebar: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-surface-elevated: #F8F9FB;
+  --bg-surface-hover: #EEF1F5;
+
+  --border-default: #D9DEE5;
+  --border-hover: #BCC4CE;
+
+  /* Typography */
+  --text-primary: #20242A;
+  --text-secondary: #59636F;
+  --text-muted: #7B8490;
+
+  /* Semantic RGB channels for opacity support */
+  --color-primary: 79 110 247;            /* #4F6EF7 */
+  --color-primary-hover: 62 93 228;      /* #3E5DE4 */
+  --color-secondary-accent: 111 99 199;  /* #6F63C7 */
+
+  --color-success: 47 158 111;           /* #2F9E6F */
+  --color-success-hover: 39 140 91;      /* #278C5B */
+
+  --color-warning: 185 133 37;           /* #B98525 */
+  --color-warning-hover: 165 118 31;     /* #A5761F */
+
+  --color-danger: 214 83 83;             /* #D65353 */
+  --color-danger-hover: 191 67 67;       /* #BF4343 */
+
+  --color-info: 79 110 247;
+  --color-info-hover: 62 93 228;
+
+  /* Shadows - Minimal & flat */
+  --shadow-subtle: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-card: none;
+  --shadow-elevated: 0 2px 4px -1px rgba(0, 0, 0, 0.05);
+
+  color-scheme: light;
 }
 
 @layer base {
+  * {
+    border-color: var(--border-default);
+  }
+
   body {
-    @apply bg-[#05070d] text-slate-100 antialiased font-sans;
-    background-color: #05070d;
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+
+  input, select, textarea, button {
+    font-family: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--color-primary));
+    outline-offset: 1px;
   }
 }
 
-/* Custom Enterprise SOC Styling — Indian Cyber Command Identity */
-.soc-card {
-  background: #10182d;
-  border: 1px solid #24304a;
-  border-radius: 0.75rem;
+/* Reusable Enterprise Component Primitives */
+@layer components {
+  /* Buttons */
+  .btn-enterprise {
+    @apply inline-flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium rounded border transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed select-none;
+  }
+
+  .btn-primary {
+    @apply btn-enterprise bg-primary text-white border-primary hover:bg-primary-hover active:opacity-90;
+  }
+
+  .btn-secondary {
+    @apply btn-enterprise bg-surface-elevated text-primaryText border-border hover:bg-surface-hover hover:border-border-hover active:bg-surface;
+  }
+
+  .btn-outline {
+    @apply btn-enterprise bg-transparent text-secondaryText border-border hover:text-primaryText hover:bg-surface-hover hover:border-border-hover;
+  }
+
+  .btn-danger {
+    @apply btn-enterprise bg-danger text-white border-danger hover:bg-danger-hover active:opacity-90;
+  }
+
+  .btn-success {
+    @apply btn-enterprise bg-success text-white border-success hover:bg-success-hover active:opacity-90;
+  }
+
+  /* Form Inputs & Selects */
+  .input-enterprise {
+    @apply w-full bg-surface border border-border text-xs text-primaryText placeholder:text-mutedText rounded px-2.5 py-1.5 transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .select-enterprise {
+    @apply input-enterprise pr-8 cursor-pointer;
+  }
+
+  /* Cards & Panels */
+  .panel-enterprise {
+    @apply bg-surface border border-border rounded shadow-card;
+  }
+
+  .panel-elevated {
+    @apply bg-surface-elevated border border-border-hover rounded shadow-elevated;
+  }
+
+  /* Tables */
+  .table-enterprise {
+    @apply w-full text-left text-xs border-collapse;
+  }
+
+  .th-enterprise {
+    @apply px-3 py-2 bg-surface-elevated text-mutedText font-medium text-[11px] border-b border-border select-none;
+  }
+
+  .td-enterprise {
+    @apply px-3 py-2 text-secondaryText border-b border-border hover:bg-surface-hover/50 transition-colors;
+  }
+
+  /* Badges & Status */
+  .badge-enterprise {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-medium rounded border select-none;
+  }
+
+  .badge-neutral {
+    @apply badge-enterprise bg-surface-elevated text-secondaryText border-border;
+  }
+
+  .badge-primary {
+    @apply badge-enterprise bg-primary/10 text-primary border-primary/25;
+  }
+
+  .badge-success {
+    @apply badge-enterprise bg-success/10 text-success border-success/25;
+  }
+
+  .badge-warning {
+    @apply badge-enterprise bg-warning/10 text-warning border-warning/25;
+  }
+
+  .badge-danger {
+    @apply badge-enterprise bg-danger/10 text-danger border-danger/25;
+  }
+
+  .badge-info {
+    @apply badge-enterprise bg-info/10 text-info border-info/25;
+  }
+
+  /* Alerts */
+  .alert-enterprise {
+    @apply p-3 rounded border text-xs flex items-start gap-2.5;
+  }
+
+  .alert-danger {
+    @apply alert-enterprise bg-danger/10 border-danger/30 text-danger;
+  }
+
+  .alert-warning {
+    @apply alert-enterprise bg-warning/10 border-warning/30 text-warning;
+  }
+
+  .alert-info {
+    @apply alert-enterprise bg-info/10 border-info/30 text-info;
+  }
+
+  .alert-success {
+    @apply alert-enterprise bg-success/10 border-success/30 text-success;
+  }
 }
 
-.soc-card-elevated {
-  background: #151f38;
-  border: 1px solid #2a3b5c;
-  border-radius: 0.75rem;
-}
-
-.soc-glass {
-  background: rgba(16, 24, 45, 0.88);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(36, 48, 74, 0.9);
-}
-
-.saffron-indicator {
-  background: #ff9933;
-  box-shadow: 0 0 8px rgba(255, 153, 51, 0.45);
-}
-
-.cyan-indicator {
-  background: #00b8d9;
-  box-shadow: 0 0 8px rgba(0, 184, 217, 0.45);
-}
-
-/* Subtle enterprise scrollbar */
+/* Minimal Enterprise Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #05070d;
+  background: var(--bg-main);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #24304a;
+  background: var(--border-default);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: var(--border-hover);
 }
-

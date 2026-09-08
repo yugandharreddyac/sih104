@@ -46,6 +46,12 @@ export class RiskController {
     res.json({ success: true, data: evidence });
   }
 
+  public static clearAssessment(req: Request, res: Response): void {
+    const { callId } = req.params;
+    RiskService.clearAssessment(callId);
+    res.json({ success: true, message: `Assessment for call ${callId} cleared.` });
+  }
+
   public static async submitTransactionContext(req: Request, res: Response): Promise<void> {
     try {
       const { callId, transactionId, amount, currency, transactionType, beneficiaryChange, otpRequested, metadata } = req.body;

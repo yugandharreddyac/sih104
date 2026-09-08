@@ -3,16 +3,16 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { Phase1Notice } from '@/components/Phase1Notice';
 import { ApiClient, WS_BASE } from '@/lib/api';
 import { BrowserAudioStreamer, MicStreamState } from '@/lib/audio_streamer';
 import { formatSafeTime, formatLatency } from '@/lib/format';
-import { RiskTensorCard } from '@/components/ui/RiskTensorCard';
 import { DominantThreatCard } from '@/components/ui/DominantThreatCard';
+import { DetectionSignalsTable } from '@/components/ui/DetectionSignalsTable';
 import { EvidenceExplainer } from '@/components/ui/EvidenceExplainer';
 import { TechnicalTelemetryPanel } from '@/components/ui/TechnicalTelemetryPanel';
 import {
   PhoneCall,
+  PhoneOff,
   Activity,
   Mic,
   Square,
@@ -39,11 +39,13 @@ interface CallSession {
   id: string;
   callerIdentifier: string;
   callerDisplayName?: string;
-  direction: 'INBOUND' | 'OUTBOUND';
+  direction?: 'INBOUND' | 'OUTBOUND';
   status: 'ACTIVE' | 'RINGING' | 'TERMINATED' | 'INITIALIZING' | 'VERIFYING' | 'FLAGGED' | 'BLOCKED';
   organizationId: string;
   claimedSpeakerId?: string;
-  createdAt: string;
+  startedAt?: string;
+  createdAt?: string;
+  durationSeconds?: number;
 }
 
 interface ThreatScenarioOption {
@@ -56,6 +58,14 @@ interface ThreatScenarioOption {
 }
 
 const THREAT_SCENARIOS: ThreatScenarioOption[] = [
+  {
+    id: 'BENIGN_INQUIRY',
+    name: '0. Legitimate Customer Call (Normal / Safe)',
+    dimension: 'overall',
+    transcript: 'Good morning, I would like to check my account balance and business hours please.',
+    claimedSpeaker: 'speaker-cfo-001',
+    desc: 'Authentic human voice with normal customer banking inquiry and zero adversarial threat indicators.',
+  },
   {
     id: 'CREDENTIAL_THEFT',
     name: '1. Credential Theft (OTP)',
@@ -96,7 +106,7 @@ const THREAT_SCENARIOS: ThreatScenarioOption[] = [
     name: '6. Acoustic Deepfake (Synthetic)',
     dimension: 'deepfake_synthetic',
     transcript: 'Synthesized vocoder test audio with high-frequency phase discontinuities.',
-    desc: 'Acoustic neural evaluation detecting vocoder phase jitter and spectral anomalies.',
+    desc: 'Acoustic feature analysis detecting vocoder phase jitter and spectral anomalies.',
   },
   {
     id: 'SPEAKER_MISMATCH',
@@ -123,7 +133,7 @@ const INITIAL_TELEMETRY = {
     confidence: 0.0,
     uncertainty: 1.0,
     artifacts: [] as string[],
-    explainability: ['Awaiting audio stream for acoustic neural evaluation.'],
+    explainability: ['Awaiting audio stream for acoustic signal evaluation.'],
     latencyMs: 0,
   },
   speaker: {
@@ -191,7 +201,12 @@ export default function CallsPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamSource, setStreamSource] = useState<'MIC' | 'SYNTHETIC'>('SYNTHETIC');
   const [claimedSpeakerId, setClaimedSpeakerId] = useState('speaker-cfo-001');
-  const [selectedScenario, setSelectedScenario] = useState<string>('CREDENTIAL_THEFT');
+  const [selectedScenario, setSelectedScenario] = useState<string>('BENIGN_INQUIRY');
+
+  // Real-time dynamic duration and streaming ticker
+  const [timerTick, setTimerTick] = useState<number>(Date.now());
+  const [streamDurationSeconds, setStreamDurationSeconds] = useState<number>(0);
+  const streamStartRef = useRef<number | null>(null);
 
   // Live Telemetry State (Starts clean / ready for stream)
   const [telemetry, setTelemetry] = useState(INITIAL_TELEMETRY);
@@ -244,6 +259,18 @@ export default function CallsPage() {
   const speechRecognitionRef = useRef<any>(null);
   const currentMicTranscriptRef = useRef<string>('');
 
+  // Active 1-second interval ticker for duration display
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimerTick(Date.now());
+      if (streamStartRef.current) {
+        const sec = Math.max(0, Math.floor((Date.now() - streamStartRef.current) / 1000));
+        setStreamDurationSeconds(sec);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     claimedSpeakerIdRef.current = claimedSpeakerId;
   }, [claimedSpeakerId]);
@@ -278,16 +305,19 @@ export default function CallsPage() {
       ApiClient.get(`/risk/${selectedCall.id}`).then((res) => {
         if (res.success && res.data) {
           const r = res.data;
-          setUnifiedRisk((prev) => ({
-            ...prev,
-            overallRiskScore: typeof r.overall_risk_score === 'number' ? r.overall_risk_score : prev.overallRiskScore,
-            riskLevel: r.risk_level ?? prev.riskLevel,
-            confidence: typeof r.confidence === 'number' ? r.confidence : prev.confidence,
-            uncertainty: typeof r.uncertainty === 'number' ? r.uncertainty : prev.uncertainty,
-            dimensions: r.dimensions ?? prev.dimensions,
-            primaryDrivers: r.primary_drivers ?? prev.primaryDrivers,
-            policyRecommendation: r.policy_recommendation ?? prev.policyRecommendation,
-          }));
+          // Only populate evaluated score if an active assessment has occurred (not NOT_AVAILABLE baseline)
+          if (typeof r.overall_risk_score === 'number' && r.status !== 'NOT_AVAILABLE') {
+            setUnifiedRisk((prev) => ({
+              ...prev,
+              overallRiskScore: r.overall_risk_score,
+              riskLevel: r.risk_level ?? prev.riskLevel,
+              confidence: typeof r.confidence === 'number' ? r.confidence : prev.confidence,
+              uncertainty: typeof r.uncertainty === 'number' ? r.uncertainty : prev.uncertainty,
+              dimensions: r.dimensions ?? prev.dimensions,
+              primaryDrivers: r.primary_drivers ?? prev.primaryDrivers,
+              policyRecommendation: r.policy_recommendation ?? prev.policyRecommendation,
+            }));
+          }
         }
       });
     }
@@ -367,16 +397,10 @@ export default function CallsPage() {
         });
 
         if (typeof msg.sequenceNumber === 'number') {
-          const hasElevatedThreat = r.dimensions && (
-            Object.values(r.dimensions).some((v: any) => typeof v === 'number' && v >= 50) ||
-            r.policy_recommendation?.is_triggered
-          );
-          if (msg.sequenceNumber < latestRiskSeqRef.current && !hasElevatedThreat) {
-            return;
+          if (msg.sequenceNumber < latestRiskSeqRef.current) {
+            return; // Drop older evaluation that arrived out of order
           }
-          if (msg.sequenceNumber > latestRiskSeqRef.current) {
-            latestRiskSeqRef.current = msg.sequenceNumber;
-          }
+          latestRiskSeqRef.current = msg.sequenceNumber;
         }
 
         const validScore = typeof r.overall_risk_score === 'number' && Number.isFinite(r.overall_risk_score)
@@ -389,24 +413,20 @@ export default function CallsPage() {
           for (const key of Object.keys(mergedDimensions) as (keyof typeof mergedDimensions)[]) {
             const incomingVal = incomingDimensions[key];
             if (typeof incomingVal === 'number' && Number.isFinite(incomingVal)) {
-              // Retain active threat findings across transient neutral acoustic ticks
-              if (incomingVal === 0 && (prev.dimensions[key] ?? 0) >= 50) {
-                continue;
-              }
               mergedDimensions[key] = incomingVal;
             } else if (incomingVal !== undefined && incomingVal !== null) {
               mergedDimensions[key] = incomingVal;
             }
           }
 
-          const mergedPolicy = r.policy_recommendation?.is_triggered
+          const mergedPolicy = r.policy_recommendation !== undefined
             ? r.policy_recommendation
-            : (prev.policyRecommendation?.is_triggered ? prev.policyRecommendation : r.policy_recommendation);
+            : prev.policyRecommendation;
 
           return {
             ...prev,
-            overallRiskScore: validScore !== null ? Math.max(validScore, prev.overallRiskScore ?? 0) : prev.overallRiskScore,
-            riskLevel: (r.risk_level && r.risk_level !== 'SAFE' && r.risk_level !== 'LOW') ? r.risk_level : (prev.riskLevel || r.risk_level),
+            overallRiskScore: validScore !== null ? validScore : prev.overallRiskScore,
+            riskLevel: r.risk_level || prev.riskLevel,
             confidence: typeof r.confidence === 'number' && Number.isFinite(r.confidence) ? r.confidence : prev.confidence,
             uncertainty: typeof r.uncertainty === 'number' && Number.isFinite(r.uncertainty) ? r.uncertainty : prev.uncertainty,
             dimensions: mergedDimensions,
@@ -708,6 +728,8 @@ export default function CallsPage() {
 
       audioStreamerRef.current = streamer;
       await streamer.start();
+      streamStartRef.current = Date.now();
+      setStreamDurationSeconds(0);
       setIsStreaming(true);
       setStreamSource('MIC');
     } catch (err: any) {
@@ -743,6 +765,8 @@ export default function CallsPage() {
 
       // Reset sequence tracker so the new scenario immediately registers in HUD
       latestRiskSeqRef.current = -1;
+      streamStartRef.current = Date.now();
+      setStreamDurationSeconds(0);
 
       // 4800 samples (300ms @ 16kHz) per 250ms tick satisfies full neural feature extraction
       audioIntervalRef.current = setInterval(() => {
@@ -759,8 +783,14 @@ export default function CallsPage() {
             const echo = i > 320 ? Math.sin((2 * Math.PI * 520 * (i - 320)) / 16000) * 4500 : 0;
             buffer[i] = direct + echo;
           } else {
-            // Standard linear PCM carrier tone
-            buffer[i] = Math.sin((2 * Math.PI * 440 * i) / 16000) * 12000;
+            // Authentic human voice harmonic structure (natural fundamental F0 ~140Hz + vocal tract formants and subtle natural breath)
+            const f0 = 140;
+            const env = 0.5 * (1 - Math.cos((2 * Math.PI * (i % 800)) / 800));
+            const h1 = Math.sin((2 * Math.PI * f0 * i) / 16000) * 6500;
+            const h2 = Math.sin((2 * Math.PI * (2 * f0) * i) / 16000) * 3500;
+            const h3 = Math.sin((2 * Math.PI * (3 * f0) * i) / 16000) * 1500;
+            const noise = (Math.random() - 0.5) * 300;
+            buffer[i] = Math.round((h1 + h2 + h3 + noise) * env);
           }
         }
         const uint8 = new Uint8Array(buffer.buffer);
@@ -825,6 +855,7 @@ export default function CallsPage() {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && currentCall) {
       wsRef.current.send(JSON.stringify({ type: 'END_STREAM', callId: currentCall.id }));
     }
+    streamStartRef.current = null;
     setIsStreaming(false);
     setMicState('STOPPED');
     setMicRmsDb(-96);
@@ -838,23 +869,21 @@ export default function CallsPage() {
         callId: selectedCall.id,
         level: 'LEVEL_2_STEP_UP_VERIFICATION',
         actionType: 'REQUIRE_STEP_UP_VERIFICATION',
+        reason: 'Analyst approved automated policy recommendation from Live Calls HUD',
         policyId: unifiedRisk.policyRecommendation?.policy_id || 'POL-CRED-001',
-        evidenceSummary: unifiedRisk.primaryDrivers,
       });
-
-      if (res.success && res.data?.id) {
-        await ApiClient.post('/interventions/decision', {
-          interventionId: res.data.id,
-          decision: 'APPROVED',
-          reason: 'SOC Analyst authorized out-of-band step-up challenge upon credential harvesting detection.',
-        });
+      if (res.success) {
+        setInterventionFeedback('Intervention recommendation dispatched successfully.');
+        setTimeout(() => setInterventionFeedback(null), 4000);
       }
-
-      setUnifiedRisk((prev) => ({ ...prev, humanWorkflowState: 'EXECUTED' }));
-      setInterventionFeedback('Action Approved: Out-of-Band Step-Up Challenge Dispatched & Persisted to Timeline.');
-    } catch {
-      setInterventionFeedback('Action Approved & Executed.');
+    } catch (err) {
+      console.warn('Failed to dispatch intervention:', err);
     }
+  };
+
+  const handleRejectIntervention = () => {
+    setInterventionFeedback('Policy intervention recommendation dismissed.');
+    setTimeout(() => setInterventionFeedback(null), 3000);
   };
 
   const handleOverrideIntervention = async () => {
@@ -878,8 +907,97 @@ export default function CallsPage() {
 
       setUnifiedRisk((prev) => ({ ...prev, humanWorkflowState: 'OVERRIDDEN' }));
       setInterventionFeedback('Intervention Overridden by SOC Analyst with Audited Justification.');
+      setTimeout(() => setInterventionFeedback(null), 3000);
     } catch {
       setInterventionFeedback('Intervention Overridden by SOC Analyst.');
+      setTimeout(() => setInterventionFeedback(null), 3000);
+    }
+  };
+
+  const handleEndSession = async (callId: string) => {
+    await handleTerminateCall(callId);
+  };
+
+  const handleBlockCall = async () => {
+    if (!selectedCall) return;
+    try {
+      const res = await ApiClient.patch(`/calls/${selectedCall.id}/status`, {
+        status: 'BLOCKED',
+        reason: 'Analyst manual override: high fraud risk confirmed',
+      });
+      if (res.success) {
+        setCalls((prev) => prev.map((c) => (c.id === selectedCall.id ? { ...c, status: 'BLOCKED' } : c)));
+        setSelectedCall((prev) => (prev ? { ...prev, status: 'BLOCKED' } : null));
+        stopStreaming();
+      }
+    } catch (err) {
+      console.warn('Failed to block call:', err);
+    }
+  };
+
+  const handleStepUpAuth = async () => {
+    if (!selectedCall) return;
+    try {
+      const res = await ApiClient.post('/interventions/recommend', {
+        callId: selectedCall.id,
+        level: 'LEVEL_2_STEP_UP_VERIFICATION',
+        actionType: 'REQUIRE_STEP_UP_VERIFICATION',
+        reason: 'Analyst triggered manual out-of-band step-up authentication',
+        policyId: unifiedRisk.policyRecommendation?.policy_id || 'POL-CRED-001',
+      });
+      if (res.success) {
+        setInterventionFeedback('Step-up verification challenge dispatched to customer.');
+        setTimeout(() => setInterventionFeedback(null), 4000);
+      }
+    } catch (err) {
+      console.warn('Failed to request step-up:', err);
+    }
+  };
+
+  const handleTerminateCall = async (callId: string) => {
+    try {
+      stopStreaming();
+      const res = await ApiClient.patch(`/calls/${callId}/status`, {
+        status: 'TERMINATED',
+        reason: 'Analyst terminated session from Live SOC Console',
+      });
+      if (res.success) {
+        setCalls((prev) => prev.map((c) => (c.id === callId ? { ...c, status: 'TERMINATED' } : c)));
+        if (selectedCall?.id === callId) {
+          setSelectedCall((prev) => (prev ? { ...prev, status: 'TERMINATED' } : null));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to terminate session:', err);
+    }
+  };
+
+  const getSessionDuration = (sessionOrDate?: CallSession | string | null) => {
+    try {
+      if (!sessionOrDate) return '00:00';
+      const session = typeof sessionOrDate === 'object' ? sessionOrDate : null;
+      const isCurrentStream = isStreaming && (!session || session.id === (selectedCallRef.current || selectedCall)?.id);
+      if (isCurrentStream && streamDurationSeconds >= 0) {
+        const mins = Math.floor(streamDurationSeconds / 60);
+        const secs = streamDurationSeconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+      const dateStr = typeof sessionOrDate === 'string' ? sessionOrDate : (session?.startedAt || session?.createdAt);
+      if (dateStr) {
+        const start = new Date(dateStr).getTime();
+        if (!isNaN(start)) {
+          const diffSec = Math.max(0, Math.floor((timerTick - start) / 1000));
+          const mins = Math.floor(diffSec / 60);
+          const secs = diffSec % 60;
+          return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+      }
+      const baseSec = session?.durationSeconds || 0;
+      const mins = Math.floor(baseSec / 60);
+      const secs = baseSec % 60;
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } catch {
+      return '00:00';
     }
   };
 
@@ -919,25 +1037,25 @@ export default function CallsPage() {
     const isInsufficient = status === 'INSUFFICIENT_AUDIO';
     const isError = status === 'ERROR';
 
-    let badgeText = status.replace(/_/g, ' ');
-    let badgeClass = 'bg-slate-800 text-slate-400 border border-slate-700';
+    let badgeText = status ? status.replace(/_/g, ' ') : 'STANDBY';
+    let badgeClass = 'bg-surface-elevated text-mutedText border border-border';
     let scoreDisplay = '—';
 
     if (isUnavailable) {
-      badgeText = 'AI NOT AVAILABLE';
-      badgeClass = 'bg-slate-800/80 text-amber-300/80 border border-amber-500/20';
+      badgeText = 'OFFLINE';
+      badgeClass = 'bg-surface-elevated text-mutedText border border-border';
       scoreDisplay = '—';
     } else if (isStandby) {
       badgeText = 'READY';
-      badgeClass = 'bg-slate-800 text-cyan-400 border border-cyan-500/30';
+      badgeClass = 'bg-surface-elevated text-secondaryText border border-border';
       scoreDisplay = '—';
     } else if (isInsufficient) {
-      badgeText = 'EVALUATING...';
-      badgeClass = 'bg-indigo-950/80 text-indigo-300 border border-indigo-500/30';
+      badgeText = 'EVALUATING';
+      badgeClass = 'bg-warning/10 text-warning border border-warning/30';
       scoreDisplay = '—';
     } else if (isError) {
       badgeText = 'ERROR';
-      badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+      badgeClass = 'bg-danger/10 text-danger border border-danger/30';
       scoreDisplay = '—';
     } else {
       if (typeof score === 'number' && isFinite(score)) {
@@ -948,46 +1066,46 @@ export default function CallsPage() {
       if (type === 'deepfake') {
         if (status === 'DETECTED' || status === 'SPOOF' || status === 'SUSPICIOUS' || (score !== null && score >= 0.685)) {
           badgeText = 'DETECTED';
-          badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          badgeClass = 'bg-danger/10 text-danger border border-danger/30';
         } else if (status === 'AUTHENTIC' || status === 'NOT_DETECTED' || (score !== null && score < 0.50)) {
           badgeText = 'AUTHENTIC';
-          badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          badgeClass = 'bg-success/10 text-success border border-success/30';
         } else if (status === 'INCONCLUSIVE') {
           badgeText = 'INCONCLUSIVE';
-          badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          badgeClass = 'bg-warning/10 text-warning border border-warning/30';
         }
       } else if (type === 'speaker') {
         if (status === 'MATCH') {
           badgeText = 'MATCH';
-          badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          badgeClass = 'bg-success/10 text-success border border-success/30';
         } else if (status === 'MISMATCH') {
           badgeText = 'MISMATCH';
-          badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          badgeClass = 'bg-danger/10 text-danger border border-danger/30';
         } else if (status === 'NOT_ENROLLED') {
           badgeText = 'UNENROLLED';
-          badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          badgeClass = 'bg-warning/10 text-warning border border-warning/30';
         }
       } else if (type === 'replay') {
         if (status === 'REPLAY_DETECTED' || status === 'DETECTED' || status === 'LIKELY_REPLAY') {
-          badgeText = 'REPLAY DETECTED';
-          badgeClass = 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          badgeText = 'DETECTED';
+          badgeClass = 'bg-danger/10 text-danger border border-danger/30';
         } else if (status === 'NOT_REPLAY' || status === 'AUTHENTIC') {
-          badgeText = 'NOT REPLAY';
-          badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          badgeText = 'AUTHENTIC';
+          badgeClass = 'bg-success/10 text-success border border-success/30';
         } else if (status === 'UNCERTAIN') {
           badgeText = 'UNCERTAIN';
-          badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+          badgeClass = 'bg-warning/10 text-warning border border-warning/30';
         }
       } else if (type === 'vad') {
         if (status === 'SPEECH' || (typeof score === 'number' && score > 0.5)) {
           badgeText = 'SPEECH';
-          badgeClass = 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+          badgeClass = 'bg-primary/10 text-primary border border-primary/30';
         } else if (status === 'SILENCE') {
           badgeText = 'SILENCE';
-          badgeClass = 'bg-slate-800 text-slate-400 border border-slate-700';
+          badgeClass = 'bg-surface-elevated text-mutedText border border-border';
         } else {
           badgeText = 'LISTENING';
-          badgeClass = 'bg-slate-800 text-slate-400 border border-slate-700';
+          badgeClass = 'bg-surface-elevated text-mutedText border border-border';
         }
       }
     }
@@ -1002,378 +1120,446 @@ export default function CallsPage() {
 
   // Threat badge state
   const isEvaluated = typeof unifiedRisk.overallRiskScore === 'number';
-  const riskScoreText = isEvaluated ? `${unifiedRisk.overallRiskScore!.toFixed(1)}/100` : 'PENDING';
+  const riskScoreText = isEvaluated ? `${Math.round(unifiedRisk.overallRiskScore!)} / 100` : 'PENDING';
 
   return (
-    <div className="flex h-screen bg-[#05070d] text-slate-100 overflow-hidden font-sans antialiased">
+    <div className="flex h-screen bg-background text-primaryText overflow-hidden font-sans antialiased">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <Navbar title="Live SOC Command Center" subtitle="Real-Time Voice Defense & Multi-Modal Threat Fusion" />
+        <Navbar title="Live Voice Sessions" subtitle="Monitor active voice sessions and real-time threat signals." />
 
-        <main className="p-6 space-y-6">
-          <Phase1Notice />
-
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <main className="p-4 md:p-6 space-y-6 max-w-7xl w-full mx-auto">
+          {/* Top Operational Telemetry Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-4">
             <div>
-              <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                <ShieldAlert className="w-5 h-5 text-rose-400" />
-                <span>Live Voice Session Command Center</span>
-              </h1>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">
-                Real-Time 10D Threat Tensor Fusion, Deterministic Policy Enforcement, and Step-Up Orchestration
+              <div className="flex items-center gap-2 text-sm font-semibold text-primaryText">
+                <span className="w-2 h-2 rounded-full bg-success animate-pulse" />
+                <span>Live Voice Stream Telemetry</span>
+                <span className="text-mutedText font-normal text-xs ml-2">
+                  ({calls.length} {calls.length === 1 ? 'Session Monitored' : 'Sessions Monitored'})
+                </span>
+              </div>
+              <p className="text-xs text-mutedText mt-0.5 font-sans">
+                Real-time acoustic deepfake detection, speaker verification, and deterministic policy enforcement.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-xs font-mono text-slate-400">Claimed Identity:</label>
+              <label className="text-xs text-secondaryText font-sans shrink-0">Claimed Identity:</label>
               <select
                 value={claimedSpeakerId}
                 onChange={(e) => setClaimedSpeakerId(e.target.value)}
-                className="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                className="select-enterprise max-w-[280px] text-xs"
               >
-                <option value="speaker-cfo-001">Enrolled CFO (speaker-cfo-001)</option>
-                <option value="speaker-admin-002">Enrolled SysAdmin (speaker-admin-002)</option>
+                <option value="speaker-cfo-001">Enrolled CFO — Speaker CFO-001</option>
+                <option value="speaker-admin-002">Enrolled SysAdmin — Speaker Admin-002</option>
                 <option value="unknown-speaker">Unenrolled Unknown Speaker</option>
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Active Calls Feed */}
-            <div className="soc-glass p-4 rounded-xl border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                <span className="text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
-                  Active Call Sessions ({calls.length})
-                </span>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* 1. ACTIVE SESSION LIST (TABLE) */}
+            <div className="lg:col-span-4 flex flex-col space-y-2">
+              <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-secondaryText font-sans">
+                    Active Sessions
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-surface-elevated border border-border text-[11px] font-mono text-mutedText">
+                    {calls.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success" />
+                  <span className="text-xs text-mutedText font-sans">Live</span>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-[680px] overflow-y-auto pr-1">
+              {/* Table Column Headers */}
+              <div className="grid grid-cols-12 px-2 py-1 border-b border-border text-[10px] font-medium text-mutedText uppercase tracking-wider font-sans">
+                <div className="col-span-5">Session / Phone</div>
+                <div className="col-span-3">Channel</div>
+                <div className="col-span-2">Status</div>
+                <div className="col-span-2 text-right">Risk</div>
+              </div>
+
+              {/* Session Rows */}
+              <div className="divide-y divide-border/40 max-h-[660px] overflow-y-auto">
                 {calls.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500 font-mono text-xs">
-                    <PhoneCall className="w-6 h-6 text-slate-600 mx-auto mb-2" />
-                    <p>No active call sessions.</p>
+                  <div className="py-12 text-center text-mutedText font-sans text-xs">
+                    <PhoneCall className="w-5 h-5 text-mutedText mx-auto mb-2 opacity-50" />
+                    <p>No active sessions detected.</p>
                   </div>
                 ) : (
-                  calls.map((call) => (
-                    <div
-                      key={call.id}
-                      onClick={() => setSelectedCall(call)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                        selectedCall?.id === call.id
-                          ? 'bg-indigo-950/40 border-indigo-500 shadow-md shadow-indigo-500/10'
-                          : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-white font-mono">{call.callerIdentifier}</span>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
-                          {call.status}
-                        </span>
+                  calls.map((call) => {
+                    const isSelected = selectedCall?.id === call.id;
+                    const statusLower = call.status ? call.status.toLowerCase() : 'active';
+                    const isVerifying = call.status === 'VERIFYING';
+                    const isFlagged = call.status === 'FLAGGED' || call.status === 'BLOCKED';
+
+                    return (
+                      <div
+                        key={call.id}
+                        onClick={() => setSelectedCall(call)}
+                        className={`grid grid-cols-12 px-2 py-2.5 items-center cursor-pointer transition-colors text-xs font-sans ${
+                          isSelected
+                            ? 'bg-surface-elevated border-l-2 border-primary text-primaryText pl-2'
+                            : 'hover:bg-surface-hover/50 border-l-2 border-transparent text-secondaryText'
+                        }`}
+                      >
+                        {/* Session / Phone */}
+                        <div className="col-span-5 min-w-0 pr-1">
+                          <span className={`block font-mono text-xs truncate ${isSelected ? 'font-semibold text-primaryText' : 'text-primaryText'}`}>
+                            {call.callerIdentifier}
+                          </span>
+                          <span className="block text-[10px] font-mono text-mutedText truncate mt-0.5">
+                            {getSessionDuration(call)} • {formatSafeTime(call.startedAt || call.createdAt, 'Now')}
+                          </span>
+                        </div>
+
+                        {/* Channel */}
+                        <div className="col-span-3 min-w-0 pr-1">
+                          <span className="block text-xs truncate text-secondaryText">
+                            {call.callerDisplayName || 'Telephony'}
+                          </span>
+                          <span className="block text-[10px] text-mutedText font-mono uppercase mt-0.5">
+                            {call.direction}
+                          </span>
+                        </div>
+
+                        {/* Status with dot */}
+                        <div className="col-span-2 min-w-0">
+                          <span className="inline-flex items-center gap-1 text-xs">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                isVerifying
+                                  ? 'bg-warning'
+                                  : isFlagged
+                                  ? 'bg-danger'
+                                  : 'bg-success'
+                              }`}
+                            />
+                            <span className="capitalize truncate text-[11px] text-secondaryText">
+                              {statusLower}
+                            </span>
+                          </span>
+                        </div>
+
+                        {/* Risk */}
+                        <div className="col-span-2 text-right">
+                          {isSelected && isEvaluated ? (
+                            <span
+                              className={`font-mono text-xs font-semibold ${
+                                unifiedRisk.riskLevel === 'CRITICAL'
+                                  ? 'text-danger'
+                                  : unifiedRisk.riskLevel === 'HIGH'
+                                  ? 'text-orange-400'
+                                  : unifiedRisk.riskLevel === 'ELEVATED'
+                                  ? 'text-warning'
+                                  : 'text-success'
+                              }`}
+                            >
+                              {Math.round(unifiedRisk.overallRiskScore!)}
+                            </span>
+                          ) : (
+                            <span className="font-mono text-xs text-mutedText">—</span>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-400 mt-1">{call.callerDisplayName || 'Telephony Audio Channel'}</p>
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono mt-2 pt-2 border-t border-slate-800/60">
-                        <span>{call.direction}</span>
-                        <span>{formatSafeTime(call.createdAt, 'NO TELEMETRY RECORDED')}</span>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
 
-            {/* Right: Live Telemetry & Phase 5 Decision Console */}
-            <div className="lg:col-span-2 soc-glass p-5 rounded-xl border border-slate-800 space-y-5">
+            {/* Right: Live Telemetry & Decision Console (Unboxed Workspace) */}
+            <div className="lg:col-span-8 space-y-5 lg:pl-6 lg:border-l lg:border-border">
               {selectedCall ? (
                 <>
-                  {/* Top Bar: Call Identification & Live Audio Controls */}
-                  <div className="flex flex-col gap-3 pb-3 border-b border-slate-800">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="text-sm font-bold text-white font-mono">{selectedCall.callerIdentifier}</h2>
-                          {isEvaluated ? (
-                            <span
-                              className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                                unifiedRisk.riskLevel === 'CRITICAL'
-                                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse'
-                                  : unifiedRisk.riskLevel === 'HIGH'
-                                  ? 'bg-orange-500/20 text-orange-300 border border-orange-500/40'
-                                  : unifiedRisk.riskLevel === 'ELEVATED' || unifiedRisk.riskLevel === 'GUARDED' || unifiedRisk.riskLevel === 'MONITOR'
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                                  : unifiedRisk.riskLevel === 'LOW' || unifiedRisk.riskLevel === 'SAFE'
-                                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                  : 'bg-slate-700/40 text-slate-300 border border-slate-600/40'
-                              }`}
-                            >
-                              {unifiedRisk.riskLevel} THREAT ({riskScoreText})
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
-                              THREAT STATUS: EVALUATION PENDING
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">
-                          Session: {selectedCall.id} • Latency: {formatLatency(unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs)}
-                        </p>
+                  {/* 2. SELECTED SESSION HEADER */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-border">
+                    <div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xs uppercase font-medium text-mutedText font-sans">Selected Session:</span>
+                        <h2 className="text-base font-semibold text-primaryText font-mono tracking-tight">
+                          {selectedCall.callerIdentifier}
+                        </h2>
+                        {isEvaluated && (
+                          <span
+                            className={`text-[11px] font-sans font-medium px-2 py-0.5 rounded ${
+                              unifiedRisk.riskLevel === 'CRITICAL'
+                                ? 'badge-danger'
+                                : unifiedRisk.riskLevel === 'HIGH'
+                                ? 'badge-warning'
+                                : unifiedRisk.riskLevel === 'ELEVATED'
+                                ? 'badge-warning'
+                                : 'badge-success'
+                            }`}
+                          >
+                            {unifiedRisk.riskLevel} Risk ({riskScoreText})
+                          </span>
+                        )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2">
-                        {!isStreaming ? (
-                          <>
-                            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-lg px-2.5 py-1">
-                              <span className="text-[10px] uppercase font-mono text-slate-400 font-semibold">Scenario:</span>
-                              <select
-                                id="threat-scenario-select"
-                                value={selectedScenario}
-                                onChange={(e) => setSelectedScenario(e.target.value)}
-                                className="bg-transparent text-xs text-cyan-300 font-mono font-semibold focus:outline-none cursor-pointer"
-                                title="Select threat scenario to evaluate in Live Calls"
-                              >
-                                {THREAT_SCENARIOS.map((s) => (
-                                  <option key={s.id} value={s.id} className="bg-slate-900 text-slate-200">
-                                    {s.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <button
-                              onClick={startMicStreaming}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-indigo-500/20"
-                            >
-                              <Mic className="w-3.5 h-3.5" />
-                              <span>Stream Live Mic</span>
-                            </button>
-                            <button
-                              id="test-scream-btn"
-                              onClick={startSyntheticToneStreaming}
-                              className="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-500/20"
-                              title="Stream calibrated synthetic audio scenario to evaluate selected threat dimension"
-                            >
-                              <Play className="w-3.5 h-3.5" />
-                              <span>Test Scream</span>
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={stopStreaming}
-                            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all"
-                          >
-                            <Square className="w-3.5 h-3.5" />
-                            <span>Stop Stream</span>
-                          </button>
-                        )}
+                      <div className="flex items-center gap-3 text-xs text-mutedText mt-1 font-mono">
+                        <span>Session ID: <span className="text-secondaryText">{selectedCall.id}</span></span>
+                        <span>•</span>
+                        <span>Duration: <span className="text-secondaryText">{getSessionDuration(selectedCall)}</span></span>
+                        <span>•</span>
+                        <span>Latency: <span className="text-secondaryText">{formatLatency(unifiedRisk.fusionLatencyMs || telemetry.totalAiLatencyMs)}</span></span>
                       </div>
                     </div>
 
-                    {/* Active Threat Dimension Alert (Covers all 10 dimensions) */}
-                    {(() => {
-                      const THREAT_ALERT_MAPPINGS: Record<string, { title: string; desc: string }> = {
-                        credential_theft: {
-                          title: 'CRITICAL CREDENTIAL THEFT SOLICITATION DETECTED',
-                          desc: 'Caller actively solicited one-time password (OTP) / authentication credentials. Step-up policy verification triggered.',
-                        },
-                        financial_fraud: {
-                          title: 'CRITICAL FINANCIAL FRAUD / WIRE TRANSFER DETECTED',
-                          desc: 'Unauthorized high-value fund transfer or beneficiary account modification requested. Transaction hold recommended.',
-                        },
-                        account_takeover: {
-                          title: 'CRITICAL ACCOUNT TAKEOVER / REMOTE ACCESS DETECTED',
-                          desc: 'Adversary instructed victim to install remote desktop software (AnyDesk) or surrender control of workstation.',
-                        },
-                        verification_bypass: {
-                          title: 'CRITICAL VERIFICATION BYPASS COERCION DETECTED',
-                          desc: 'Caller attempted to coerce operator into skipping out-of-band identity verification controls.',
-                        },
-                        social_engineering: {
-                          title: 'HIGH CONVERSATIONAL SOCIAL ENGINEERING DETECTED',
-                          desc: 'Coercive authority exploitation, artificial urgency, or fear tactics detected across dialogue turns.',
-                        },
-                        deepfake_synthetic: {
-                          title: 'CRITICAL ACOUSTIC DEEPFAKE / SYNTHETIC VOICE DETECTED',
-                          desc: 'Neural vocoder phase jitter, unnatural spectral consistency, or synthetic voice artifacts detected in audio stream.',
-                        },
-                        identity_impersonation: {
-                          title: 'CRITICAL SPEAKER BIOMETRIC MISMATCH DETECTED',
-                          desc: 'Caller acoustic voiceprint contradicts enrolled biometric identity profile for claimed speaker identity.',
-                        },
-                        replay_injection: {
-                          title: 'ELEVATED REPLAY / LOUDSPEAKER INJECTION DETECTED',
-                          desc: 'Physical loudspeaker acoustic roll-off and secondary room reverberation decay detected in stream.',
-                        },
-                        inconsistency: {
-                          title: 'HIGH DIALOGUE CLAIM INCONSISTENCY DETECTED',
-                          desc: 'Contradictory caller identities, organizations, or factual assertions detected across turns.',
-                        },
-                      };
-
-                      const elevatedThreats = Object.entries(unifiedRisk.dimensions)
-                        .filter(([k, v]) => k !== 'overall' && typeof v === 'number' && (v ?? 0) >= 50)
-                        .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
-                      const dominantThreat = elevatedThreats[0];
-                      const dominantInfo = dominantThreat ? (THREAT_ALERT_MAPPINGS[dominantThreat[0]] || {
-                        title: `CRITICAL ${dominantThreat[0].toUpperCase()} DETECTED`,
-                        desc: `Elevated risk detected on ${dominantThreat[0]} dimension. Score: ${(dominantThreat[1] as number).toFixed(1)}/100.`
-                      }) : null;
-
-                      if (!dominantThreat || !dominantInfo) return null;
-
-                      return (
-                        <div className="p-3 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-start gap-2.5">
-                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                          <div>
-                            <strong className="block text-white font-bold">
-                              {dominantInfo.title}
-                            </strong>
-                            <span>
-                              {dominantInfo.desc}
-                            </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {!isStreaming ? (
+                        <>
+                          {/* Scenario Selector */}
+                          <div className="flex items-center gap-1.5 bg-surface border border-border rounded px-2.5 py-1 text-xs">
+                            <span className="text-mutedText font-sans text-xs">Scenario:</span>
+                            <select
+                              id="threat-scenario-select"
+                              value={selectedScenario}
+                              onChange={(e) => setSelectedScenario(e.target.value)}
+                              className="bg-transparent text-primaryText font-sans text-xs focus:outline-none cursor-pointer"
+                              title="Select threat scenario to evaluate in Live Calls"
+                            >
+                              {THREAT_SCENARIOS.map((s) => (
+                                <option key={s.id} value={s.id} className="bg-surface text-primaryText">
+                                  {s.name}
+                                </option>
+                              ))}
+                            </select>
                           </div>
-                        </div>
-                      );
-                    })()}
 
-                    {/* Dominant Threat Summary & Contributing Signals */}
-                    <DominantThreatCard
-                      overallRiskScore={unifiedRisk.overallRiskScore}
-                      riskLevel={unifiedRisk.riskLevel}
-                      confidence={unifiedRisk.confidence}
-                      velocity={unifiedRisk.riskVelocity}
-                      dimensions={unifiedRisk.dimensions}
-                      policyId={unifiedRisk.policyRecommendation?.policy_id}
-                      policyExplanation={unifiedRisk.policyRecommendation?.explanation}
-                    />
+                          {/* Action Buttons */}
+                          <button
+                            onClick={startMicStreaming}
+                            className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3 rounded font-sans"
+                          >
+                            <Mic className="w-3.5 h-3.5" />
+                            <span>Stream Live Mic</span>
+                          </button>
 
-                    {/* Microphone Stream Health Bar */}
-                    {isStreaming && (
-                      <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900 border border-indigo-500/30 text-xs font-mono">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                          <span className="text-slate-300">
-                            Source: <strong className="text-indigo-300">{streamSource === 'MIC' ? 'BROWSER MICROPHONE (16 kHz PCM)' : 'SYNTHETIC TEST BENCH'}</strong>
-                          </span>
-                          <span className="text-slate-500">•</span>
-                          <span className="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-500/30 text-[10px]">
-                            {micState}
-                          </span>
-                        </div>
-                        {streamSource === 'MIC' && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400 text-[10px]">Input Energy:</span>
-                            <div className="w-24 h-2 bg-slate-800 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-emerald-400 transition-all duration-75"
-                                style={{ width: `${Math.max(0, Math.min(100, (micRmsDb + 60) * 2))}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-slate-400">{micRmsDb > -90 ? `${micRmsDb.toFixed(0)} dB` : 'MUTE'}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                          <button
+                            id="test-scream-btn"
+                            onClick={startSyntheticToneStreaming}
+                            className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3 rounded font-sans"
+                            title="Stream calibrated synthetic audio scenario"
+                          >
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Test Stream</span>
+                          </button>
 
-                    {micError && (
-                      <div className="px-3 py-2 rounded-lg bg-rose-950/60 border border-rose-500/40 text-xs font-mono text-rose-300 flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span><strong>Microphone Error:</strong> {micError}</span>
-                      </div>
-                    )}
+                          <button
+                            onClick={() => handleEndSession(selectedCall.id)}
+                            className="btn-outline text-mutedText hover:text-danger hover:border-danger/40 flex items-center gap-1.5 text-xs py-1.5 px-2.5 rounded font-sans"
+                            title="Terminate this session"
+                          >
+                            <PhoneOff className="w-3.5 h-3.5" />
+                            <span>End Session</span>
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={stopStreaming}
+                          className="btn-danger flex items-center gap-1.5 text-xs py-1.5 px-3 rounded font-sans"
+                        >
+                          <Square className="w-3.5 h-3.5" />
+                          <span>Stop Stream</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Subsystem Model Status Row */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                    {/* Deepfake */}
-                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
-                      <span className="text-slate-400 text-[10px] block uppercase font-semibold">Acoustic Deepfake</span>
-                      <div className="flex items-center justify-between">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${dfView.badgeClass}`}>
-                          {dfView.badgeText}
+                  {/* 3. THREAT ALERT */}
+                  {(() => {
+                    const THREAT_ALERT_MAPPINGS: Record<string, { title: string; desc: string; severity: string }> = {
+                      identity_impersonation: {
+                        title: 'Speaker verification mismatch',
+                        desc: "The caller's voiceprint does not match the enrolled speaker profile.",
+                        severity: 'Critical',
+                      },
+                      credential_theft: {
+                        title: 'Credential theft solicitation',
+                        desc: 'The caller actively solicited one-time password (OTP) or authentication credentials.',
+                        severity: 'Critical',
+                      },
+                      financial_fraud: {
+                        title: 'Unauthorized financial transfer solicitation',
+                        desc: 'High-value fund transfer or beneficiary account modification requested without authorization.',
+                        severity: 'Critical',
+                      },
+                      account_takeover: {
+                        title: 'Remote access software solicitation',
+                        desc: 'Caller instructed operator to install remote desktop software (AnyDesk) or surrender workstation control.',
+                        severity: 'Critical',
+                      },
+                      verification_bypass: {
+                        title: 'Verification bypass coercion',
+                        desc: 'Caller attempted to coerce operator into skipping out-of-band identity verification controls.',
+                        severity: 'Critical',
+                      },
+                      social_engineering: {
+                        title: 'Conversational social engineering detected',
+                        desc: 'Coercive authority exploitation, artificial urgency, or intimidation tactics identified in dialogue.',
+                        severity: 'High',
+                      },
+                      deepfake_synthetic: {
+                        title: 'Synthetic voice / acoustic deepfake detected',
+                        desc: 'Synthetic vocoder phase jitter, unnatural spectral consistency, or synthesized voice artifacts detected in audio stream.',
+                        severity: 'Critical',
+                      },
+                      replay_injection: {
+                        title: 'Replay or loudspeaker injection detected',
+                        desc: 'Physical loudspeaker acoustic roll-off and secondary room reverberation decay detected in stream.',
+                        severity: 'Elevated',
+                      },
+                      inconsistency: {
+                        title: 'Dialogue claim inconsistency detected',
+                        desc: 'Contradictory caller identities, organizations, or factual assertions detected across turns.',
+                        severity: 'Elevated',
+                      },
+                    };
+
+                    const elevatedThreats = Object.entries(unifiedRisk.dimensions)
+                      .filter(([k, v]) => k !== 'overall' && typeof v === 'number' && (v ?? 0) >= 50)
+                      .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+                    const dominantThreat = elevatedThreats[0];
+                    const dominantInfo = dominantThreat
+                      ? THREAT_ALERT_MAPPINGS[dominantThreat[0]] || {
+                          title: `${dominantThreat[0].replace(/_/g, ' ')} detected`,
+                          desc: `Elevated risk detected on ${dominantThreat[0].replace(/_/g, ' ')}. Score: ${(dominantThreat[1] as number).toFixed(1)}/100.`,
+                          severity: (dominantThreat[1] as number) >= 80 ? 'Critical' : 'High',
+                        }
+                      : null;
+
+                    if (!dominantThreat || !dominantInfo) return null;
+
+                    return (
+                      <div className="py-2.5 px-3 border-l-2 border-danger bg-danger/5 text-xs flex items-start justify-between gap-3 font-sans">
+                        <div className="flex items-start gap-2.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-danger shrink-0 mt-1.5" />
+                          <div>
+                            <h4 className="text-xs font-semibold text-primaryText">
+                              {dominantInfo.title}
+                            </h4>
+                            <p className="text-xs text-secondaryText mt-0.5">
+                              {dominantInfo.desc}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0">
+                          <span className="badge-danger text-[11px] font-sans font-medium px-2 py-0.5 rounded">
+                            Severity: {dominantInfo.severity}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 4. THREAT ASSESSMENT & RISK ASSESSMENT (UNBOXED) */}
+                  <DominantThreatCard
+                    unboxed={true}
+                    overallRiskScore={unifiedRisk.overallRiskScore}
+                    riskLevel={unifiedRisk.riskLevel}
+                    confidence={unifiedRisk.confidence}
+                    velocity={unifiedRisk.riskVelocity}
+                    dimensions={unifiedRisk.dimensions}
+                    policyId={unifiedRisk.policyRecommendation?.policy_id}
+                    policyExplanation={unifiedRisk.policyRecommendation?.explanation}
+                  />
+
+                  {/* 8. LIVE MICROPHONE CONTROL & HEALTH */}
+                  {isStreaming && (
+                    <div className="py-2 px-3 bg-surface-elevated/40 border border-border rounded flex items-center justify-between text-xs font-sans">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-2 h-2 rounded-full bg-success animate-ping" />
+                        <span className="text-secondaryText font-sans">
+                          Source: <strong className="text-primaryText">{streamSource === 'MIC' ? 'Browser Microphone (16 kHz PCM)' : 'Synthetic Test Bench'}</strong>
                         </span>
-                        <span className="text-white font-bold">{dfView.scoreDisplay}</span>
+                        <span className="text-border">•</span>
+                        <span className="px-1.5 py-0.2 rounded bg-surface text-secondaryText border border-border text-[11px] font-mono">
+                          {micState}
+                        </span>
+                      </div>
+                      {streamSource === 'MIC' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-mutedText text-[11px] font-sans">Input Energy:</span>
+                          <div className="w-24 h-1.5 bg-surface-elevated rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-success transition-all duration-75"
+                              style={{ width: `${Math.max(0, Math.min(100, (micRmsDb + 60) * 2))}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] text-mutedText font-mono">{micRmsDb > -90 ? `${micRmsDb.toFixed(0)} dB` : 'MUTE'}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {micError && (
+                    <div className="p-2.5 rounded bg-danger/10 border border-danger/30 text-xs font-sans text-danger flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 text-danger shrink-0" />
+                      <span><strong>Microphone Error:</strong> {micError}</span>
+                    </div>
+                  )}
+
+                  {/* Subsystem Model Status Row (Horizontal Divider Based) */}
+                  <div className="py-2.5 border-y border-border grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-border">
+                    {/* Deepfake */}
+                    <div className="py-1 px-3 space-y-0.5 text-xs font-sans">
+                      <span className="text-mutedText text-[10px] block uppercase font-medium tracking-wider">Acoustic Deepfake</span>
+                      <div className="flex items-center justify-between">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primaryText">
+                          <span className={`w-1.5 h-1.5 rounded-full ${dfView.badgeText === 'AUTHENTIC' ? 'bg-success' : dfView.badgeText === 'DETECTED' ? 'bg-danger' : 'bg-mutedText'}`} />
+                          <span>{dfView.badgeText}</span>
+                        </span>
+                        <span className="text-secondaryText font-mono">{dfView.scoreDisplay}</span>
                       </div>
                     </div>
 
                     {/* Biometric Speaker */}
-                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
-                      <span className="text-slate-400 text-[10px] block uppercase font-semibold">Speaker Match</span>
+                    <div className="py-1 px-3 space-y-0.5 text-xs font-sans">
+                      <span className="text-mutedText text-[10px] block uppercase font-medium tracking-wider">Speaker Match</span>
                       <div className="flex items-center justify-between">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${spView.badgeClass}`}>
-                          {spView.badgeText}
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primaryText">
+                          <span className={`w-1.5 h-1.5 rounded-full ${spView.badgeText === 'MATCH' ? 'bg-success' : spView.badgeText === 'MISMATCH' ? 'bg-danger' : 'bg-mutedText'}`} />
+                          <span>{spView.badgeText}</span>
                         </span>
-                        <span className="text-white font-bold">{spView.scoreDisplay}</span>
+                        <span className="text-secondaryText font-mono">{spView.scoreDisplay}</span>
                       </div>
                     </div>
 
                     {/* Replay */}
-                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
-                      <span className="text-slate-400 text-[10px] block uppercase font-semibold">Replay Attack</span>
+                    <div className="py-1 px-3 space-y-0.5 text-xs font-sans">
+                      <span className="text-mutedText text-[10px] block uppercase font-medium tracking-wider">Replay Attack</span>
                       <div className="flex items-center justify-between">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${rpView.badgeClass}`}>
-                          {rpView.badgeText}
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primaryText">
+                          <span className={`w-1.5 h-1.5 rounded-full ${rpView.badgeText === 'AUTHENTIC' || rpView.badgeText === 'NOT REPLAY' ? 'bg-success' : rpView.badgeText.includes('REPLAY') ? 'bg-danger' : 'bg-mutedText'}`} />
+                          <span>{rpView.badgeText}</span>
                         </span>
-                        <span className="text-white font-bold">{rpView.scoreDisplay}</span>
+                        <span className="text-secondaryText font-mono">{rpView.scoreDisplay}</span>
                       </div>
                     </div>
 
                     {/* VAD */}
-                    <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 space-y-1 font-mono text-xs">
-                      <span className="text-slate-400 text-[10px] block uppercase font-semibold">Voice Activity</span>
+                    <div className="py-1 px-3 space-y-0.5 text-xs font-sans">
+                      <span className="text-mutedText text-[10px] block uppercase font-medium tracking-wider">Voice Activity</span>
                       <div className="flex items-center justify-between">
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${vadView.badgeClass}`}>
-                          {vadView.badgeText}
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primaryText">
+                          <span className={`w-1.5 h-1.5 rounded-full ${vadView.badgeText === 'VOICE ACTIVE' ? 'bg-success' : 'bg-mutedText'}`} />
+                          <span>{vadView.badgeText}</span>
                         </span>
-                        <span className="text-white font-bold">{vadView.scoreDisplay}</span>
+                        <span className="text-secondaryText font-mono">{vadView.scoreDisplay}</span>
                       </div>
                     </div>
                   </div>
 
-                  {/* 10-Dimensional Multi-Modal Risk Matrix HUD */}
-                  <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-indigo-400" />
-                        10-Dimensional Unified Risk Tensor
-                      </span>
-                      <div className="flex items-center gap-3 text-[11px] font-mono">
-                        <span className="text-slate-400">
-                          Confidence:{' '}
-                          <strong className="text-emerald-400">
-                            {typeof unifiedRisk.confidence === 'number' ? `${(unifiedRisk.confidence * 100).toFixed(0)}%` : 'PENDING'}
-                          </strong>
-                        </span>
-                        <span className="text-slate-400 flex items-center gap-1">
-                          Velocity: <TrendingUp className="w-3 h-3 text-rose-400" />
-                          <strong className="text-rose-400">+{unifiedRisk.riskVelocity ?? 0}/s</strong>
-                        </span>
-                      </div>
-                    </div>
+                  {/* Analytical Detection Signals Table (Unboxed) */}
+                  <DetectionSignalsTable unboxed={true} dimensions={unifiedRisk.dimensions} />
 
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 pt-1">
-                      {[
-                        { key: 'credential_theft', name: 'Credential Theft', val: unifiedRisk.dimensions.credential_theft },
-                        { key: 'social_engineering', name: 'Social Engineering', val: unifiedRisk.dimensions.social_engineering },
-                        { key: 'verification_bypass', name: 'Verification Bypass', val: unifiedRisk.dimensions.verification_bypass },
-                        { key: 'financial_fraud', name: 'Financial Fraud', val: unifiedRisk.dimensions.financial_fraud },
-                        { key: 'identity_impersonation', name: 'Identity Impersonation', val: unifiedRisk.dimensions.identity_impersonation },
-                        { key: 'account_takeover', name: 'Account Takeover', val: unifiedRisk.dimensions.account_takeover },
-                        { key: 'deepfake_synthetic', name: 'Deepfake / Synthetic', val: unifiedRisk.dimensions.deepfake_synthetic },
-                        { key: 'replay_injection', name: 'Replay / Injection', val: unifiedRisk.dimensions.replay_injection },
-                        { key: 'inconsistency', name: 'Signal Inconsistency', val: unifiedRisk.dimensions.inconsistency },
-                        { key: 'overall', name: 'Overall Composite', val: unifiedRisk.dimensions.overall },
-                      ].map((dim) => (
-                        <RiskTensorCard
-                          key={dim.key}
-                          name={dim.name}
-                          score={dim.val}
-                          highlight={dim.key === 'overall'}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Forensic Evidence & Explainability Panel */}
+                  {/* Forensic Evidence & Explainability */}
                   <EvidenceExplainer
                     what={
                       (unifiedRisk.dimensions.credential_theft ?? 0) >= 70
@@ -1413,28 +1599,28 @@ export default function CallsPage() {
                     vadStatus={telemetry.vad.state}
                   />
 
-                  {/* Deterministic Policy Trigger & Decision Bar */}
+                  {/* 9. ANALYST POLICY INTERVENTION ACTIONS */}
                   {unifiedRisk.policyRecommendation?.is_triggered && (
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-rose-950/40 to-indigo-950/40 border border-rose-500/30 space-y-3">
+                    <div className="py-3 border-t border-border space-y-2.5 font-sans">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <ShieldAlert className="w-4 h-4 text-rose-400" />
-                          <span className="text-xs font-bold text-white font-mono uppercase tracking-wider">
+                          <ShieldAlert className="w-4 h-4 text-danger" />
+                          <span className="text-xs font-semibold text-primaryText uppercase tracking-wider font-mono">
                             Policy Trigger: {unifiedRisk.policyRecommendation.policy_id}
                           </span>
                         </div>
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                        <span className="text-[10px] font-sans px-2 py-0.5 rounded bg-warning/10 text-warning font-medium border border-warning/30">
                           {unifiedRisk.humanWorkflowState}
                         </span>
                       </div>
 
-                      <p className="text-xs text-slate-300 font-mono">
+                      <p className="text-xs text-secondaryText">
                         {unifiedRisk.policyRecommendation.explanation}
                       </p>
 
                       {interventionFeedback && (
-                        <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4" />
+                        <div className="p-2 rounded bg-success/10 border border-success/30 text-success text-xs font-sans flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
                           <span>{interventionFeedback}</span>
                         </div>
                       )}
@@ -1442,14 +1628,14 @@ export default function CallsPage() {
                       <div className="flex items-center justify-end gap-2.5 pt-1">
                         <button
                           onClick={handleOverrideIntervention}
-                          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-mono flex items-center gap-1.5 transition-all border border-slate-700"
+                          className="btn-secondary flex items-center gap-1.5 text-xs py-1.5 px-3 rounded font-sans"
                         >
-                          <XCircle className="w-3.5 h-3.5 text-slate-400" />
+                          <XCircle className="w-3.5 h-3.5 text-mutedText" />
                           <span>Override / False Positive</span>
                         </button>
                         <button
                           onClick={handleApproveIntervention}
-                          className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold font-mono flex items-center gap-1.5 transition-all shadow-md shadow-rose-500/20"
+                          className="btn-primary flex items-center gap-1.5 text-xs py-1.5 px-3.5 rounded font-sans font-medium"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" />
                           <span>Approve & Dispatch Step-Up Challenge</span>
@@ -1459,28 +1645,28 @@ export default function CallsPage() {
                   )}
 
                   {/* Redacted Live Transcript Stream */}
-                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-slate-400 flex items-center gap-1.5 font-bold uppercase tracking-wider text-[10px]">
-                        <MessageSquare className="w-3.5 h-3.5 text-cyan-400" />
-                        Pre-Persistence Redacted Transcript Stream
+                  <div className="pt-3 border-t border-border space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-sans">
+                      <span className="text-mutedText flex items-center gap-1.5 font-medium uppercase tracking-wider text-[10px]">
+                        <MessageSquare className="w-3.5 h-3.5 text-secondaryText" />
+                        Live Transcript (Privacy Redacted)
                       </span>
-                      <span className="text-[10px] text-emerald-400 font-bold">
+                      <span className="text-[10px] text-success font-mono font-medium">
                         {telemetry.conversation.language} ({telemetry.conversation.intent})
                       </span>
                     </div>
 
-                    <p className="text-xs font-mono text-slate-200 bg-slate-900/80 p-2.5 rounded-lg border border-slate-800/80">
+                    <p className="text-xs font-sans text-secondaryText italic">
                       &ldquo;{telemetry.conversation.redactedTranscript || telemetry.conversation.transcript || 'Waiting for audio speech turn...'}&rdquo;
                     </p>
                   </div>
                 </>
               ) : (
-                <div className="p-16 text-center text-slate-500 text-sm font-mono space-y-3">
-                  <PhoneCall className="w-10 h-10 text-slate-600 mx-auto" />
-                  <p className="text-slate-300 font-bold">No Call Session Selected</p>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto">
-                    Select a monitored session from the left queue or stream audio from the telephony gateway.
+                <div className="py-24 text-center text-mutedText text-sm font-sans space-y-2">
+                  <PhoneCall className="w-8 h-8 text-mutedText mx-auto opacity-40" />
+                  <p className="text-primaryText font-medium">No Call Session Selected</p>
+                  <p className="text-xs text-mutedText max-w-md mx-auto">
+                    Select a monitored session from the left queue to inspect real-time threat telemetry.
                   </p>
                 </div>
               )}

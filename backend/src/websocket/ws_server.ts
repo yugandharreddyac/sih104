@@ -84,6 +84,7 @@ export interface CallAsrState {
   hasPendingAudio: boolean;
   pendingChunk?: CallAsrPendingChunk;
   lastCommittedSeq: number;
+  evaluationSequence: number;
   latestConvResult?: any;
   latestTranscript?: string;
   latestRiskAssessment?: any;
@@ -105,6 +106,7 @@ export class WebSocketGateway {
         inFlight: false,
         hasPendingAudio: false,
         lastCommittedSeq: -1,
+        evaluationSequence: 0,
       };
       this.callAsrStates.set(callId, asrState);
     }
@@ -757,8 +759,9 @@ export class WebSocketGateway {
                   state.user?.id
                 );
                 asrState.latestRiskAssessment = asyncRisk;
+                asrState.evaluationSequence = (asrState.evaluationSequence || 0) + 1;
+                const asyncBroadcastSeq = asrState.evaluationSequence;
 
-                const asyncBroadcastSeq = Math.max(sequenceNumber, speechSegment.turnIndex);
                 this.broadcast({
                   type: 'UNIFIED_RISK_ASSESSMENT',
                   callId,
@@ -869,11 +872,13 @@ export class WebSocketGateway {
         state.user?.id
       );
       asrState.latestRiskAssessment = unifiedRisk;
+      asrState.evaluationSequence = (asrState.evaluationSequence || 0) + 1;
+      const syncBroadcastSeq = asrState.evaluationSequence;
 
       this.broadcast({
         type: 'UNIFIED_RISK_ASSESSMENT',
         callId,
-        sequenceNumber,
+        sequenceNumber: syncBroadcastSeq,
         payload: unifiedRisk,
         timestamp: new Date().toISOString(),
       });

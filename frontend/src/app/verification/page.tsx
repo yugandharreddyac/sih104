@@ -4,24 +4,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SecurityStatusBadge } from '@/components/ui/SecurityStatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import {
   Lock,
-  ShieldCheck,
   CheckCircle2,
   XCircle,
-  RefreshCw,
   Send,
-  PhoneCall,
-  Smartphone,
-  KeyRound,
-  PhoneForwarded,
-  ArrowRight,
-  ShieldAlert,
   Clock,
-  UserCheck,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 import { formatSafeTime, formatSafeDateTime } from '@/lib/format';
@@ -104,75 +93,83 @@ export default function VerificationPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#05070d]">
+    <div className="flex min-h-screen bg-background text-primaryText">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
-          title="Independent Step-Up Verification Hub"
-          subtitle="Out-of-Band Authentication Decoupling for High-Risk Voice Interactions"
+          title="Step-Up Identity Verification"
+          subtitle="Out-of-band multi-factor challenge dispatch for high-risk voice sessions"
         />
 
-        <main className="flex-1 p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
-          {/* Top Security Advisory Banner */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/40 via-[#0c1222] to-slate-900 border border-indigo-500/30 flex items-start gap-3 shadow-lg">
-            <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400 shrink-0 mt-0.5">
-              <Lock className="w-5 h-5 text-cyan-400" />
+        <main className="flex-1 p-4 md:p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto font-sans">
+          {/* Top Security Advisory (Unboxed Header) */}
+          <div className="pb-4 border-b border-border space-y-1">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-primary" />
+              <h2 className="text-xs font-semibold text-primaryText uppercase tracking-wider font-sans">
+                Out-of-Band Security Decoupling
+              </h2>
+              <span className="text-[10px] text-mutedText font-mono ml-2">
+                [Zero Trust Channel]
+              </span>
             </div>
-            <div className="space-y-1">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <span>Out-of-Band Security Decoupling</span>
-                <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
-                  Zero Trust Voice Channel
-                </span>
-              </h3>
-              <p className="text-xs text-slate-300 font-sans leading-relaxed">
-                When an active voice interaction exhibits elevated threat signals (acoustic deepfakes, speaker mismatches, or high-risk transaction requests), the voice channel cannot be trusted. Dispatch an independent secondary identity challenge across an isolated channel.
-              </p>
-            </div>
+            <p className="text-xs text-secondaryText font-sans leading-relaxed max-w-3xl">
+              When an active voice interaction exhibits elevated threat signals (acoustic deepfakes, speaker mismatches, or high-risk transaction requests), the voice channel cannot be trusted. Dispatch an independent secondary identity challenge across an isolated channel.
+            </p>
           </div>
 
           {feedbackMsg && (
             <div
-              className={`p-3 rounded-lg border text-xs flex items-center justify-between font-sans ${
+              className={`p-3 rounded border text-xs flex items-center justify-between font-sans ${
                 feedbackMsg.type === 'success'
-                  ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
-                  : 'bg-rose-950/60 border-rose-500/30 text-rose-300'
+                  ? 'bg-success/10 border-success/30 text-success'
+                  : 'bg-danger/10 border-danger/30 text-danger'
               }`}
             >
               <span className="flex items-center gap-2">
                 {feedbackMsg.type === 'success' ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                 ) : (
-                  <XCircle className="w-4 h-4 text-rose-400" />
+                  <XCircle className="w-4 h-4 shrink-0" />
                 )}
-                {feedbackMsg.text}
+                <span>{feedbackMsg.text}</span>
               </span>
-              <button onClick={() => setFeedbackMsg(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => setFeedbackMsg(null)} className="text-mutedText hover:text-primaryText px-1" aria-label="Dismiss message">
                 ✕
               </button>
             </div>
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Left 7 Columns: Active Challenges & Results Table */}
+            {/* Left 7 Columns: Active Challenges (Data Table / List) */}
             <div className="lg:col-span-7 space-y-3">
-              <SectionHeader
-                title="Active Verification Challenges"
-                subtitle="Live identity verification challenges dispatched across out-of-band channels"
-                icon={ShieldCheck}
-                count={requests.length}
-                onRefresh={fetchVerifications}
-                loading={loading}
-              />
+              <div className="flex items-center justify-between pb-1.5 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-secondaryText font-sans">
+                    Active Verification Challenges
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-surface-elevated border border-border text-[11px] font-mono text-mutedText">
+                    {requests.length}
+                  </span>
+                </div>
+                <button
+                  onClick={fetchVerifications}
+                  className="text-xs text-mutedText hover:text-primaryText flex items-center gap-1 font-sans"
+                  title="Refresh challenges"
+                >
+                  <Clock className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
 
-              <div className="space-y-3">
-                {requests.length === 0 && !loading ? (
-                  <EmptyState
-                    title="No Active Verification Challenges"
-                    description="When voice risk exceeds policy thresholds, out-of-band challenges dispatched by analysts will appear here."
-                  />
-                ) : (
-                  requests.map((req) => {
+              {requests.length === 0 && !loading ? (
+                <EmptyState
+                  title="No Active Verification Challenges"
+                  description="When voice risk exceeds policy thresholds, out-of-band challenges dispatched by analysts will appear here."
+                />
+              ) : (
+                <div className="divide-y divide-border/40 border-b border-border">
+                  {requests.map((req) => {
                     const isPending = req.status === 'PENDING';
                     const isApproved = req.status === 'APPROVED';
                     const isRejected = req.status === 'REJECTED';
@@ -180,56 +177,56 @@ export default function VerificationPage() {
                     return (
                       <div
                         key={req.id}
-                        className="p-4 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3"
+                        className="py-3 font-sans space-y-2"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300">
-                              {req.mechanism === 'AUTHENTICATOR_PUSH' ? (
-                                <Smartphone className="w-4 h-4 text-indigo-400" />
-                              ) : req.mechanism === 'FIDO2_HARDWARE_KEY' ? (
-                                <KeyRound className="w-4 h-4 text-cyan-400" />
-                              ) : (
-                                <PhoneForwarded className="w-4 h-4 text-amber-300" />
-                              )}
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="font-mono text-xs font-bold text-white">
-                                  {req.targetIdentity}
-                                </span>
-                                <SecurityStatusBadge status={req.status} size="xs" />
-                              </div>
-                              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                                Method: {req.mechanism?.replace(/_/g, ' ')} • Call: {req.callId?.slice(0, 8)}...
-                              </p>
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-primaryText">
+                              {req.targetIdentity}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs">
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  isPending
+                                    ? 'bg-warning'
+                                    : isApproved
+                                    ? 'bg-success'
+                                    : 'bg-danger'
+                                }`}
+                              />
+                              <span className="text-[11px] capitalize">{req.status?.toLowerCase()}</span>
+                            </span>
                           </div>
 
-                          <div className="text-[10px] font-mono text-slate-500 sm:text-right">
+                          <div className="text-[10px] font-mono text-mutedText sm:text-right">
                             {formatSafeTime(req.createdAt)}
                           </div>
                         </div>
 
+                        <div className="flex items-center justify-between text-xs text-secondaryText">
+                          <span>Method: <strong className="text-primaryText font-normal">{req.mechanism?.replace(/_/g, ' ')}</strong></span>
+                          <span className="font-mono text-[11px] text-mutedText">Call: {req.callId?.slice(0, 8)}...</span>
+                        </div>
+
                         {/* Status Result & Action Bar */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-                          <div className="text-[11px] font-sans text-slate-300">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5">
+                          <div className="text-xs">
                             {isPending && (
-                              <span className="text-amber-300 flex items-center gap-1.5 font-mono">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                                Awaiting user secondary device response...
+                              <span className="text-warning flex items-center gap-1.5 font-sans text-xs">
+                                <span className="w-1.5 h-1.5 rounded-full bg-warning" />
+                                <span>Awaiting secondary authentication response...</span>
                               </span>
                             )}
                             {isApproved && (
-                              <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
+                              <span className="text-success font-medium flex items-center gap-1.5 text-xs">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                ✓ Identity Verified via Out-of-Band Channel
+                                <span>Identity Verified via Out-of-Band Channel</span>
                               </span>
                             )}
                             {isRejected && (
-                              <span className="text-rose-400 font-semibold flex items-center gap-1.5">
+                              <span className="text-danger font-medium flex items-center gap-1.5 text-xs">
                                 <XCircle className="w-3.5 h-3.5" />
-                                ✕ Step-Up Challenge Failed / Rejected
+                                <span>Step-Up Challenge Failed or Rejected</span>
                               </span>
                             )}
                           </div>
@@ -238,51 +235,51 @@ export default function VerificationPage() {
                             <div className="flex items-center gap-2 ml-auto">
                               <button
                                 onClick={() => handleResolve(req.id, 'APPROVED')}
-                                className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1 transition-colors"
+                                className="btn-success text-xs py-1 px-2.5 flex items-center gap-1"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>CONFIRM</span>
+                                <span>Confirm</span>
                               </button>
                               <button
                                 onClick={() => handleResolve(req.id, 'REJECTED')}
-                                className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/50 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-1 transition-colors"
+                                className="btn-danger text-xs py-1 px-2.5 flex items-center gap-1"
                               >
                                 <XCircle className="w-3.5 h-3.5" />
-                                <span>REJECT</span>
+                                <span>Reject</span>
                               </button>
                             </div>
                           )}
                         </div>
                       </div>
                     );
-                  })
-                )}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Right 5 Columns: Dispatch Step-Up Challenge Form */}
-            <div className="lg:col-span-5">
-              <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-4 sticky top-20">
-                <div className="pb-3 border-b border-slate-800">
-                  <h3 className="text-sm font-bold text-white font-sans flex items-center gap-2">
-                    <Send className="w-4 h-4 text-indigo-400" />
+            <div className="lg:col-span-5 lg:pl-6 lg:border-l lg:border-border">
+              <div className="space-y-4">
+                <div className="pb-2 border-b border-border">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-secondaryText font-sans flex items-center gap-2">
+                    <Send className="w-3.5 h-3.5 text-primary" />
                     <span>Dispatch Step-Up Challenge</span>
                   </h3>
-                  <p className="text-xs text-slate-400 font-sans mt-0.5">
+                  <p className="text-xs text-mutedText font-sans mt-0.5">
                     Initiate an out-of-band verification challenge for an active call session.
                   </p>
                 </div>
 
-                <form onSubmit={handleCreateRequest} className="space-y-4 text-xs font-sans">
+                <form onSubmit={handleCreateRequest} className="space-y-3.5 text-xs font-sans">
                   {/* Target Call Selection */}
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1.5">
+                    <label className="block text-secondaryText font-medium mb-1">
                       Target Voice Call Session
                     </label>
                     <select
                       value={callId}
                       onChange={(e) => setCallId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="select-enterprise font-mono w-full"
                     >
                       {calls.map((c) => (
                         <option key={c.id} value={c.id}>
@@ -294,7 +291,7 @@ export default function VerificationPage() {
 
                   {/* Claimed Identity */}
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1.5">
+                    <label className="block text-secondaryText font-medium mb-1">
                       Claimed Identity / User Principal
                     </label>
                     <input
@@ -303,16 +300,16 @@ export default function VerificationPage() {
                       onChange={(e) => setTargetIdentity(e.target.value)}
                       required
                       placeholder="user@corp.internal or +15550192834"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                      className="input-enterprise font-mono w-full"
                     />
                   </div>
 
-                  {/* Verification Mechanism */}
+                  {/* Verification Mechanism (Clean Radio List, No Box Wrappers) */}
                   <div>
-                    <label className="block text-slate-300 font-medium mb-1.5">
+                    <label className="block text-secondaryText font-medium mb-2">
                       Verification Decoupling Channel
                     </label>
-                    <div className="space-y-2">
+                    <div className="space-y-2.5">
                       {[
                         {
                           id: 'AUTHENTICATOR_PUSH',
@@ -332,11 +329,7 @@ export default function VerificationPage() {
                       ].map((m) => (
                         <label
                           key={m.id}
-                          className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            mechanism === m.id
-                              ? 'bg-indigo-950/40 border-indigo-500 text-slate-200'
-                              : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/60'
-                          }`}
+                          className="flex items-start gap-2.5 cursor-pointer hover:text-primaryText"
                         >
                           <input
                             type="radio"
@@ -344,11 +337,13 @@ export default function VerificationPage() {
                             value={m.id}
                             checked={mechanism === m.id}
                             onChange={(e) => setMechanism(e.target.value)}
-                            className="mt-1"
+                            className="mt-0.5 cursor-pointer text-primary"
                           />
                           <div>
-                            <div className="font-semibold text-slate-200 text-xs">{m.name}</div>
-                            <div className="text-[11px] text-slate-400 mt-0.5">{m.desc}</div>
+                            <div className={`text-xs ${mechanism === m.id ? 'font-semibold text-primaryText' : 'text-secondaryText'}`}>
+                              {m.name}
+                            </div>
+                            <div className="text-[11px] text-mutedText mt-0.5">{m.desc}</div>
                           </div>
                         </label>
                       ))}
@@ -358,14 +353,14 @@ export default function VerificationPage() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-2.5 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-indigo-600/20"
+                    className="btn-primary w-full py-2 text-xs font-medium mt-2 flex items-center justify-center gap-1.5"
                   >
                     {submitting ? (
                       <span>Dispatching Challenge...</span>
                     ) : (
                       <>
                         <Send className="w-3.5 h-3.5" />
-                        <span>DISPATCH STEP-UP CHALLENGE</span>
+                        <span>Dispatch Step-Up Challenge</span>
                       </>
                     )}
                   </button>

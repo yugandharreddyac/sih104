@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { SecurityStatusBadge } from './SecurityStatusBadge';
 import { ShieldAlert, ShieldCheck, AlertTriangle, Activity } from 'lucide-react';
 
 interface ThreatVerdictProps {
@@ -26,47 +25,47 @@ export const ThreatVerdict: React.FC<ThreatVerdictProps> = ({
   const isSuspicious = ['SUSPICIOUS', 'INCONCLUSIVE', 'PENDING', 'REVIEW_REQUIRED'].includes(norm);
   const isSafe = ['SAFE', 'AUTHENTIC', 'NOT_DETECTED'].includes(norm);
 
-  let borderStyle = 'border-slate-800 bg-[#0c1222]';
-  let titleColor = 'text-slate-100';
+  let borderStyle = 'border-border bg-surface';
+  let titleColor = 'text-primaryText';
 
   if (isHighRisk) {
-    borderStyle = 'border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-[#0c1222] to-[#0c1222]';
-    titleColor = 'text-rose-400';
+    borderStyle = 'border-red-500/40 bg-surface';
+    titleColor = 'text-danger';
   } else if (isSuspicious) {
-    borderStyle = 'border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-[#0c1222] to-[#0c1222]';
-    titleColor = 'text-amber-300';
+    borderStyle = 'border-amber-500/40 bg-surface';
+    titleColor = 'text-warning';
   } else if (isSafe) {
-    borderStyle = 'border-emerald-500/40 bg-gradient-to-r from-emerald-950/30 via-[#0c1222] to-[#0c1222]';
-    titleColor = 'text-emerald-400';
+    borderStyle = 'border-green-500/40 bg-surface';
+    titleColor = 'text-success';
   }
 
   return (
-    <div className={`p-5 rounded-xl border ${borderStyle} ${className}`}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+    <div className={`p-4 rounded border ${borderStyle} ${className}`}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+          <div className="p-2 rounded bg-surface-elevated border border-border">
             {isHighRisk ? (
-              <ShieldAlert className="w-5 h-5 text-rose-400" />
+              <ShieldAlert className="w-5 h-5 text-danger" />
             ) : isSuspicious ? (
-              <AlertTriangle className="w-5 h-5 text-amber-300" />
+              <AlertTriangle className="w-5 h-5 text-warning" />
             ) : isSafe ? (
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <ShieldCheck className="w-5 h-5 text-success" />
             ) : (
-              <Activity className="w-5 h-5 text-cyan-400" />
+              <Activity className="w-5 h-5 text-info" />
             )}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider font-sans">
+              <span className="text-xs text-mutedText font-sans">
                 Voice Security Verdict
               </span>
               {callerIdentifier && (
-                <span className="text-xs font-mono text-cyan-400 font-semibold px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20">
+                <span className="text-xs font-mono text-primary font-medium px-1.5 py-0.2 rounded bg-surface-elevated border border-border">
                   {callerIdentifier}
                 </span>
               )}
             </div>
-            <h3 className={`text-base font-bold font-sans mt-0.5 ${titleColor}`}>
+            <h3 className={`text-sm font-semibold font-sans mt-0.5 ${titleColor}`}>
               {norm.replace(/_/g, ' ')}
             </h3>
           </div>
@@ -74,25 +73,25 @@ export const ThreatVerdict: React.FC<ThreatVerdictProps> = ({
 
         <div className="flex items-center gap-3">
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Threat Score</div>
+            <div className="text-[11px] text-mutedText font-sans">Threat Score</div>
             {typeof riskScore === 'number' && Number.isFinite(riskScore) ? (
-              <div className={`text-xl font-bold font-mono ${isHighRisk ? 'text-rose-400' : isSuspicious ? 'text-amber-300' : 'text-emerald-400'}`}>
+              <div className={`text-xl font-semibold font-mono ${isHighRisk ? 'text-danger' : isSuspicious ? 'text-warning' : 'text-success'}`}>
                 {Math.round(riskScore > 1 ? riskScore : riskScore * 100)}%
               </div>
             ) : (
-              <div className="text-sm font-bold font-mono text-slate-500">
+              <div className="text-sm font-medium font-mono text-mutedText">
                 —
               </div>
             )}
           </div>
-          <div className="text-right pl-3 border-l border-slate-800">
-            <div className="text-[10px] uppercase tracking-wider font-mono text-slate-500">Confidence</div>
+          <div className="text-right pl-3 border-l border-border">
+            <div className="text-[11px] text-mutedText font-sans">Confidence</div>
             {typeof confidence === 'number' && Number.isFinite(confidence) ? (
-              <div className="text-sm font-semibold font-mono text-slate-300">
+              <div className="text-sm font-semibold font-mono text-secondaryText">
                 {Math.round(confidence > 1 ? confidence : confidence * 100)}%
               </div>
             ) : (
-              <div className="text-sm font-bold font-mono text-slate-500">
+              <div className="text-sm font-medium font-mono text-mutedText">
                 —
               </div>
             )}
@@ -101,7 +100,7 @@ export const ThreatVerdict: React.FC<ThreatVerdictProps> = ({
       </div>
 
       {summary && (
-        <p className="text-xs text-slate-300 mt-3 leading-relaxed font-sans">
+        <p className="text-xs text-secondaryText mt-2.5 leading-relaxed font-sans">
           {summary}
         </p>
       )}

@@ -25,48 +25,48 @@ export const RiskScoreGauge: React.FC<RiskScoreGaugeProps> = ({
   const isElevated = isAvailable && normalizedScore >= 0.4 && normalizedScore < 0.7;
   const isSafe = isAvailable && normalizedScore < 0.4;
 
-  let colorClass = 'text-slate-500';
-  let barBg = 'bg-slate-700';
+  let colorClass = 'text-mutedText';
+  let barBg = 'bg-border';
 
   if (isCritical) {
-    colorClass = 'text-rose-400';
-    barBg = 'bg-rose-500';
+    colorClass = 'text-danger';
+    barBg = 'bg-danger';
   } else if (isElevated) {
-    colorClass = 'text-amber-300';
-    barBg = 'bg-amber-400';
+    colorClass = 'text-warning';
+    barBg = 'bg-warning';
   } else if (isSafe) {
-    colorClass = 'text-emerald-400';
-    barBg = 'bg-emerald-400';
+    colorClass = 'text-success';
+    barBg = 'bg-success';
   }
 
   const heightClasses = {
     sm: 'h-1.5',
-    md: 'h-2.5',
-    lg: 'h-3.5',
+    md: 'h-2',
+    lg: 'h-2.5',
   };
 
   const textSizes = {
-    sm: 'text-sm',
-    md: 'text-lg',
-    lg: 'text-2xl',
+    sm: 'text-xs',
+    md: 'text-base',
+    lg: 'text-xl',
   };
 
   return (
     <div className={`space-y-1.5 ${className}`}>
       <div className="flex items-center justify-between text-xs">
         {showLabel && (
-          <span className="font-sans font-medium text-slate-400 uppercase tracking-wider text-[11px]">
+          <span className="font-sans font-medium text-secondaryText text-xs">
             {label}
           </span>
         )}
-        <span className={`font-mono font-bold ${textSizes[size]} ${colorClass}`}>
+        <span className={`font-mono font-semibold ${textSizes[size]} ${colorClass}`}>
           {isAvailable ? `${percentage}%` : '—'}
         </span>
       </div>
 
-      <div className={`w-full rounded-full bg-slate-800/80 overflow-hidden ${heightClasses[size]}`}>
+      <div className={`w-full rounded bg-surface-elevated overflow-hidden ${heightClasses[size]}`}>
         <div
-          className={`h-full transition-all duration-500 rounded-full ${barBg}`}
+          className={`h-full transition-all duration-300 rounded ${barBg}`}
           style={{ width: isAvailable ? `${percentage}%` : '0%' }}
         />
       </div>

@@ -3,23 +3,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SecurityStatusBadge } from '@/components/ui/SecurityStatusBadge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import {
-  ScrollText,
-  ShieldCheck,
-  RefreshCw,
   Search,
-  Filter,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  User,
-  Hash,
+  RefreshCw,
   ChevronDown,
   ChevronUp,
-  Lock,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 import { formatSafeDateTime } from '@/lib/format';
@@ -56,143 +46,182 @@ export default function AuditPage() {
   });
 
   return (
-    <div className="flex min-h-screen bg-[#05070d]">
+    <div className="flex min-h-screen bg-background text-primaryText">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
-          title="Immutable Security Audit Logs"
-          subtitle="Tamper-Evident Evidence Trail with Zero Secret Retention"
+          title="Security Audit Logs"
+          subtitle="Tamper-evident cryptographic audit trail and analyst action log"
         />
 
-        <main className="flex-1 p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
-          {/* Top Compliance & Integrity Banner */}
-          <div className="p-4 rounded-xl bg-[#0c1222] border border-slate-800 flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 mt-0.5 shrink-0">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <div className="space-y-0.5">
-              <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono flex items-center gap-2">
-                <span>Cryptographic Audit Trail</span>
-                <span className="text-[10px] px-2 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  Compliance Ready
-                </span>
-              </h3>
-              <p className="text-xs text-slate-300 font-sans leading-relaxed">
-                All voice intelligence actions, policy decisions, step-up challenges, and analyst containment orders are cryptographically logged with correlation IDs. Raw biometric recordings and plaintext secrets are permanently scrubbed by the Privacy Firewall.
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto font-sans">
+          {/* Header & Controls Toolbar */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-border">
+            <div>
+              <h2 className="text-sm font-semibold text-primaryText">
+                Cryptographic Audit Trail
+              </h2>
+              <p className="text-xs text-mutedText mt-0.5">
+                All voice intelligence actions, policy decisions, step-up challenges, and analyst orders.
               </p>
             </div>
-          </div>
 
-          <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-4">
-            <SectionHeader
-              title="Audit Trail Records"
-              subtitle="Chronological sequence of security operations events"
-              icon={ScrollText}
-              count={filteredLogs.length}
-              onRefresh={fetchLogs}
-              loading={loading}
-            />
-
-            {/* Search and Filters */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 rounded-lg bg-slate-900/60 border border-slate-800/80">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            <div className="flex items-center gap-3">
+              <div className="relative w-64">
+                <Search className="w-3.5 h-3.5 text-mutedText absolute left-2.5 top-2" />
                 <input
                   type="text"
-                  placeholder="Filter by action, actor, resource..."
+                  placeholder="Filter action, actor, CID..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 font-sans focus:outline-none focus:border-indigo-500"
+                  className="input-enterprise pl-8 text-xs py-1 h-8 w-full"
+                  aria-label="Filter audit logs"
                 />
               </div>
 
-              <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end">
-                {['ALL', 'SUCCESS', 'ERROR'].map((res) => (
+              <div className="flex items-center border border-border rounded overflow-hidden" role="group" aria-label="Filter by result">
+                {(['ALL', 'SUCCESS', 'ERROR'] as const).map((res) => (
                   <button
                     key={res}
-                    onClick={() => setFilterResult(res as any)}
-                    className={`px-3 py-1 rounded text-[11px] font-mono font-semibold transition-colors ${
+                    type="button"
+                    onClick={() => setFilterResult(res)}
+                    className={`px-2.5 py-1 text-[11px] font-mono transition-colors ${
                       filterResult === res
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-slate-800/80 text-slate-400 hover:text-slate-200'
+                        ? 'bg-primary text-white font-semibold'
+                        : 'bg-surface text-secondaryText hover:text-primaryText hover:bg-surface-hover'
                     }`}
                   >
                     {res}
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Audit Log Entries List */}
-            <div className="space-y-2">
-              {filteredLogs.length === 0 && !loading ? (
-                <EmptyState
-                  title="Zero Audit Log Entries Recorded"
-                  description="All security-critical actions and policy decisions will be cryptographically recorded here."
-                />
-              ) : (
-                filteredLogs.map((log) => {
-                  const isExpanded = expandedLogId === log.id;
-                  const isSuccess = log.result === 'SUCCESS';
-
-                  return (
-                    <div
-                      key={log.id}
-                      className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/80 font-mono text-xs space-y-2 hover:border-slate-700 transition-colors"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5 flex-wrap">
-                          <span
-                            className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
-                              isSuccess
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                            }`}
-                          >
-                            {log.result}
-                          </span>
-                          <span className="font-bold text-white font-sans">{log.action}</span>
-                          <span className="text-slate-500 text-[11px]">[{log.resourceType}]</span>
-                        </div>
-                        <span className="text-slate-400 text-[11px] font-mono">
-                          {formatSafeDateTime(log.timestamp)}
-                        </span>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-400 gap-2 pt-1 border-t border-slate-800/60">
-                        <span className="flex items-center gap-1.5 font-sans">
-                          <User className="w-3 h-3 text-slate-500" />
-                          <span>Actor: <strong className="text-slate-300 font-mono">{log.actorUserId || 'SYSTEM_DAEMON'}</strong></span>
-                        </span>
-                        <span className="flex items-center gap-1.5 font-mono text-slate-500">
-                          <Hash className="w-3 h-3 text-slate-600" />
-                          <span>CID: {log.correlationId ? `${log.correlationId.slice(0, 16)}...` : 'N/A'}</span>
-                        </span>
-
-                        {log.metadata && Object.keys(log.metadata).length > 0 && (
-                          <button
-                            onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
-                            className="text-[11px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 ml-auto"
-                          >
-                            <span>{isExpanded ? 'Hide Metadata' : 'Inspect Evidence'}</span>
-                            {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                          </button>
-                        )}
-                      </div>
-
-                      {isExpanded && log.metadata && (
-                        <div className="mt-2 p-3 rounded-lg bg-slate-950/90 border border-slate-800 text-[10px] text-slate-300 overflow-x-auto">
-                          <pre className="whitespace-pre-wrap font-mono">
-                            {JSON.stringify(log.metadata, null, 2)}
-                          </pre>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
+              <button
+                type="button"
+                onClick={fetchLogs}
+                disabled={loading}
+                className="text-xs text-secondaryText hover:text-primaryText flex items-center gap-1 px-2 py-1"
+                title="Refresh audit records"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : ''}`} />
+                <span>Refresh</span>
+              </button>
             </div>
           </div>
+
+          {/* Audit Records Table */}
+          {loading && logs.length === 0 ? (
+            <div className="pt-8">
+              <LoadingState
+                label="Retrieving Immutable Audit Trail..."
+                description="Querying cryptographic event logs, correlation hashes, and actor signatures."
+              />
+            </div>
+          ) : filteredLogs.length === 0 ? (
+            <div className="pt-8">
+              <EmptyState
+                title="Zero Audit Log Entries Recorded"
+                description="All security-critical actions and policy decisions will be cryptographically recorded here."
+                actionLabel="Refresh Logs"
+                onAction={fetchLogs}
+              />
+            </div>
+          ) : (
+            <div className="pt-2">
+              <div className="flex items-center justify-between py-2 border-b border-border text-xs text-mutedText">
+                <span className="font-semibold uppercase tracking-wider text-[11px] text-secondaryText">
+                  Event Sequence ({filteredLogs.length} records)
+                </span>
+                <span className="font-mono text-[11px]">
+                  Zero-Knowledge Retention Active
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-mutedText font-medium text-[11px] uppercase tracking-wider">
+                      <th className="py-2.5 pr-4">Timestamp</th>
+                      <th className="py-2.5 px-3">Result</th>
+                      <th className="py-2.5 px-4">Action & Resource</th>
+                      <th className="py-2.5 px-4">Actor</th>
+                      <th className="py-2.5 px-4">Correlation ID</th>
+                      <th className="py-2.5 pl-3 text-right">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40 font-mono text-[11px]">
+                    {filteredLogs.map((log) => {
+                      const isExpanded = expandedLogId === log.id;
+                      const isSuccess = log.result === 'SUCCESS';
+                      const hasMeta = log.metadata && Object.keys(log.metadata).length > 0;
+
+                      return (
+                        <React.Fragment key={log.id}>
+                          <tr className="hover:bg-surface-hover/30 transition-colors">
+                            <td className="py-3 pr-4 text-mutedText whitespace-nowrap">
+                              {formatSafeDateTime(log.timestamp)}
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1.5 font-sans">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isSuccess ? 'bg-success' : 'bg-danger'
+                                  }`}
+                                />
+                                <span className={isSuccess ? 'text-success' : 'text-danger'}>
+                                  {log.result}
+                                </span>
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-sans font-medium text-primaryText">
+                                {log.action}
+                              </div>
+                              <div className="text-mutedText text-[10px]">
+                                {log.resourceType}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-primaryText whitespace-nowrap">
+                              {log.actorUserId || 'SYSTEM_DAEMON'}
+                            </td>
+                            <td className="py-3 px-4 text-mutedText whitespace-nowrap">
+                              {log.correlationId ? log.correlationId.slice(0, 16) : '—'}
+                            </td>
+                            <td className="py-3 pl-3 text-right whitespace-nowrap">
+                              {hasMeta ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                                  className="text-primary hover:text-primary-hover inline-flex items-center gap-1 text-[11px]"
+                                >
+                                  <span>{isExpanded ? 'Hide' : 'Inspect'}</span>
+                                  {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                </button>
+                              ) : (
+                                <span className="text-mutedText">—</span>
+                              )}
+                            </td>
+                          </tr>
+                          {isExpanded && hasMeta && (
+                            <tr className="bg-surface-elevated/40">
+                              <td colSpan={6} className="p-3 pl-8">
+                                <div className="text-[10px] uppercase font-semibold text-mutedText mb-1">
+                                  Corroborated Event Metadata
+                                </div>
+                                <pre className="p-2.5 rounded bg-surface border border-border text-[11px] text-secondaryText overflow-x-auto whitespace-pre-wrap font-mono">
+                                  {JSON.stringify(log.metadata, null, 2)}
+                                </pre>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     </div>

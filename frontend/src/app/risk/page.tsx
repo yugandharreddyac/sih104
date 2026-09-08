@@ -1,45 +1,26 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SecurityStatusBadge } from '@/components/ui/SecurityStatusBadge';
-import { ThreatVerdict } from '@/components/ui/ThreatVerdict';
-import { RiskScoreGauge } from '@/components/ui/RiskScoreGauge';
-import { EvidenceList } from '@/components/ui/EvidenceList';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { RiskTensorCard } from '@/components/ui/RiskTensorCard';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { DetectionSignalsTable } from '@/components/ui/DetectionSignalsTable';
 import {
   BarChart3,
-  ShieldAlert,
-  ShieldCheck,
-  Layers,
-  Activity,
-  TrendingUp,
   RefreshCw,
-  AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  ArrowRight,
-  Lock,
   Cpu,
   UserCheck,
   Repeat,
   MessageSquare,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
-import { formatSafeTime } from '@/lib/format';
 
 export default function RiskPage() {
   const [calls, setCalls] = useState<any[]>([]);
   const [selectedCallId, setSelectedCallId] = useState<string>('');
   const [assessment, setAssessment] = useState<any | null>(null);
-  const [timeline, setTimeline] = useState<any[]>([]);
-  const [evidence, setEvidence] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showFullTensor, setShowFullTensor] = useState(false);
 
   const fetchCalls = useCallback(async () => {
     setLoading(true);
@@ -64,23 +45,13 @@ export default function RiskPage() {
   const fetchRiskData = useCallback(async (callId: string) => {
     if (!callId) return;
     setLoading(true);
-    const [riskRes, timelineRes, evidenceRes] = await Promise.all([
-      ApiClient.get(`/risk/${callId}`),
-      ApiClient.get(`/risk/${callId}/timeline`),
-      ApiClient.get(`/risk/${callId}/evidence`),
-    ]);
+    const riskRes = await ApiClient.get(`/risk/${callId}`);
     setLoading(false);
 
     if (riskRes.success && riskRes.data) {
       setAssessment(riskRes.data);
     } else {
       setAssessment(null);
-    }
-    if (timelineRes.success && timelineRes.data) {
-      setTimeline(timelineRes.data);
-    }
-    if (evidenceRes.success && evidenceRes.data) {
-      setEvidence(evidenceRes.data);
     }
   }, []);
 
@@ -116,38 +87,40 @@ export default function RiskPage() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#05070d]">
+    <div className="flex min-h-screen bg-background text-primaryText">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
-          title="Explainable Multi-Modal Threat Matrix"
-          subtitle="Unified 10-Dimensional Risk Tensor & Cross-Modal Corroboration"
+          title="Threat Assessment Matrix"
+          subtitle="Multi-modal threat decomposition across acoustic, biometric, and conversational signals"
         />
 
-        <main className="flex-1 p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
-          {/* Call Selection Bar */}
-          <div className="p-4 rounded-xl bg-[#0c1222] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                <BarChart3 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+        <main className="flex-1 p-4 sm:p-6 space-y-6 overflow-y-auto max-w-5xl w-full mx-auto">
+          {/* Target Call Selection (Unboxed) */}
+          <section aria-label="Session Selection" className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-border">
+            <div>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-primary" />
+                <h2 className="text-xs font-semibold text-primaryText uppercase tracking-wider font-sans">
                   Target Call Assessment
-                </h3>
-                <p className="text-[11px] text-slate-400 font-sans">
-                  Select an active voice session to inspect multi-modal risk scoring.
-                </p>
+                </h2>
               </div>
+              <p className="text-xs text-mutedText font-sans mt-0.5">
+                Select an active voice session to inspect multi-modal risk scoring and forensic decomposition.
+              </p>
             </div>
 
-            {calls.length > 0 && (
+            {calls.length > 0 ? (
               <div className="flex items-center gap-2">
-                <label className="text-xs font-mono text-slate-400 shrink-0">Call Session:</label>
+                <label htmlFor="risk-call-select" className="text-xs text-mutedText shrink-0 font-medium font-sans">
+                  Session:
+                </label>
                 <select
+                  id="risk-call-select"
                   value={selectedCallId}
                   onChange={(e) => setSelectedCallId(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-xs rounded-lg px-3 py-1.5 text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
+                  className="select-enterprise text-xs font-mono max-w-xs"
+                  aria-label="Select call session for risk analysis"
                 >
                   {calls.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -155,204 +128,271 @@ export default function RiskPage() {
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => selectedCallId && fetchRiskData(selectedCallId)}
+                  disabled={loading}
+                  className="btn-secondary text-xs px-2.5 py-1.5 shrink-0"
+                  aria-label="Refresh risk data"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : ''}`} />
+                  <span className="hidden sm:inline">Refresh</span>
+                </button>
               </div>
-            )}
-          </div>
+            ) : null}
+          </section>
 
-          {calls.length === 0 && !loading ? (
+          {loading && calls.length === 0 ? (
+            <LoadingState
+              label="Aggregating Threat Telemetry..."
+              description="Connecting to Bayesian multi-modal risk engine and retrieving live session data."
+            />
+          ) : calls.length === 0 ? (
             <EmptyState
               title="No Call Sessions Available"
-              description="Initiate a live stream from the Live Calls console to view explainable threat risk metrics."
+              description="There are currently no active voice sessions requiring risk evaluation. Initiate a session from Live Calls."
               actionLabel="Go to Live Calls"
               onAction={() => (window.location.href = '/calls')}
             />
           ) : (
             <div className="space-y-6">
-              {/* Level 1 & 2: Primary Threat Assessment Verdict Card */}
-              <ThreatVerdict
-                verdict={riskLevel}
-                riskScore={normalizedOverall}
-                confidence={typeof assessment?.confidence === 'number' ? assessment.confidence : null}
-                callerIdentifier={calls.find((c) => c.id === selectedCallId)?.callerIdentifier}
-                summary={
-                  isEvaluated
-                    ? `Unified threat tensor synthesized across acoustic deepfake detection, speaker biometrics, and multi-turn conversational intent analysis.`
-                    : `Telemetry pending live stream evaluation or multi-modal analysis.`
-                }
-              />
-
-              {/* Primary Risk Drivers Overview (Level 3 - Why is it a threat?) */}
-              <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-                  <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-cyan-400" />
-                    <span>Primary Risk Drivers</span>
-                  </h3>
-                  <span className="text-[10px] font-mono text-slate-500">
-                    Weighted Bayesian Fusion
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-3.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                        <Cpu className="w-4 h-4 text-rose-400" />
-                        <span>Acoustic Deepfake</span>
-                      </div>
-                      <SecurityStatusBadge status={getDimensionStatus(dimensions.deepfake_synthetic)} size="xs" showIcon={false} />
+              {/* VOICE SECURITY VERDICT (Clean Section) */}
+              <section aria-label="Voice Security Verdict" className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs uppercase font-semibold text-mutedText font-sans tracking-wider">
+                        Voice Security Verdict
+                      </span>
+                      <span className="font-mono text-xs text-secondaryText">
+                        • {calls.find((c) => c.id === selectedCallId)?.callerIdentifier}
+                      </span>
                     </div>
-                    <RiskScoreGauge
-                      score={dimensions.deepfake_synthetic}
-                      size="sm"
-                      label="Vocoder Spoof"
-                    />
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`text-base font-bold font-sans tracking-tight ${
+                          riskLevel === 'CRITICAL'
+                            ? 'text-danger'
+                            : riskLevel === 'HIGH'
+                            ? 'text-warning'
+                            : riskLevel === 'ELEVATED'
+                            ? 'text-warning'
+                            : 'text-success'
+                        }`}
+                      >
+                        {riskLevel}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="p-3.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                        <UserCheck className="w-4 h-4 text-amber-300" />
-                        <span>Identity Impersonation</span>
-                      </div>
-                      <SecurityStatusBadge status={getDimensionStatus(dimensions.identity_impersonation)} size="xs" showIcon={false} />
-                    </div>
-                    <RiskScoreGauge
-                      score={dimensions.identity_impersonation}
-                      size="sm"
-                      label="Biometric Variance"
-                    />
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                        <Repeat className="w-4 h-4 text-cyan-400" />
-                        <span>Replay / Injection</span>
-                      </div>
-                      <SecurityStatusBadge status={getDimensionStatus(dimensions.replay_injection)} size="xs" showIcon={false} />
-                    </div>
-                    <RiskScoreGauge
-                      score={dimensions.replay_injection}
-                      size="sm"
-                      label="Spectral Cutoff"
-                    />
-                  </div>
-
-                  <div className="p-3.5 rounded-lg bg-slate-900/80 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-slate-200">
-                        <MessageSquare className="w-4 h-4 text-rose-400" />
-                        <span>Social Engineering</span>
-                      </div>
-                      <SecurityStatusBadge status={getDimensionStatus(dimensions.social_engineering)} size="xs" showIcon={false} />
-                    </div>
-                    <RiskScoreGauge
-                      score={dimensions.social_engineering}
-                      size="sm"
-                      label="Intent Urgency"
-                    />
-                  </div>
-                </div>
-
-                {/* Plain Language "Why This Score?" Synthesis */}
-                <div className="p-4 rounded-lg bg-slate-900/60 border border-slate-800/80 space-y-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
-                    Plain-Language Assessment Synthesis
-                  </span>
-                  {primaryDrivers && primaryDrivers.length > 0 ? (
-                    <ul className="space-y-1.5 text-xs text-slate-300 font-sans leading-relaxed">
-                      {primaryDrivers.map((driver: string, idx: number) => (
-                        <li key={idx} className="flex items-start gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
-                          <span>{driver}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">
-                      {isEvaluated
-                        ? 'All acoustic and conversational security metrics are within normal baseline tolerances.'
-                        : 'Awaiting sufficient multi-modal audio telemetry to generate plain-language diagnostic synthesis.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Expandable 10-Dimensional Threat Tensor */}
-              <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded bg-slate-900 border border-slate-800 text-indigo-400">
-                      <Layers className="w-4 h-4" />
+                  <div className="flex items-center gap-6 font-mono text-xs">
+                    <div>
+                      <span className="text-[11px] text-mutedText block font-sans">Threat Score</span>
+                      <span className="text-base font-semibold text-primaryText">
+                        {isEvaluated ? `${Math.round(normalizedOverall! * 100)}%` : '—'}
+                      </span>
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-                        Full 10-Dimensional Threat Tensor Decomposition
-                      </h3>
-                      <p className="text-[11px] text-slate-400 font-sans">
-                        Multi-layer neural, biometric, and conversational risk vector evaluation
-                      </p>
+                      <span className="text-[11px] text-mutedText block font-sans">Confidence</span>
+                      <span className="text-base font-semibold text-primaryText">
+                        {typeof assessment?.confidence === 'number'
+                          ? `${Math.round(assessment.confidence > 1 ? assessment.confidence : assessment.confidence * 100)}%`
+                          : '—'}
+                      </span>
                     </div>
-                  </div>
-                  <div className="text-[10px] font-mono text-slate-400 bg-slate-900/90 px-2.5 py-1 rounded border border-slate-800">
-                    Scores: 0–100 Operational Risk (Not a probability of guilt)
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  <RiskTensorCard
-                    name="1. Credential Theft"
-                    score={dimensions.credential_theft}
-                    description="High Weight"
-                  />
-                  <RiskTensorCard
-                    name="2. Social Engineering"
-                    score={dimensions.social_engineering}
-                    description="High Weight"
-                  />
-                  <RiskTensorCard
-                    name="3. Financial Fraud"
-                    score={dimensions.financial_fraud}
-                    description="Critical Weight"
-                  />
-                  <RiskTensorCard
-                    name="4. Account Takeover"
-                    score={dimensions.account_takeover}
-                    description="Critical Weight"
-                  />
-                  <RiskTensorCard
-                    name="5. Verification Bypass"
-                    score={dimensions.verification_bypass}
-                    description="Elevated"
-                  />
-                  <RiskTensorCard
-                    name="6. Identity Impersonation"
-                    score={dimensions.identity_impersonation}
-                    description="Biometric"
-                  />
-                  <RiskTensorCard
-                    name="7. Deepfake / Synthetic"
-                    score={dimensions.deepfake_synthetic}
-                    description="Acoustic"
-                  />
-                  <RiskTensorCard
-                    name="8. Replay / Injection"
-                    score={dimensions.replay_injection}
-                    description="Spectral"
-                  />
-                  <RiskTensorCard
-                    name="9. Signal Inconsistency"
-                    score={dimensions.inconsistency}
-                    description="Cross-Modal"
-                  />
-                  <RiskTensorCard
-                    name="10. Overall Composite"
-                    score={dimensions.overall ?? (isEvaluated ? rawScore : null)}
-                    description="Bayesian Fusion"
-                  />
+                <p className="text-xs text-secondaryText font-sans leading-relaxed">
+                  {isEvaluated
+                    ? `Multi-modal threat score evaluated across acoustic deepfake detection, speaker biometrics, and conversational intent analysis.`
+                    : `Telemetry pending live stream evaluation or multi-modal analysis.`}
+                </p>
+              </section>
+
+              <hr className="border-border" />
+
+              {/* PRIMARY RISK FACTORS (Table Layout) */}
+              <section aria-label="Primary Risk Factors" className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-semibold text-primaryText uppercase tracking-wider font-sans">
+                      Primary Risk Factors
+                    </h3>
+                    <p className="text-xs text-mutedText font-sans mt-0.5">
+                      Multi-modal indicators contributing to the current assessment
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-sans text-mutedText">
+                    Range: 0–100%
+                  </span>
                 </div>
-              </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs font-sans">
+                    <thead>
+                      <tr className="border-b border-border text-[11px] text-mutedText font-medium">
+                        <th className="py-2 pr-4 font-medium">Factor</th>
+                        <th className="py-2 px-4 font-medium">Signal Status</th>
+                        <th className="py-2 pl-4 font-medium text-right w-24">Score</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40 font-sans">
+                      <tr className="hover:bg-surface-hover/30 transition-colors">
+                        <td className="py-2.5 pr-4">
+                          <div className="flex items-center gap-2">
+                            <Cpu className="w-3.5 h-3.5 text-secondaryText" />
+                            <span className="font-medium text-primaryText">Acoustic Deepfake</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                getDimensionStatus(dimensions.deepfake_synthetic) === 'HIGH_RISK'
+                                  ? 'bg-danger'
+                                  : getDimensionStatus(dimensions.deepfake_synthetic) === 'SUSPICIOUS'
+                                  ? 'bg-warning'
+                                  : 'bg-success'
+                              }`}
+                            />
+                            <span className="text-secondaryText capitalize">
+                              {getDimensionStatus(dimensions.deepfake_synthetic).toLowerCase().replace('_', ' ')}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-4 text-right font-mono font-medium text-primaryText">
+                          {typeof dimensions.deepfake_synthetic === 'number'
+                            ? `${Math.round(dimensions.deepfake_synthetic > 1 ? dimensions.deepfake_synthetic : dimensions.deepfake_synthetic * 100)}%`
+                            : '—'}
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-surface-hover/30 transition-colors">
+                        <td className="py-2.5 pr-4">
+                          <div className="flex items-center gap-2">
+                            <UserCheck className="w-3.5 h-3.5 text-secondaryText" />
+                            <span className="font-medium text-primaryText">Identity Impersonation</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                getDimensionStatus(dimensions.identity_impersonation) === 'HIGH_RISK'
+                                  ? 'bg-danger'
+                                  : getDimensionStatus(dimensions.identity_impersonation) === 'SUSPICIOUS'
+                                  ? 'bg-warning'
+                                  : 'bg-success'
+                              }`}
+                            />
+                            <span className="text-secondaryText capitalize">
+                              {getDimensionStatus(dimensions.identity_impersonation).toLowerCase().replace('_', ' ')}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-4 text-right font-mono font-medium text-primaryText">
+                          {typeof dimensions.identity_impersonation === 'number'
+                            ? `${Math.round(dimensions.identity_impersonation > 1 ? dimensions.identity_impersonation : dimensions.identity_impersonation * 100)}%`
+                            : '—'}
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-surface-hover/30 transition-colors">
+                        <td className="py-2.5 pr-4">
+                          <div className="flex items-center gap-2">
+                            <Repeat className="w-3.5 h-3.5 text-secondaryText" />
+                            <span className="font-medium text-primaryText">Replay / Injection</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                getDimensionStatus(dimensions.replay_injection) === 'HIGH_RISK'
+                                  ? 'bg-danger'
+                                  : getDimensionStatus(dimensions.replay_injection) === 'SUSPICIOUS'
+                                  ? 'bg-warning'
+                                  : 'bg-success'
+                              }`}
+                            />
+                            <span className="text-secondaryText capitalize">
+                              {getDimensionStatus(dimensions.replay_injection).toLowerCase().replace('_', ' ')}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-4 text-right font-mono font-medium text-primaryText">
+                          {typeof dimensions.replay_injection === 'number'
+                            ? `${Math.round(dimensions.replay_injection > 1 ? dimensions.replay_injection : dimensions.replay_injection * 100)}%`
+                            : '—'}
+                        </td>
+                      </tr>
+
+                      <tr className="hover:bg-surface-hover/30 transition-colors">
+                        <td className="py-2.5 pr-4">
+                          <div className="flex items-center gap-2">
+                            <MessageSquare className="w-3.5 h-3.5 text-secondaryText" />
+                            <span className="font-medium text-primaryText">Social Engineering</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-4">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                getDimensionStatus(dimensions.social_engineering) === 'HIGH_RISK'
+                                  ? 'bg-danger'
+                                  : getDimensionStatus(dimensions.social_engineering) === 'SUSPICIOUS'
+                                  ? 'bg-warning'
+                                  : 'bg-success'
+                              }`}
+                            />
+                            <span className="text-secondaryText capitalize">
+                              {getDimensionStatus(dimensions.social_engineering).toLowerCase().replace('_', ' ')}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="py-2.5 pl-4 text-right font-mono font-medium text-primaryText">
+                          {typeof dimensions.social_engineering === 'number'
+                            ? `${Math.round(dimensions.social_engineering > 1 ? dimensions.social_engineering : dimensions.social_engineering * 100)}%`
+                            : '—'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <hr className="border-border" />
+
+              {/* ASSESSMENT SYNTHESIS (Clean List Layout) */}
+              <section aria-label="Assessment Synthesis" className="space-y-2.5">
+                <h3 className="text-xs font-semibold text-primaryText uppercase tracking-wider font-sans">
+                  Assessment Synthesis
+                </h3>
+                {primaryDrivers && primaryDrivers.length > 0 ? (
+                  <ul className="space-y-2 text-xs text-secondaryText leading-relaxed font-sans">
+                    {primaryDrivers.map((driver: string, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                        <span className="text-primaryText font-sans">{driver}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-mutedText italic font-sans">
+                    {isEvaluated
+                      ? 'All acoustic and conversational security metrics are within normal baseline tolerances.'
+                      : 'Awaiting sufficient multi-modal audio telemetry to generate plain-language diagnostic synthesis.'}
+                  </p>
+                )}
+              </section>
+
+              <hr className="border-border" />
+
+              {/* DETECTION SIGNALS TABLE (UNBOXED) */}
+              <section aria-label="Detection Signals Table" className="space-y-2.5">
+                <DetectionSignalsTable unboxed={true} dimensions={dimensions} />
+              </section>
             </div>
           )}
         </main>

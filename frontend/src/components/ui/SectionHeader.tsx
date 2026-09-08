@@ -27,31 +27,31 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
   className = '',
 }) => {
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800 ${className}`}>
+    <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border ${className}`}>
       <div className="flex items-center gap-2.5">
         {Icon && (
-          <div className="p-1.5 rounded-lg bg-slate-800/80 text-cyan-400 border border-slate-700/60 shrink-0">
+          <div className="p-1.5 rounded bg-surface-elevated text-secondaryText border border-border shrink-0">
             <Icon className="w-4 h-4" />
           </div>
         )}
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-100 font-sans tracking-wide">
+            <h2 className="text-sm font-semibold text-primaryText font-sans">
               {title}
             </h2>
             {typeof count === 'number' && (
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+              <span className="text-[11px] font-mono font-medium px-1.5 py-0.2 rounded bg-surface-elevated text-secondaryText border border-border">
                 {count}
               </span>
             )}
             {badgeText && (
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-semibold">
+              <span className="badge-primary text-[11px] font-sans">
                 {badgeText}
               </span>
             )}
           </div>
           {subtitle && (
-            <p className="text-xs text-slate-400 font-sans mt-0.5">{subtitle}</p>
+            <p className="text-xs text-mutedText font-sans mt-0.5">{subtitle}</p>
           )}
         </div>
       </div>
@@ -62,9 +62,9 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
           <button
             onClick={onRefresh}
             title="Refresh Data"
-            className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors"
+            className="p-1.5 rounded bg-surface border border-border text-mutedText hover:text-primaryText hover:border-border-hover transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : ''}`} />
           </button>
         )}
       </div>

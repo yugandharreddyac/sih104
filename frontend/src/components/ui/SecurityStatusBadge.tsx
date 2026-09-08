@@ -2,58 +2,40 @@
 
 import React from 'react';
 import {
-  CheckCircle2,
+  ShieldCheck,
   AlertTriangle,
   ShieldAlert,
-  ShieldCheck,
-  Clock,
   HelpCircle,
-  XCircle,
-  Radio,
-  Lock,
-  Ban,
   Activity,
+  CheckCircle2,
 } from 'lucide-react';
 
 export type SecurityStatus =
+  | 'ACTIVE'
+  | 'VERIFYING'
+  | 'WARNING'
+  | 'CRITICAL'
+  | 'COMPLETED'
   | 'SAFE'
   | 'AUTHENTIC'
   | 'NOT_DETECTED'
-  | 'NOT_REPLAY'
   | 'MATCH'
   | 'HEALTHY'
-  | 'ACTIVE'
   | 'ONLINE'
   | 'APPROVED'
   | 'VERIFIED'
   | 'READY'
   | 'STANDBY'
-  | 'LISTENING'
-  | 'ANALYZING'
-  | 'PROCESSING'
   | 'EVALUATING'
   | 'PENDING'
-  | 'INVESTIGATING'
-  | 'REVIEW_REQUIRED'
   | 'INCONCLUSIVE'
-  | 'INSUFFICIENT_AUDIO'
   | 'DEGRADED'
-  | 'FALLBACK'
-  | 'SUSPICIOUS'
   | 'DETECTED'
-  | 'SPOOF'
   | 'MISMATCH'
   | 'HIGH_RISK'
-  | 'CRITICAL'
-  | 'THREAT_DETECTED'
-  | 'CONTAINED'
   | 'BLOCKED'
-  | 'REJECTED'
-  | 'FAILED'
-  | 'EXPIRED'
   | 'OFFLINE'
   | 'UNAVAILABLE'
-  | 'NOT_AVAILABLE'
   | 'ERROR';
 
 interface SecurityStatusBadgeProps {
@@ -71,22 +53,25 @@ export const SecurityStatusBadge: React.FC<SecurityStatusBadgeProps> = ({
 }) => {
   const norm = (status || 'UNKNOWN').toUpperCase().replace(/\s+/g, '_');
 
-  // Green / Safe / Healthy
+  // Green / Safe / Active / Completed / Healthy
   const isSafe = [
+    'ACTIVE',
     'SAFE',
     'AUTHENTIC',
     'NOT_DETECTED',
     'NOT_REPLAY',
     'MATCH',
     'HEALTHY',
-    'ACTIVE',
     'ONLINE',
     'APPROVED',
     'VERIFIED',
+    'COMPLETED',
+    'RESOLVED',
   ].includes(norm);
 
-  // Blue / Cyan / Info / Ready
+  // Blue / Sky / Info / Verifying / Ready
   const isInfo = [
+    'VERIFYING',
     'READY',
     'STANDBY',
     'LISTENING',
@@ -97,8 +82,9 @@ export const SecurityStatusBadge: React.FC<SecurityStatusBadgeProps> = ({
     'CONNECTED',
   ].includes(norm);
 
-  // Amber / Warning / Review
+  // Amber / Warning / Review / Degraded
   const isWarning = [
+    'WARNING',
     'PENDING',
     'INVESTIGATING',
     'REVIEW_REQUIRED',
@@ -107,16 +93,17 @@ export const SecurityStatusBadge: React.FC<SecurityStatusBadgeProps> = ({
     'DEGRADED',
     'FALLBACK',
     'SUSPICIOUS',
+    'UNENROLLED',
   ].includes(norm);
 
-  // Red / Critical / Threat / Blocked
+  // Red / Critical / Threat / Blocked / Error
   const isThreat = [
+    'CRITICAL',
     'DETECTED',
     'SPOOF',
     'MISMATCH',
     'HIGH_RISK',
     'HIGH',
-    'CRITICAL',
     'THREAT_DETECTED',
     'CONTAINED',
     'BLOCKED',
@@ -124,38 +111,82 @@ export const SecurityStatusBadge: React.FC<SecurityStatusBadgeProps> = ({
     'FAILED',
     'EXPIRED',
     'ERROR',
+    'OFFLINE',
+    'UNAVAILABLE',
   ].includes(norm);
 
-  let badgeColor = 'bg-slate-800/80 text-slate-400 border-slate-700';
+  let badgeColor = 'bg-surface-elevated text-secondaryText border-border';
+  let dotColor = 'bg-mutedText';
   let Icon = HelpCircle;
 
   if (isSafe) {
-    badgeColor = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25';
+    badgeColor = 'bg-success/10 text-success border-success/25';
+    dotColor = 'bg-success';
     Icon = ShieldCheck;
   } else if (isInfo) {
-    badgeColor = 'bg-cyan-500/10 text-cyan-400 border-cyan-500/25';
+    badgeColor = 'bg-primary/10 text-primary border-primary/25';
+    dotColor = 'bg-primary';
     Icon = Activity;
   } else if (isWarning) {
-    badgeColor = 'bg-amber-500/10 text-amber-300 border-amber-500/25';
+    badgeColor = 'bg-warning/10 text-warning border-warning/25';
+    dotColor = 'bg-warning';
     Icon = AlertTriangle;
   } else if (isThreat) {
-    badgeColor = 'bg-rose-500/10 text-rose-400 border-rose-500/25';
+    badgeColor = 'bg-danger/10 text-danger border-danger/25';
+    dotColor = 'bg-danger';
     Icon = ShieldAlert;
   }
 
   const sizeClasses = {
     xs: 'text-[10px] px-1.5 py-0.5 gap-1',
-    sm: 'text-xs px-2.5 py-1 gap-1.5',
-    md: 'text-sm px-3 py-1.5 gap-2 font-semibold',
+    sm: 'text-xs px-2 py-0.5 gap-1.5',
+    md: 'text-xs px-2.5 py-1 gap-1.5 font-medium',
   };
 
-  const displayText = norm.replace(/_/g, ' ');
+  // Standardized natural case text representation
+  const formatStatusText = (raw: string) => {
+    switch (raw) {
+      case 'ACTIVE':
+        return 'Active';
+      case 'VERIFYING':
+        return 'Verifying';
+      case 'WARNING':
+        return 'Warning';
+      case 'CRITICAL':
+        return 'Critical';
+      case 'COMPLETED':
+        return 'Completed';
+      case 'SAFE':
+        return 'Safe';
+      case 'AUTHENTIC':
+        return 'Authentic';
+      case 'MATCH':
+        return 'Match';
+      case 'MISMATCH':
+        return 'Mismatch';
+      case 'DETECTED':
+        return 'Detected';
+      case 'PENDING':
+        return 'Pending';
+      case 'HEALTHY':
+        return 'Healthy';
+      case 'DEGRADED':
+        return 'Degraded';
+      case 'OFFLINE':
+        return 'Offline';
+      default:
+        return raw.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
+    }
+  };
+
+  const displayText = formatStatusText(norm);
 
   return (
     <span
-      className={`inline-flex items-center font-mono font-medium rounded border ${badgeColor} ${sizeClasses[size]} ${className}`}
+      role="status"
+      className={`inline-flex items-center font-sans font-medium rounded border ${badgeColor} ${sizeClasses[size]} ${className}`}
     >
-      {showIcon && <Icon className="w-3.5 h-3.5 shrink-0" />}
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} aria-hidden="true" />
       <span>{displayText}</span>
     </span>
   );

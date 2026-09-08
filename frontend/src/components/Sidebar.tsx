@@ -12,8 +12,9 @@ import {
   BarChart3,
   ScrollText,
   Activity,
+  Network,
   LogOut,
-  Radio,
+  X,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
 
@@ -21,7 +22,7 @@ const NAV_GROUPS = [
   {
     group: 'MONITOR',
     items: [
-      { name: 'SOC Overview', href: '/dashboard', icon: Shield },
+      { name: 'Overview', href: '/dashboard', icon: Shield },
       { name: 'Live Calls', href: '/calls', icon: PhoneCall, isLive: true },
     ],
   },
@@ -37,6 +38,7 @@ const NAV_GROUPS = [
     items: [
       { name: 'Risk Assessment', href: '/risk', icon: BarChart3 },
       { name: 'Policy Engine', href: '/policies', icon: FileCheck2 },
+      { name: 'Architecture & Diagrams', href: '/diagrams', icon: Network },
     ],
   },
   {
@@ -51,6 +53,7 @@ const NAV_GROUPS = [
 export const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   useEffect(() => {
     const localUser = ApiClient.getUser();
@@ -63,7 +66,28 @@ export const Sidebar: React.FC = () => {
         }
       });
     }
+
+    // Listen for custom toggle events from mobile navbar
+    const handleToggle = () => setIsMobileOpen((prev) => !prev);
+    window.addEventListener('voxshield-toggle-sidebar', handleToggle);
+    return () => window.removeEventListener('voxshield-toggle-sidebar', handleToggle);
   }, []);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  // Handle Escape key to close mobile drawer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileOpen) {
+        setIsMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileOpen]);
 
   const handleLogout = () => {
     ApiClient.clearAuth();
@@ -73,7 +97,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const getInitials = (name?: string) => {
-    if (!name) return 'SO';
+    if (!name) return 'SA';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -82,32 +106,39 @@ export const Sidebar: React.FC = () => {
       .slice(0, 2);
   };
 
-  return (
-    <aside className="w-64 bg-[#070b17] border-r border-[#24304a] flex flex-col h-screen sticky top-0 shrink-0 select-none z-40">
-      {/* Brand Header — Indian Cyber Command Identity */}
-      <div className="p-4 border-b border-[#24304a] flex items-center gap-3 relative">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-indigo-600 to-cyan-500 flex items-center justify-center shadow-md shadow-indigo-500/20 shrink-0">
-          <Shield className="w-4 h-4 text-white" />
-        </div>
-        <div className="min-w-0">
-          <div className="font-bold text-sm tracking-wider text-white flex items-center gap-1.5 font-sans">
-            <span>VOXSHIELD</span>
-            <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-400 font-mono border border-cyan-500/20">
-              SOC
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#ff9933] ml-auto shrink-0" title="Indian Cyber Command Node" />
+  const sidebarContent = (
+    <aside className="w-64 bg-sidebar border-r border-border flex flex-col h-screen sticky top-0 shrink-0 select-none z-40">
+      {/* Brand Header */}
+      <div className="h-14 px-4 border-b border-border flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="p-1.5 rounded bg-surface-elevated border border-border text-primary shrink-0">
+            <Shield className="w-4 h-4" />
           </div>
-          <p className="text-[10px] text-slate-400 font-sans tracking-tight">
-            National Cyber Security Operations
-          </p>
+          <div className="min-w-0">
+            <div className="font-semibold text-sm tracking-wide text-primaryText font-sans truncate">
+              VOXSHIELD
+            </div>
+            <p className="text-[11px] text-mutedText font-sans truncate leading-none">
+              Security Operations
+            </p>
+          </div>
         </div>
+
+        {/* Mobile close button */}
+        <button
+          onClick={() => setIsMobileOpen(false)}
+          className="lg:hidden p-1.5 rounded text-mutedText hover:text-primaryText hover:bg-surface-hover"
+          aria-label="Close navigation"
+        >
+          <X className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Categorized Navigation */}
-      <nav className="flex-1 px-3 py-3 space-y-4 overflow-y-auto">
+      <nav className="flex-1 px-2.5 py-3 space-y-4 overflow-y-auto">
         {NAV_GROUPS.map((group) => (
-          <div key={group.group} className="space-y-1">
-            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono">
+          <div key={group.group} className="space-y-0.5">
+            <div className="px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-mutedText font-sans">
               {group.group}
             </div>
             {group.items.map((item) => {
@@ -120,29 +151,26 @@ export const Sidebar: React.FC = () => {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all relative ${
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded text-xs font-sans transition-colors ${
                     isActive
-                      ? 'bg-[#151f38] text-cyan-300 border border-[#2a3b5c] shadow-sm font-semibold'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-[#10182d] border border-transparent'
+                      ? 'bg-surface-elevated text-primaryText font-medium border-l-2 border-primary pl-2'
+                      : 'text-secondaryText hover:text-primaryText hover:bg-surface-hover/60 border-l-2 border-transparent pl-2'
                   }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-cyan-400' : 'text-slate-400'
+                        isActive ? 'text-primary' : 'text-mutedText'
                       }`}
                     />
-                    <span className="font-sans truncate">{item.name}</span>
+                    <span className="truncate">{item.name}</span>
                   </div>
 
-                  {isActive && (
-                    <span className="w-1 h-3.5 rounded-full bg-cyan-400 absolute right-1.5" />
-                  )}
-
                   {item.isLive && (
-                    <span className="flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 mr-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
-                      <span>LIVE</span>
+                    <span className="flex items-center gap-1 text-[10px] font-sans font-medium px-1.5 py-0.2 rounded bg-red-500/10 text-red-400 border border-red-500/20 mr-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                      <span>Live</span>
                     </span>
                   )}
                 </Link>
@@ -153,32 +181,53 @@ export const Sidebar: React.FC = () => {
       </nav>
 
       {/* User Session Footer */}
-      <div className="p-3 border-t border-slate-800/80 bg-[#080d1a]">
-        <div className="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+      <div className="p-3 border-t border-border bg-sidebar">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-xs font-bold text-indigo-300 font-mono shrink-0">
+            <div className="w-7 h-7 rounded bg-surface-elevated border border-border flex items-center justify-center text-xs font-medium text-primaryText font-sans shrink-0">
               {getInitials(user?.fullName)}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-200 font-sans truncate">
-                {user?.fullName || 'SOC Operator'}
+              <p className="text-xs font-medium text-primaryText font-sans truncate leading-snug">
+                {user?.fullName || 'Tier-3 SOC Analyst'}
               </p>
-              <p className="text-[10px] text-indigo-400 font-mono truncate">
-                {user?.role || 'AUTHENTICATED'}
+              <p className="text-[11px] text-mutedText font-sans truncate leading-none">
+                {user?.role ? user.role.replace(/_/g, ' ') : 'Security Analyst'}
               </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
             title="Logout Session"
-            className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors shrink-0"
+            className="p-1 text-mutedText hover:text-danger hover:bg-red-500/10 rounded transition-colors shrink-0 ml-1.5"
+            aria-label="Log out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
     </aside>
   );
+
+  return (
+    <>
+      {/* Desktop Persistent Sidebar */}
+      <div className="hidden lg:block shrink-0">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile Drawer with Backdrop */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileOpen(false)}
+          />
+          <div className="relative z-50 flex">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
-
-

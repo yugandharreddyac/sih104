@@ -46,53 +46,73 @@ class StreamingASREngine:
             if cls._neural_model_initialized and cls._cached_neural_model is not None:
                 return cls._cached_neural_model
 
-        target_path = custom_path or cls._neural_model_path
-        if not os.path.exists(target_path) or not os.path.isdir(target_path):
-            logger.warning(
-                f"[ASR] Faster-Whisper model directory not found at '{target_path}'. "
-                "Engaging deterministic DSP fallback engine."
-            )
-            cls._neural_model_initialized = True
-            cls._cached_neural_model = None
-            return None
+            if custom_path:
+                is_named = custom_path in ("tiny", "base", "small", "medium", "large", "large-v2", "large-v3")
+                is_dir = os.path.exists(custom_path) and os.path.isdir(custom_path)
+                if is_dir:
+                    model_bin = os.path.join(custom_path, "model.bin")
+                    model_safe = os.path.join(custom_path, "model.safetensors")
+                    config_json = os.path.join(custom_path, "config.json")
+                    if not ((os.path.exists(model_bin) or os.path.exists(model_safe)) and os.path.exists(config_json)):
+                        logger.warning(
+                            f"[ASR] Custom model weights missing in '{custom_path}'. "
+                            "Engaging deterministic DSP fallback engine."
+                        )
+                        cls._neural_model_initialized = True
+                        cls._cached_neural_model = None
+                        return None
+                    target_path = custom_path
+                elif is_named:
+                    target_path = custom_path
+                else:
+                    logger.warning(
+                        f"[ASR] Faster-Whisper custom model path not found at '{custom_path}'. "
+                        "Engaging deterministic DSP fallback engine."
+                    )
+                    cls._neural_model_initialized = True
+                    cls._cached_neural_model = None
+                    return None
+            else:
+                target_path = (
+                    os.getenv("VOXSHIELD_AI_ASR_MODEL")
+                    or os.getenv("ASR_MODEL_PATH")
+                    or cls._neural_model_path
+                )
+                is_local_dir = os.path.exists(target_path) and os.path.isdir(target_path)
+                if is_local_dir:
+                    model_bin = os.path.join(target_path, "model.bin")
+                    model_safe = os.path.join(target_path, "model.safetensors")
+                    config_json = os.path.join(target_path, "config.json")
+                    if not ((os.path.exists(model_bin) or os.path.exists(model_safe)) and os.path.exists(config_json)):
+                        target_path = "base"
+                elif target_path not in ("tiny", "base", "small", "medium", "large", "large-v2", "large-v3"):
+                    target_path = "base"
 
-        # Check required model files
-        model_bin = os.path.join(target_path, "model.bin")
-        config_json = os.path.join(target_path, "config.json")
-        if not (os.path.exists(model_bin) and os.path.exists(config_json)):
-            logger.warning(
-                f"[ASR] Model weights missing in '{target_path}'. "
-                "Engaging deterministic DSP fallback engine."
-            )
-            cls._neural_model_initialized = True
-            cls._cached_neural_model = None
-            return None
-
-        try:
-            # pyrefly: ignore [missing-import]
-            from faster_whisper import WhisperModel
-            logger.info(f"[ASR] Loading Faster-Whisper CPU INT8 model from {target_path}...")
-            start_t = time.perf_counter()
-            model = WhisperModel(
-                model_size_or_path=target_path,
-                device="cpu",
-                compute_type="int8",
-                cpu_threads=2,
-                num_workers=1
-            )
-            cls._cached_neural_model = model
-            cls._neural_model_initialized = True
-            load_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
-            logger.info(f"[ASR] Faster-Whisper INT8 model successfully loaded in {load_ms} ms.")
-            return cls._cached_neural_model
-        except Exception as e:
-            logger.warning(
-                f"[ASR] Failed to initialize Faster-Whisper neural model: {e}. "
-                "Gracefully falling back to DSP acoustic energy engine."
-            )
-            cls._neural_model_initialized = True
-            cls._cached_neural_model = None
-            return None
+            try:
+                # pyrefly: ignore [missing-import]
+                from faster_whisper import WhisperModel
+                logger.info(f"[ASR] Loading Faster-Whisper CPU INT8 model ('{target_path}')...")
+                start_t = time.perf_counter()
+                model = WhisperModel(
+                    model_size_or_path=target_path,
+                    device="cpu",
+                    compute_type="int8",
+                    cpu_threads=2,
+                    num_workers=1
+                )
+                cls._cached_neural_model = model
+                cls._neural_model_initialized = True
+                load_ms = round((time.perf_counter() - start_t) * 1000.0, 2)
+                logger.info(f"[ASR] Faster-Whisper INT8 model successfully loaded in {load_ms} ms.")
+                return cls._cached_neural_model
+            except Exception as e:
+                logger.warning(
+                    f"[ASR] Failed to initialize Faster-Whisper neural model: {e}. "
+                    "Gracefully falling back to DSP acoustic energy engine."
+                )
+                cls._neural_model_initialized = True
+                cls._cached_neural_model = None
+                return None
 
     @property
     def is_neural_active(self) -> bool:

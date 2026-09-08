@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675">
+  <defs>
+    <style>
+      .text-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; fill: #111827; }
+      .text-subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400; fill: #6B7280; }
+      .text-center-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 700; fill: #6B7280; letter-spacing: 0.08em; text-anchor: middle; }
+      .text-center-val { font-family: "SF Mono", Monaco, Menlo, Consolas, monospace; font-size: 32px; font-weight: 800; fill: #111827; text-anchor: middle; }
+      .text-item-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 600; fill: #111827; }
+      .text-item-pct { font-family: "SF Mono", Monaco, Menlo, Consolas, monospace; font-size: 16px; font-weight: 700; fill: #111827; text-anchor: end; }
+      .text-item-desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 400; fill: #4B5563; }
+      .text-footer { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #9CA3AF; }
+    </style>
+  </defs>
+
+  <!-- Presentation Background Canvas (16:9 Widescreen) -->
+  <rect width="1200" height="675" fill="#FFFFFF"/>
+  <rect x="1" y="1" width="1198" height="673" fill="none" stroke="#E5E7EB" stroke-width="2"/>
+
+  <!-- Top Title Block -->
+  <g transform="translate(60, 55)">
+    <text class="text-title" x="0" y="0">Risk Fusion Signal Weighting</text>
+    <text class="text-subtitle" x="0" y="24">Proportional Contribution of Multi-Modal Detection Signals to Composite Threat Evaluation</text>
+    <line x1="0" y1="44" x2="1080" y2="44" stroke="#E5E7EB" stroke-width="1"/>
+  </g>
+
+  <!-- Donut Chart Center: X=360, Y=370
+       Outer Radius = 190, Inner Radius = 114
+       Angles (clockwise from 12 o'clock / -90 deg):
+       1. Deepfake 35% -> 126 deg (from -90 to 36 deg)
+          Start: (-90 deg): (360, 180) outer, (360, 256) inner
+          End: (36 deg): outer = 360 + 190*cos(36) = 513.71, 370 + 190*sin(36) = 481.68
+                         inner = 360 + 114*cos(36) = 452.23, 370 + 114*sin(36) = 437.01
+       2. Speaker Verification 25% -> 90 deg (from 36 to 126 deg)
+          End: (126 deg): outer = 360 + 190*cos(126) = 248.32, 370 + 190*sin(126) = 523.71
+                          inner = 360 + 114*cos(126) = 292.99, 370 + 114*sin(126) = 462.23
+       3. Social Engineering 25% -> 90 deg (from 126 to 216 deg)
+          End: (216 deg): outer = 360 + 190*cos(216) = 206.29, 370 + 190*sin(216) = 258.32
+                          inner = 360 + 114*cos(216) = 267.77, 370 + 114*sin(216) = 302.99
+       4. Manipulation / Replay 15% -> 54 deg (from 216 to 270 deg / -90 deg)
+          End: (-90 deg): outer = 360, 180
+                          inner = 360, 256
+  -->
+
+  <!-- Donut Segments -->
+  <g>
+    <!-- Slice 1: Deepfake / Voice-Clone Detection (35% - Blue #2563EB) -->
+    <path
+      d="M 360 180 A 190 190 0 0 1 513.71 481.68 L 452.23 437.01 A 114 114 0 0 0 360 256 Z"
+      fill="#2563EB"
+      stroke="#FFFFFF"
+      stroke-width="3"
+    />
+
+    <!-- Slice 2: Speaker Verification (25% - Indigo #4F46E5) -->
+    <path
+      d="M 513.71 481.68 A 190 190 0 0 1 248.32 523.71 L 292.99 462.23 A 114 114 0 0 0 452.23 437.01 Z"
+      fill="#4F46E5"
+      stroke="#FFFFFF"
+      stroke-width="3"
+    />
+
+    <!-- Slice 3: Conversation & Social-Engineering Analysis (25% - Amber #D97706) -->
+    <path
+      d="M 248.32 523.71 A 190 190 0 0 1 206.29 258.32 L 267.77 302.99 A 114 114 0 0 0 292.99 462.23 Z"
+      fill="#D97706"
+      stroke="#FFFFFF"
+      stroke-width="3"
+    />
+
+    <!-- Slice 4: Manipulation / Replay Detection (15% - Red #DC2626) -->
+    <path
+      d="M 206.29 258.32 A 190 190 0 0 1 360 180 L 360 256 A 114 114 0 0 0 267.77 302.99 Z"
+      fill="#DC2626"
+      stroke="#FFFFFF"
+      stroke-width="3"
+    />
+
+    <!-- Center Circle & Summary -->
+    <circle cx="360" cy="370" r="108" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1.5"/>
+    <text class="text-center-title" x="360" y="354">RISK FUSION</text>
+    <text class="text-center-val" x="360" y="394">100%</text>
+  </g>
+
+  <!-- Right Legend & Detailed Breakdown -->
+  <g transform="translate(640, 160)">
+    <!-- Item 1: Deepfake / Voice-Clone Detection (35%) -->
+    <g transform="translate(0, 0)">
+      <rect x="0" y="0" width="500" height="84" rx="6" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+      <rect x="0" y="0" width="6" height="84" rx="3" fill="#2563EB"/>
+      <circle cx="28" cy="28" r="6" fill="#2563EB"/>
+      <text class="text-item-title" x="44" y="33">Deepfake / Voice-Clone Detection</text>
+      <text class="text-item-pct" x="480" y="33">35%</text>
+      <text class="text-item-desc" x="44" y="58">Acoustic spectral artifacts, phase discontinuity &amp; synthetic vocoder anomalies</text>
+    </g>
+
+    <!-- Item 2: Speaker Verification (25%) -->
+    <g transform="translate(0, 96)">
+      <rect x="0" y="0" width="500" height="84" rx="6" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+      <rect x="0" y="0" width="6" height="84" rx="3" fill="#4F46E5"/>
+      <circle cx="28" cy="28" r="6" fill="#4F46E5"/>
+      <text class="text-item-title" x="44" y="33">Speaker Verification</text>
+      <text class="text-item-pct" x="480" y="33">25%</text>
+      <text class="text-item-desc" x="44" y="58">Biometric voiceprint embedding distance compared to enrolled authorized profile</text>
+    </g>
+
+    <!-- Item 3: Conversation & Social-Engineering Analysis (25%) -->
+    <g transform="translate(0, 192)">
+      <rect x="0" y="0" width="500" height="84" rx="6" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+      <rect x="0" y="0" width="6" height="84" rx="3" fill="#D97706"/>
+      <circle cx="28" cy="28" r="6" fill="#D97706"/>
+      <text class="text-item-title" x="44" y="33">Conversation &amp; Social-Engineering Analysis</text>
+      <text class="text-item-pct" x="480" y="33">25%</text>
+      <text class="text-item-desc" x="44" y="58">Credential solicitation, urgency triggers, coercive phrasing &amp; NLP intent scoring</text>
+    </g>
+
+    <!-- Item 4: Manipulation / Replay Detection (15%) -->
+    <g transform="translate(0, 288)">
+      <rect x="0" y="0" width="500" height="84" rx="6" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="1"/>
+      <rect x="0" y="0" width="6" height="84" rx="3" fill="#DC2626"/>
+      <circle cx="28" cy="28" r="6" fill="#DC2626"/>
+      <text class="text-item-title" x="44" y="33">Manipulation / Replay Detection</text>
+      <text class="text-item-pct" x="480" y="33">15%</text>
+      <text class="text-item-desc" x="44" y="58">Loudspeaker impulse response, room acoustic mismatch &amp; injection indicators</text>
+    </g>
+  </g>
+
+  <!-- Bottom Footer Annotation -->
+  <g transform="translate(60, 630)">
+    <line x1="0" y1="0" x2="1080" y2="0" stroke="#E5E7EB" stroke-width="1"/>
+    <text class="text-footer" x="0" y="20">Model Engine: Deterministic weighted Bayesian fusion pipeline calibrated for real-time live telecommunications defense.</text>
+    <text class="text-footer" x="1080" y="20" text-anchor="end">Composite Signal Sum: 35% + 25% + 25% + 15% = 100%</text>
+  </g>
+</svg>

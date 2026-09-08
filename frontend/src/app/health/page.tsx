@@ -3,20 +3,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { SectionHeader } from '@/components/ui/SectionHeader';
-import { SecurityStatusBadge } from '@/components/ui/SecurityStatusBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
 import {
-  Activity,
-  Server,
-  Database,
-  Cpu,
-  ShieldCheck,
   RefreshCw,
-  AlertCircle,
-  CheckCircle2,
+  Server,
+  Cpu,
   Lock,
   FileCheck2,
-  Clock,
+  Database,
   Radio,
 } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
@@ -40,269 +34,210 @@ export default function HealthPage() {
   }, [fetchHealth]);
 
   const components = healthData?.components || {};
+  const isHealthy = healthData?.status === 'HEALTHY' || healthData?.success;
+
+  const servicesList = [
+    {
+      id: 'backend',
+      name: 'Backend Gateway',
+      subsystem: 'Express REST & WebSockets',
+      icon: Server,
+      endpoint: 'Port 4000 (HTTP/WS)',
+      metric: components.backend?.uptimeSeconds
+        ? `Uptime ${Math.floor(components.backend.uptimeSeconds)}s`
+        : 'Active',
+      status: components.backend?.status || 'HEALTHY',
+      details: 'Event pipeline & auth sessions',
+    },
+    {
+      id: 'aiService',
+      name: 'Acoustic AI Service',
+      subsystem: 'FastAPI & ONNX Inference',
+      icon: Cpu,
+      endpoint: 'http://localhost:8000',
+      metric: '~12.4ms (SLA <256ms)',
+      status: components.aiService?.status || 'HEALTHY',
+      details: 'Acoustic CNN model loaded',
+    },
+    {
+      id: 'privacy',
+      name: 'Privacy Firewall',
+      subsystem: 'Zero-Trust Audio & PII Redaction',
+      icon: Lock,
+      endpoint: 'In-Memory Stream Buffer',
+      metric: 'Zero Audio Retention',
+      status: 'ACTIVE',
+      details: 'Secret scrubbing & ephemeral ring buffer',
+    },
+    {
+      id: 'policy',
+      name: 'Deterministic Policy Engine',
+      subsystem: 'Security Guardrails',
+      icon: FileCheck2,
+      endpoint: 'Internal Bus',
+      metric: '<1ms latency',
+      status: 'ACTIVE',
+      details: '6 active enterprise enforcement policies',
+    },
+    {
+      id: 'db',
+      name: 'Persistence Store',
+      subsystem: 'Telemetry & Audit Logs',
+      icon: Database,
+      endpoint: components.database?.status === 'CONNECTED' ? 'PostgreSQL' : 'In-Memory Store',
+      metric: 'Synchronized',
+      status: components.database?.status === 'CONNECTED' ? 'HEALTHY' : 'ACTIVE',
+      details: 'Graceful self-contained persistence',
+    },
+    {
+      id: 'rtp',
+      name: 'RTP Telephony Gateway',
+      subsystem: 'Asterisk / FreeSWITCH Ingest',
+      icon: Radio,
+      endpoint: 'Port 10000 (UDP)',
+      metric: 'G.711 / PCM Normalization',
+      status: 'ACTIVE',
+      details: 'Jitter buffer active, live packet ingest',
+    },
+  ];
 
   return (
-    <div className="flex min-h-screen bg-[#05070d]">
+    <div className="flex min-h-screen bg-background text-primaryText">
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar
-          title="System & Component Health Matrix"
-          subtitle="Real-Time Service Diagnostics Across All VOXSHIELD Operational Layers"
+          title="System & Service Diagnostics"
+          subtitle="Real-time operational status across infrastructure, AI runtime, and telephony gateways"
         />
 
-        <main className="flex-1 p-6 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
-          {/* Top Platform Health Overview Banner */}
-          <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto font-sans">
+          {/* Top Status & Controls Header (Canvas Level, No Box) */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-400">
-                <Activity className="w-6 h-6" />
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isHealthy ? 'bg-success' : 'bg-warning'
+                  }`}
+                />
+                <h2 className="text-sm font-semibold text-primaryText font-sans">
+                  {isHealthy ? 'All Systems Operational' : 'Degraded Subsystems Detected'}
+                </h2>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base font-bold text-white font-sans">
-                    VOXSHIELD Operational Grid
-                  </h3>
-                  <SecurityStatusBadge
-                    status={healthData?.status || 'HEALTHY'}
-                    size="xs"
-                  />
-                </div>
-                <p className="text-xs text-slate-400 font-sans mt-0.5">
-                  Live diagnostics polled every 15 seconds across core microservices and neural inference runtime.
-                </p>
-              </div>
+              <span className="text-mutedText">|</span>
+              <span className="text-xs text-secondaryText">
+                Telemetry polled every 10s
+              </span>
             </div>
 
             <button
+              type="button"
               onClick={fetchHealth}
               disabled={loading}
-              className="px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-slate-600 text-xs font-mono text-slate-200 flex items-center gap-2 transition-colors self-start sm:self-auto"
+              className="text-xs text-secondaryText hover:text-primaryText flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded px-2 py-1"
+              aria-label="Refresh system diagnostics"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-cyan-400' : ''}`} />
-              <span>REFRESH DIAGNOSTICS</span>
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-primary' : ''}`} />
+              <span>Refresh Telemetry</span>
             </button>
           </div>
 
-          {/* Service Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Backend Gateway */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                    <Server className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">Backend Gateway</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Express REST + WebSockets</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge
-                  status={components.backend?.status || 'HEALTHY'}
-                  size="xs"
-                />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>Port / Protocol:</span>
-                  <span className="text-slate-200">4000 (HTTP / WS)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Uptime:</span>
-                  <span className="text-slate-200">
-                    {components.backend?.uptimeSeconds
-                      ? `${Math.floor(components.backend.uptimeSeconds)}s`
-                      : 'Active'}
+          {loading && !healthData ? (
+            <div className="pt-8">
+              <LoadingState
+                label="Probing System Components..."
+                description="Polling health endpoints across backend gateway, acoustic AI, and database persistence layers."
+              />
+            </div>
+          ) : (
+            <div className="pt-4 space-y-8">
+              {/* Service Status Table */}
+              <div>
+                <div className="flex items-center justify-between pb-2 border-b border-border">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-secondaryText">
+                    Core Microservices & Subsystems
+                  </span>
+                  <span className="text-xs font-mono text-mutedText">
+                    {servicesList.length} Monitored Endpoints
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span>Memory Usage:</span>
-                  <span className="text-slate-200">Normal / Managed</span>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-mutedText font-medium text-[11px] uppercase tracking-wider">
+                        <th className="py-2.5 pr-4">Subsystem</th>
+                        <th className="py-2.5 px-4">Endpoint / Channel</th>
+                        <th className="py-2.5 px-4">Performance / SLA</th>
+                        <th className="py-2.5 px-4">Operational Status</th>
+                        <th className="py-2.5 pl-4">Diagnostic Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/40 text-secondaryText">
+                      {servicesList.map((srv) => {
+                        const IconComponent = srv.icon;
+                        const isOk = srv.status === 'HEALTHY' || srv.status === 'ACTIVE' || srv.status === 'CONNECTED';
+
+                        return (
+                          <tr key={srv.id} className="hover:bg-surface-hover/30 transition-colors">
+                            <td className="py-3 pr-4">
+                              <div className="flex items-center gap-2.5">
+                                <IconComponent className="w-4 h-4 text-mutedText flex-shrink-0" />
+                                <div>
+                                  <div className="font-medium text-primaryText">{srv.name}</div>
+                                  <div className="text-[11px] text-mutedText">{srv.subsystem}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] text-primaryText">
+                              {srv.endpoint}
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px]">
+                              <span className={isOk ? 'text-success' : 'text-warning'}>
+                                {srv.metric}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center gap-1.5 font-medium">
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isOk ? 'bg-success' : 'bg-warning'
+                                  }`}
+                                />
+                                <span className="capitalize">{srv.status.toLowerCase()}</span>
+                              </span>
+                            </td>
+                            <td className="py-3 pl-4 text-mutedText text-[11px]">
+                              {srv.details}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+              </div>
+
+              {/* Expandable Raw Diagnostic Payload */}
+              <div className="pt-2 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setShowRaw(!showRaw)}
+                  aria-expanded={showRaw}
+                  className="flex items-center justify-between w-full text-xs font-mono text-mutedText hover:text-primaryText transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none py-1"
+                >
+                  <span>{showRaw ? '[-] HIDE RAW DIAGNOSTIC PAYLOAD' : '[+] INSPECT RAW DIAGNOSTIC PAYLOAD'}</span>
+                  <span>GET /health</span>
+                </button>
+
+                {showRaw && (
+                  <pre className="mt-3 p-3.5 rounded bg-surface-elevated border border-border text-[11px] font-mono text-secondaryText overflow-x-auto whitespace-pre-wrap">
+                    {JSON.stringify(healthData, null, 2)}
+                  </pre>
+                )}
               </div>
             </div>
-
-            {/* Acoustic AI Service */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
-                    <Cpu className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">Acoustic AI Service</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">FastAPI + ONNX Runtime</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge
-                  status={components.aiService?.status || 'HEALTHY'}
-                  size="xs"
-                />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>Endpoint:</span>
-                  <span className="text-slate-200">http://localhost:8000</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Neural Latency:</span>
-                  <span className="text-emerald-400 font-bold">~12.4ms (Target &lt;256ms)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Model Engine:</span>
-                  <span className="text-slate-200">robust_mini_cnn_v1</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Privacy Firewall */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400">
-                    <Lock className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">Privacy Firewall</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Zero-Trust Audio & PII Redaction</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge status="ACTIVE" size="xs" />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>Enforcement:</span>
-                  <span className="text-emerald-400 font-bold">STRICT (Zero Audio Retention)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Secret Scrubbing:</span>
-                  <span className="text-slate-200">OTP / CVV / Passwords</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Memory Buffer:</span>
-                  <span className="text-slate-200">Volatile Stream Ring</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Deterministic Policy Engine */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
-                    <FileCheck2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">Deterministic Policy Engine</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Real-Time Action Enforcement</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge status="ACTIVE" size="xs" />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>Active Rules:</span>
-                  <span className="text-slate-200">6 Enterprise Policies</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Evaluation Time:</span>
-                  <span className="text-emerald-400 font-bold">&lt;1ms</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Rule Engine:</span>
-                  <span className="text-slate-200">Deterministic Guardrails</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Persistence Store */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400">
-                    <Database className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">Storage Store</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">PostgreSQL / In-Memory</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge
-                  status={components.database?.status === 'CONNECTED' ? 'CONNECTED' : 'FALLBACK'}
-                  size="xs"
-                />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>Engine State:</span>
-                  <span className="text-slate-200">
-                    {components.database?.status === 'CONNECTED' ? 'PostgreSQL Active' : 'In-Memory Store'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Audit Trail Store:</span>
-                  <span className="text-slate-200">Synchronized</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Degraded Mode:</span>
-                  <span className="text-emerald-400">Graceful Self-Contained</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Telephony RTP Server */}
-            <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 rounded-lg bg-rose-500/10 text-rose-400">
-                    <Radio className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-white font-sans">RTP Telephony Gateway</h3>
-                    <p className="text-[10px] text-slate-400 font-mono">Asterisk / FreeSWITCH Ingestion</p>
-                  </div>
-                </div>
-                <SecurityStatusBadge status="ACTIVE" size="xs" />
-              </div>
-
-              <div className="text-[11px] font-mono text-slate-400 space-y-1.5 pt-2 border-t border-slate-800/80">
-                <div className="flex justify-between">
-                  <span>UDP Ingest Port:</span>
-                  <span className="text-slate-200">10000 (UDP)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Codecs Supported:</span>
-                  <span className="text-slate-200">G.711 μ-law, A-law, PCM</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Packet Normalization:</span>
-                  <span className="text-emerald-400">Jitter Buffering Active</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Expandable Raw Diagnostic Payload */}
-          <div className="p-5 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3">
-            <button
-              onClick={() => setShowRaw(!showRaw)}
-              className="w-full flex items-center justify-between text-xs font-mono text-slate-400 hover:text-slate-200"
-            >
-              <span>{showRaw ? '[-] HIDE RAW DIAGNOSTIC JSON' : '[+] INSPECT RAW DIAGNOSTIC JSON'}</span>
-              <span>GET /health</span>
-            </button>
-
-            {showRaw && (
-              <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono text-cyan-300 overflow-x-auto whitespace-pre-wrap">
-                {JSON.stringify(healthData, null, 2)}
-              </pre>
-            )}
-          </div>
+          )}
         </main>
       </div>
     </div>

@@ -13,6 +13,7 @@ export interface CallRecord {
   destinationIdentifier: string;
   status: CallStatus;
   startedAt: Date;
+  createdAt?: Date;
   endedAt?: Date;
   durationSeconds: number;
   metadata: Record<string, any>;
@@ -32,6 +33,7 @@ export class CallsService {
     const callId = uuidv4();
     const sanitizedMetadata = PrivacyFirewall.sanitizeObject(params.metadata || {});
 
+    const now = new Date();
     const call: CallRecord = {
       id: callId,
       externalCallId: params.externalCallId,
@@ -39,10 +41,11 @@ export class CallsService {
       callerIdentifier: params.callerIdentifier,
       destinationIdentifier: params.destinationIdentifier,
       status: 'ACTIVE',
-      startedAt: new Date(),
+      startedAt: now,
+      createdAt: now,
       durationSeconds: 0,
       metadata: sanitizedMetadata,
-      events: [{ type: 'CALL_STARTED', payload: { startedAt: new Date() }, timestamp: new Date() }],
+      events: [{ type: 'CALL_STARTED', payload: { startedAt: now }, timestamp: now }],
     };
 
     this.calls.set(callId, call);
@@ -149,6 +152,7 @@ export class CallsService {
         destinationIdentifier: '1-800-VOX-BANK',
         status: 'ACTIVE',
         startedAt: new Date(Date.now() - 120000),
+        createdAt: new Date(Date.now() - 120000),
         durationSeconds: 120,
         metadata: { department: 'Treasury Wire Ops', channel: 'PSTN-INBOUND' },
         events: [{ type: 'CALL_STARTED', payload: {}, timestamp: new Date(Date.now() - 120000) }],
@@ -161,6 +165,7 @@ export class CallsService {
         destinationIdentifier: 'EXT-8801-IT-HELPDESK',
         status: 'VERIFYING',
         startedAt: new Date(Date.now() - 340000),
+        createdAt: new Date(Date.now() - 340000),
         durationSeconds: 340,
         metadata: { department: 'IT Helpdesk', channel: 'INTERNAL-PBX' },
         events: [{ type: 'CALL_STARTED', payload: {}, timestamp: new Date(Date.now() - 340000) }],

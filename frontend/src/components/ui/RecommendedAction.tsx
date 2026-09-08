@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Lock, ShieldAlert, CheckCircle2, XCircle, ArrowRight, Eye } from 'lucide-react';
+import { Lock, ShieldAlert, CheckCircle2, ArrowRight } from 'lucide-react';
 
 interface RecommendedActionProps {
   actionTitle: string;
@@ -35,23 +35,23 @@ export const RecommendedAction: React.FC<RecommendedActionProps> = ({
 
   return (
     <div
-      className={`p-5 rounded-xl border bg-[#0c1222] ${
+      className={`p-4 rounded border bg-surface ${
         isContainOrBlock
-          ? 'border-rose-500/30'
+          ? 'border-red-500/40'
           : isStepUp
-          ? 'border-indigo-500/30'
-          : 'border-slate-800'
-      } space-y-4 ${className}`}
+          ? 'border-blue-500/40'
+          : 'border-border'
+      } space-y-3.5 ${className}`}
     >
-      <div className="flex items-start justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <div className="flex items-start justify-between gap-3 pb-3 border-b border-border">
         <div className="flex items-start gap-3">
           <div
-            className={`p-2.5 rounded-lg shrink-0 ${
+            className={`p-2 rounded shrink-0 ${
               isContainOrBlock
-                ? 'bg-rose-500/10 text-rose-400'
+                ? 'bg-red-500/10 text-red-400'
                 : isStepUp
-                ? 'bg-indigo-500/10 text-indigo-400'
-                : 'bg-cyan-500/10 text-cyan-400'
+                ? 'bg-blue-500/10 text-blue-400'
+                : 'bg-green-500/10 text-green-400'
             }`}
           >
             {isContainOrBlock ? (
@@ -63,25 +63,21 @@ export const RecommendedAction: React.FC<RecommendedActionProps> = ({
             )}
           </div>
           <div>
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider font-mono">
+            <span className="text-[11px] text-mutedText font-sans block">
               Recommended Security Response
             </span>
-            <h4 className="text-sm font-bold text-white font-sans mt-0.5">{actionTitle}</h4>
-            <p className="text-xs text-slate-300 mt-1 font-sans leading-relaxed">{reason}</p>
+            <h4 className="text-sm font-semibold text-primaryText font-sans mt-0.5">{actionTitle}</h4>
+            <p className="text-xs text-secondaryText mt-1 font-sans leading-relaxed">{reason}</p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5 pt-1">
+      <div className="flex flex-wrap items-center gap-2 pt-0.5">
         {onPrimaryAction && (
           <button
             onClick={onPrimaryAction}
             disabled={primaryActionLoading}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold font-sans flex items-center gap-2 transition-all shadow-md ${
-              isContainOrBlock
-                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/20'
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
-            }`}
+            className={isContainOrBlock ? 'btn-danger' : 'btn-primary'}
           >
             {primaryActionLoading ? (
               <span>Executing...</span>
@@ -97,7 +93,7 @@ export const RecommendedAction: React.FC<RecommendedActionProps> = ({
         {onSecondaryAction && secondaryActionLabel && (
           <button
             onClick={onSecondaryAction}
-            className="px-3.5 py-2 rounded-lg text-xs font-medium font-sans text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 transition-colors"
+            className="btn-secondary"
           >
             {secondaryActionLabel}
           </button>
@@ -106,7 +102,7 @@ export const RecommendedAction: React.FC<RecommendedActionProps> = ({
         {onDangerAction && dangerActionLabel && (
           <button
             onClick={onDangerAction}
-            className="px-3.5 py-2 rounded-lg text-xs font-semibold font-sans text-rose-300 hover:text-rose-200 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-500/30 transition-colors ml-auto"
+            className="btn-danger ml-auto"
           >
             {dangerActionLabel}
           </button>

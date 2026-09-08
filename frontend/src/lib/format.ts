@@ -53,48 +53,48 @@ export function getRiskSeverity(score: number | null | undefined): {
   if (score === null || score === undefined || !isFinite(score)) {
     return {
       level: 'UNKNOWN',
-      textClass: 'text-slate-400',
-      badgeClass: 'bg-slate-800 text-slate-400 border border-slate-700',
-      barColor: 'bg-slate-700',
+      textClass: 'text-mutedText',
+      badgeClass: 'bg-surface-elevated text-mutedText border border-border',
+      barColor: 'bg-border',
     };
   }
   const normalized = score > 1 ? score : score * 100;
   if (normalized >= 70) {
     return {
       level: 'CRITICAL',
-      textClass: 'text-rose-400',
-      badgeClass: 'bg-rose-500/20 text-rose-300 border border-rose-500/40',
-      barColor: 'bg-rose-500',
+      textClass: 'text-danger',
+      badgeClass: 'badge-danger',
+      barColor: 'bg-danger',
     };
   }
   if (normalized >= 50) {
     return {
       level: 'HIGH',
-      textClass: 'text-orange-400',
-      badgeClass: 'bg-orange-500/20 text-orange-300 border border-orange-500/40',
-      barColor: 'bg-orange-500',
+      textClass: 'text-danger',
+      badgeClass: 'badge-danger',
+      barColor: 'bg-danger',
     };
   }
   if (normalized >= 30) {
     return {
       level: 'ELEVATED',
-      textClass: 'text-amber-300',
-      badgeClass: 'bg-amber-500/20 text-amber-300 border border-amber-500/40',
-      barColor: 'bg-amber-500',
+      textClass: 'text-warning',
+      badgeClass: 'badge-warning',
+      barColor: 'bg-warning',
     };
   }
   if (normalized > 0) {
     return {
       level: 'LOW',
-      textClass: 'text-cyan-300',
-      badgeClass: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
-      barColor: 'bg-cyan-500',
+      textClass: 'text-success',
+      badgeClass: 'badge-success',
+      barColor: 'bg-success',
     };
   }
   return {
     level: 'NEUTRAL',
-    textClass: 'text-slate-300',
-    badgeClass: 'bg-slate-900 text-slate-400 border border-slate-800',
-    barColor: 'bg-slate-700',
+    textClass: 'text-secondaryText',
+    badgeClass: 'badge-neutral',
+    barColor: 'bg-border',
   };
 }

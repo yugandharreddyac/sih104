@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675">
+  <defs>
+    <style>
+      .text-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 22px; font-weight: 700; fill: #111827; }
+      .text-subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400; fill: #6B7280; }
+      .text-hub-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 800; fill: #111827; letter-spacing: -0.02em; text-anchor: middle; }
+      .text-hub-sub { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 10px; font-weight: 700; fill: #6B7280; letter-spacing: 0.08em; text-anchor: middle; }
+      .text-node-name { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #111827; text-anchor: middle; }
+      .text-node-cat { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 9.5px; font-weight: 600; fill: #4B5563; letter-spacing: 0.05em; text-anchor: middle; }
+      .text-footer { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; fill: #9CA3AF; }
+    </style>
+  </defs>
+
+  <!-- Presentation Background Canvas (16:9 Widescreen) -->
+  <rect width="1200" height="675" fill="#FFFFFF"/>
+  <rect x="1" y="1" width="1198" height="673" fill="none" stroke="#E5E7EB" stroke-width="2"/>
+
+  <!-- Top Title Block -->
+  <g transform="translate(60, 55)">
+    <text class="text-title" x="0" y="0">VOXSHIELD Technology Stack</text>
+    <text class="text-subtitle" x="0" y="24">Distributed Modular Architecture Powering Real-Time Voice Security &amp; Forensic Threat Defense</text>
+    <line x1="0" y1="44" x2="1080" y2="44" stroke="#E5E7EB" stroke-width="1"/>
+  </g>
+
+  <!-- Circular Architecture Canvas
+       Center Hub: (600, 370)
+       Guide Ring Radius = 215
+  -->
+
+  <!-- Subtle Concentric Guide Ring -->
+  <circle cx="600" cy="370" r="215" fill="none" stroke="#E5E7EB" stroke-width="1.5" stroke-dasharray="6 6"/>
+
+  <!-- Radial Connector Lines (Center Hub to Outer Nodes) -->
+  <g stroke="#93C5FD" stroke-width="1.5">
+    <!-- Node 1: Top (600, 155) -->
+    <line x1="600" y1="370" x2="600" y2="155"/>
+
+    <!-- Node 2: Top-Right (752, 218) -->
+    <line x1="600" y1="370" x2="752" y2="218"/>
+
+    <!-- Node 3: Right (815, 370) -->
+    <line x1="600" y1="370" x2="815" y2="370"/>
+
+    <!-- Node 4: Bottom-Right (752, 522) -->
+    <line x1="600" y1="370" x2="752" y2="522"/>
+
+    <!-- Node 5: Bottom (600, 585) -->
+    <line x1="600" y1="370" x2="600" y2="585"/>
+
+    <!-- Node 6: Bottom-Left (448, 522) -->
+    <line x1="600" y1="370" x2="448" y2="522"/>
+
+    <!-- Node 7: Left (385, 370) -->
+    <line x1="600" y1="370" x2="385" y2="370"/>
+
+    <!-- Node 8: Top-Left (448, 218) -->
+    <line x1="600" y1="370" x2="448" y2="218"/>
+  </g>
+
+  <!-- Central Hub: VOXSHIELD -->
+  <g>
+    <!-- Outer Hub Glow Rim -->
+    <circle cx="600" cy="370" r="76" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="2"/>
+    <!-- Inner Hub Core -->
+    <circle cx="600" cy="370" r="68" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.5"/>
+
+    <!-- Center Typography -->
+    <text class="text-hub-title" x="600" y="358">VOXSHIELD</text>
+    <text class="text-hub-sub" x="600" y="378">REAL-TIME VOICE</text>
+    <text class="text-hub-sub" x="600" y="392">SECURITY PLATFORM</text>
+  </g>
+
+  <!-- 8 Technology Node Blocks (180px x 54px rounded capsules) -->
+  <g>
+    <!-- Node 1: Next.js 14 (Top / 12:00) -->
+    <g transform="translate(505, 128)">
+      <rect x="0" y="0" width="190" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="97" y="24">Next.js 14</text>
+      <text class="text-node-cat" x="97" y="41">FRONTEND &amp; SOC SHELL</text>
+    </g>
+
+    <!-- Node 2: PyTorch + MiniAcousticCNN (Top-Right / 1:30) -->
+    <g transform="translate(657, 191)">
+      <rect x="0" y="0" width="205" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="104" y="24">PyTorch + MiniAcousticCNN</text>
+      <text class="text-node-cat" x="104" y="41">ACOUSTIC DEEPFAKE INFERENCE</text>
+    </g>
+
+    <!-- Node 3: WebSockets + RTP (Right / 3:00) -->
+    <g transform="translate(720, 343)">
+      <rect x="0" y="0" width="190" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="97" y="24">WebSockets + RTP</text>
+      <text class="text-node-cat" x="97" y="41">STREAMING INGESTION</text>
+    </g>
+
+    <!-- Node 4: 10D Risk Fusion (Bottom-Right / 4:30) -->
+    <g transform="translate(657, 495)">
+      <rect x="0" y="0" width="205" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="104" y="24">10D Risk Fusion</text>
+      <text class="text-node-cat" x="104" y="41">MULTI-MODAL THREAT ENGINE</text>
+    </g>
+
+    <!-- Node 5: Node.js + Express (Bottom / 6:00) -->
+    <g transform="translate(505, 558)">
+      <rect x="0" y="0" width="190" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="97" y="24">Node.js + Express</text>
+      <text class="text-node-cat" x="97" y="41">BACKEND GATEWAY</text>
+    </g>
+
+    <!-- Node 6: PostgreSQL + Redis (Bottom-Left / 7:30) -->
+    <g transform="translate(338, 495)">
+      <rect x="0" y="0" width="205" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="104" y="24">PostgreSQL + Redis</text>
+      <text class="text-node-cat" x="104" y="41">DATA &amp; PERSISTENCE LAYER</text>
+    </g>
+
+    <!-- Node 7: JWT + RBAC + Privacy Firewall (Left / 9:00) -->
+    <g transform="translate(285, 343)">
+      <rect x="0" y="0" width="210" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="107" y="24">JWT + RBAC + Privacy Firewall</text>
+      <text class="text-node-cat" x="107" y="41">ZERO-TRUST SECURITY</text>
+    </g>
+
+    <!-- Node 8: Faster-Whisper (Top-Left / 10:30) -->
+    <g transform="translate(338, 191)">
+      <rect x="0" y="0" width="205" height="54" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+      <rect x="0" y="0" width="4" height="54" rx="2" fill="#2563EB"/>
+      <text class="text-node-name" x="104" y="24">Faster-Whisper</text>
+      <text class="text-node-cat" x="104" y="41">SPEECH RECOGNITION (ASR)</text>
+    </g>
+  </g>
+
+  <!-- Bottom Footer Annotation -->
+  <g transform="translate(60, 635)">
+    <line x1="0" y1="0" x2="1080" y2="0" stroke="#E5E7EB" stroke-width="1"/>
+    <text class="text-footer" x="0" y="20">Architecture Specification: End-to-end telemetry pipeline connecting audio ingestion, inference microservices, and cryptographic audit persistence.</text>
+    <text class="text-footer" x="1080" y="20" text-anchor="end">Subsystems: 8 Autonomous Microservice Nodes</text>
+  </g>
+</svg>

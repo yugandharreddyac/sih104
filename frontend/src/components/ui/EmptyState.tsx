@@ -22,19 +22,20 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <div
-      className={`p-8 rounded-xl bg-[#10182d] border border-[#24304a] text-center flex flex-col items-center justify-center ${className}`}
+      role="status"
+      className={`p-8 rounded bg-surface border border-border text-center flex flex-col items-center justify-center font-sans ${className}`}
     >
-      <div className="w-12 h-12 rounded-xl bg-slate-900 border border-[#24304a] flex items-center justify-center mb-3 text-slate-400">
-        <Icon className="w-6 h-6 text-slate-400" />
+      <div className="w-9 h-9 rounded bg-surface-elevated border border-border flex items-center justify-center mb-2.5 text-mutedText">
+        <Icon className="w-4 h-4 text-mutedText" />
       </div>
-      <h4 className="text-sm font-bold text-slate-200 font-sans">{title}</h4>
-      <p className="text-xs text-slate-400 font-sans mt-1 max-w-sm leading-relaxed">
+      <h4 className="text-xs font-semibold text-primaryText">{title}</h4>
+      <p className="text-xs text-mutedText mt-1 max-w-sm leading-relaxed">
         {description}
       </p>
       {actionLabel && onAction && (
         <button
           onClick={onAction}
-          className="mt-4 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white flex items-center gap-1.5 transition-colors"
+          className="mt-3.5 btn-primary text-xs"
         >
           <span>{actionLabel}</span>
           <ArrowRight className="w-3.5 h-3.5" />

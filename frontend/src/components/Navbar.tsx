@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Shield, Activity, Cpu, Lock, User, Info, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export const Navbar: React.FC<{ title: string; subtitle?: string }> = ({ title, subtitle }) => {
   const [gatewayStatus, setGatewayStatus] = useState<boolean | null>(null);
@@ -55,108 +56,120 @@ export const Navbar: React.FC<{ title: string; subtitle?: string }> = ({ title, 
     };
   }, []);
 
+  const toggleMobileNav = () => {
+    window.dispatchEvent(new CustomEvent('voxshield-toggle-sidebar'));
+  };
+
+  const getInitials = (name?: string) => {
+    if (!name) return 'SA';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
-    <header className="h-16 border-b border-[#24304a] bg-[#070b17]/95 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30 select-none">
-      {/* Page Title & Operational Subtitle */}
-      <div className="min-w-0 pr-4">
-        <h1 className="text-base font-bold text-slate-100 tracking-tight font-sans truncate">
-          {title}
-        </h1>
-        {subtitle && (
-          <p className="text-xs text-slate-400 font-sans truncate">{subtitle}</p>
-        )}
+    <header className="h-14 border-b border-border bg-surface px-4 md:px-6 flex items-center justify-between sticky top-0 z-30 select-none">
+      {/* Left: Mobile Toggle & Page Context */}
+      <div className="flex items-center gap-3 min-w-0 pr-4">
+        <button
+          onClick={toggleMobileNav}
+          className="lg:hidden p-1.5 rounded text-mutedText hover:text-primaryText hover:bg-surface-elevated transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <div className="min-w-0">
+          <h1 className="text-sm font-semibold text-primaryText font-sans tracking-tight truncate leading-tight">
+            {title}
+          </h1>
+          {subtitle && (
+            <p className="text-xs text-mutedText font-sans truncate leading-none mt-0.5 hidden sm:block">{subtitle}</p>
+          )}
+        </div>
       </div>
 
-      {/* Real Platform Health & Security Status Badges */}
-      <div className="flex items-center gap-3 shrink-0">
-        {/* Gateway Status with Tooltip */}
-        <div
-          className={`group relative flex items-center gap-2 px-2.5 py-1 rounded-md border text-xs font-mono font-medium cursor-help transition-all ${
-            gatewayStatus === null
-              ? 'bg-slate-900 border-slate-800 text-slate-400'
-              : gatewayStatus
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-          }`}
-          title="Backend REST and WebSocket gateway status on port 4000"
-        >
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              gatewayStatus === null
-                ? 'bg-slate-500 animate-pulse'
-                : gatewayStatus
-                ? 'bg-emerald-400 animate-pulse'
-                : 'bg-rose-400'
-            }`}
-          />
-          <span className="hidden sm:inline">
-            {gatewayStatus === null
-              ? 'GATEWAY CONNECTING'
-              : gatewayStatus
-              ? 'GATEWAY ONLINE'
-              : 'GATEWAY OFFLINE'}
-          </span>
-          <div className="opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 absolute top-9 right-0 bg-slate-900 border border-slate-700 text-[10px] text-slate-300 px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 font-mono">
-            Backend REST & WebSocket telemetry gateway on port 4000
+      {/* Right: Operational Status Indicators & Analyst Identity */}
+      <div className="flex items-center gap-4 shrink-0">
+        {/* Gateway Status */}
+        <div className="flex flex-col items-end sm:items-start text-right sm:text-left">
+          <span className="text-[10px] text-mutedText font-sans leading-none">Gateway</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                gatewayStatus === null
+                  ? 'bg-mutedText'
+                  : gatewayStatus
+                  ? 'bg-success'
+                  : 'bg-danger'
+              }`}
+            />
+            <span className="text-xs font-medium text-secondaryText font-sans">
+              {gatewayStatus === null ? 'Connecting' : gatewayStatus ? 'Operational' : 'Offline'}
+            </span>
           </div>
         </div>
 
-        {/* AI Engine Status with Tooltip */}
-        <div
-          className={`group relative hidden md:flex items-center gap-2 px-2.5 py-1 rounded-md border text-xs font-mono font-medium cursor-help transition-all ${
-            aiStatus === 'CONNECTING'
-              ? 'bg-slate-900 border-slate-800 text-slate-400'
-              : aiStatus === 'HEALTHY'
-              ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-400'
-              : aiStatus === 'DEGRADED'
-              ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
-              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-          }`}
-          title="Acoustic and conversational AI inference service status on port 8000"
-        >
-          <Cpu className="w-3.5 h-3.5" />
-          <span>
-            {aiStatus === 'CONNECTING'
-              ? 'AI CONNECTING'
-              : aiStatus === 'HEALTHY'
-              ? 'AI SERVICE HEALTHY'
-              : aiStatus === 'DEGRADED'
-              ? 'AI DEGRADED'
-              : 'AI UNAVAILABLE'}
-          </span>
-          <div className="opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 absolute top-9 right-0 bg-slate-900 border border-slate-700 text-[10px] text-slate-300 px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 font-mono">
-            Neural acoustic deepfake & conversational intent inference on port 8000
+        {/* AI Service Status */}
+        <div className="hidden sm:flex flex-col">
+          <span className="text-[10px] text-mutedText font-sans leading-none">AI Service</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                aiStatus === 'HEALTHY'
+                  ? 'bg-success'
+                  : aiStatus === 'DEGRADED'
+                  ? 'bg-warning'
+                  : aiStatus === 'CONNECTING'
+                  ? 'bg-mutedText'
+                  : 'bg-danger'
+              }`}
+            />
+            <span className="text-xs font-medium text-secondaryText font-sans">
+              {aiStatus === 'HEALTHY'
+                ? 'Operational'
+                : aiStatus === 'DEGRADED'
+                ? 'Degraded'
+                : aiStatus === 'CONNECTING'
+                ? 'Connecting'
+                : 'Unavailable'}
+            </span>
           </div>
         </div>
 
-        {/* Privacy Firewall Badge with Tooltip */}
-        <div
-          className="group relative hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-md bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 text-xs font-mono font-medium cursor-help"
-          title="Zero audio retention privacy firewall enforced across all streams"
-        >
-          <Lock className="w-3.5 h-3.5 text-indigo-400" />
-          <span>PRIVACY ENFORCED</span>
-          <div className="opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 absolute top-9 right-0 bg-slate-900 border border-slate-700 text-[10px] text-slate-300 px-2 py-1 rounded shadow-xl whitespace-nowrap z-50 font-mono">
-            Zero audio retention & real-time credential PII scrubbing active
+        {/* Privacy Status */}
+        <div className="hidden md:flex flex-col">
+          <span className="text-[10px] text-mutedText font-sans leading-none">Privacy</span>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-success" />
+            <span className="text-xs font-medium text-secondaryText font-sans">
+              Enforced
+            </span>
           </div>
         </div>
 
-        {/* Active Analyst Identity */}
-        {user && (
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-            <div className="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 font-mono">
-              {user.fullName ? user.fullName[0].toUpperCase() : 'A'}
-            </div>
-            <div className="hidden xl:block text-left">
-              <p className="text-xs font-semibold text-slate-200 font-sans leading-none truncate max-w-[120px]">
-                {user.fullName || 'SOC Analyst'}
-              </p>
-              <p className="text-[10px] text-indigo-400 font-mono leading-none mt-1">
-                {user.role || 'SECURITY_ANALYST'}
-              </p>
-            </div>
+        {/* Theme Mode Switcher */}
+        <div className="pl-1">
+          <ThemeToggle />
+        </div>
+
+        {/* User Identity Chip */}
+        <div className="flex items-center gap-2 pl-3 border-l border-border">
+          <div className="w-7 h-7 rounded bg-surface-elevated border border-border flex items-center justify-center text-xs font-medium text-primaryText font-sans shrink-0">
+            {getInitials(user?.fullName)}
           </div>
-        )}
+          <div className="hidden xl:block text-left">
+            <p className="text-xs font-medium text-primaryText font-sans leading-none truncate max-w-[130px]">
+              {user?.fullName || 'Tier-3 SOC Analyst'}
+            </p>
+            <p className="text-[11px] text-mutedText font-sans leading-none mt-1">
+              {user?.role ? user.role.replace(/_/g, ' ') : 'Security Analyst'}
+            </p>
+          </div>
+        </div>
       </div>
     </header>
   );

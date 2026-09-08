@@ -316,6 +316,16 @@ export class RiskService {
     return assessment.evidence_graph || { nodes: [], edges: [], primary_findings: [] };
   }
 
+  public static clearAssessment(callId?: string): void {
+    if (callId) {
+      this.assessments.delete(callId);
+      this.timelineHistory.delete(callId);
+    } else {
+      this.assessments.clear();
+      this.timelineHistory.clear();
+    }
+  }
+
   public static recordCustomAssessment(assessment: any): void {
     const callId = assessment.callId || assessment.call_id;
     if (callId) {

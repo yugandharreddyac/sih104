@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Lock, Mail, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 import { ApiClient } from '@/lib/api';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,69 +29,63 @@ export default function LoginPage() {
     }
   };
 
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#070b14] p-4 relative overflow-hidden">
-      {/* Background Gradients */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none"></div>
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
 
-      <div className="max-w-md w-full soc-glass p-8 rounded-2xl border border-slate-800 shadow-2xl relative z-10">
+      <div className="max-w-sm w-full bg-surface p-6 sm:p-8 rounded border border-border shadow-card relative z-10">
         {/* Brand Header */}
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/25">
-            <Shield className="w-8 h-8 text-white" />
+        <div className="text-center mb-6">
+          <div className="w-10 h-10 rounded bg-surface-elevated border border-border flex items-center justify-center mx-auto mb-3 text-primary">
+            <Shield className="w-5 h-5" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-wide">VOXSHIELD</h1>
-          <p className="text-xs font-mono text-cyan-400 mt-1">SOC Portal & Security Operations</p>
-          <p className="text-xs text-slate-400 mt-2">
-            Real-time Voice Impersonation & Social Engineering Defense
+          <h1 className="text-lg font-semibold text-primaryText tracking-wide font-sans">VOXSHIELD</h1>
+          <p className="text-xs text-mutedText font-sans mt-0.5">
+            Security Operations Center
           </p>
         </div>
 
-        {/* Phase 1 Badge */}
-        <div className="p-3 rounded-lg bg-indigo-950/50 border border-indigo-500/30 text-indigo-300 text-xs mb-6 flex items-center gap-2 font-mono">
-          <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>Phase 1 Foundation: Enterprise RBAC & Security Gateway</span>
-        </div>
-
         {error && (
-          <div className="p-3 rounded-lg bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs mb-4 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          <div className="alert-danger mb-4">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} className="space-y-3.5">
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
+            <label className="block text-xs font-medium text-secondaryText mb-1 font-sans">
               Operator Email
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Mail className="w-4 h-4 text-mutedText absolute left-2.5 top-2.5" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-900/80 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono transition-colors"
+                autoComplete="username email"
+                className="input-enterprise pl-9 font-sans"
                 placeholder="analyst@voxshield.security"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1">
-              Security Key / Password
+            <label className="block text-xs font-medium text-secondaryText mb-1 font-sans">
+              Password
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Lock className="w-4 h-4 text-mutedText absolute left-2.5 top-2.5" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full pl-9 pr-3 py-2.5 bg-slate-900/80 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono transition-colors"
+                autoComplete="current-password"
+                className="input-enterprise pl-9 font-sans"
                 placeholder="••••••••••••"
               />
             </div>
@@ -99,22 +94,22 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-sm font-semibold shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all mt-6"
+            className="btn-primary w-full py-2 mt-4 text-xs font-medium"
           >
             {loading ? (
               <span>Authenticating...</span>
             ) : (
               <>
                 <span>Access Security Console</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </>
             )}
           </button>
         </form>
 
-        <div className="mt-6 pt-4 border-t border-slate-800 text-center">
-          <p className="text-[11px] text-slate-500 font-mono">
-            Default Credentials: analyst@voxshield.security / VoxShield@2026!
+        <div className="mt-6 pt-3 border-t border-border text-center">
+          <p className="text-[11px] text-mutedText font-mono">
+            analyst@voxshield.security / VoxShield@2026!
           </p>
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, AlertTriangle, ShieldAlert, Cpu, UserCheck, Repeat, MessageSquare } from 'lucide-react';
+import { ShieldAlert, Cpu, UserCheck, Repeat, MessageSquare, AlertTriangle } from 'lucide-react';
 
 export interface SecurityEvidenceItem {
   category: 'ACOUSTIC' | 'BIOMETRIC' | 'REPLAY' | 'CONVERSATION' | 'POLICY' | 'GENERAL';
@@ -28,46 +28,46 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({
   const getIcon = (category?: string) => {
     switch (category) {
       case 'ACOUSTIC':
-        return <Cpu className="w-4 h-4 text-cyan-400" />;
+        return <Cpu className="w-4 h-4 text-info" />;
       case 'BIOMETRIC':
-        return <UserCheck className="w-4 h-4 text-indigo-400" />;
+        return <UserCheck className="w-4 h-4 text-primary" />;
       case 'REPLAY':
-        return <Repeat className="w-4 h-4 text-amber-300" />;
+        return <Repeat className="w-4 h-4 text-warning" />;
       case 'CONVERSATION':
-        return <MessageSquare className="w-4 h-4 text-rose-400" />;
+        return <MessageSquare className="w-4 h-4 text-danger" />;
       default:
-        return <AlertTriangle className="w-4 h-4 text-amber-400" />;
+        return <AlertTriangle className="w-4 h-4 text-warning" />;
     }
   };
 
   const getSeverityBadge = (sev?: string) => {
     const s = (sev || 'MEDIUM').toUpperCase();
     if (s === 'CRITICAL' || s === 'HIGH') {
-      return 'bg-rose-500/10 text-rose-300 border-rose-500/30';
+      return 'bg-red-500/10 text-red-400 border-red-500/25';
     }
     if (s === 'MEDIUM') {
-      return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+      return 'bg-amber-500/10 text-amber-300 border-amber-500/25';
     }
     if (s === 'LOW' || s === 'INFO') {
-      return 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30';
+      return 'bg-sky-500/10 text-sky-400 border-sky-500/25';
     }
-    return 'bg-slate-800 text-slate-300 border-slate-700';
+    return 'bg-surface-elevated text-secondaryText border-border';
   };
 
   return (
-    <div className={`p-4 rounded-xl bg-[#0c1222] border border-slate-800 space-y-3 ${className}`}>
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-        <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-sans flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
+    <div className={`p-4 rounded bg-surface border border-border space-y-3 ${className}`}>
+      <div className="flex items-center justify-between pb-2 border-b border-border">
+        <h4 className="text-xs font-semibold text-primaryText font-sans flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-warning" />
           <span>{title}</span>
         </h4>
-        <span className="text-[10px] font-mono text-slate-500">
+        <span className="text-[11px] font-mono text-mutedText">
           {items.length} Signal{items.length === 1 ? '' : 's'}
         </span>
       </div>
 
       {items.length === 0 ? (
-        <div className="py-6 text-center text-xs text-slate-500 font-sans">
+        <div className="py-6 text-center text-xs text-mutedText font-sans">
           {emptyMessage}
         </div>
       ) : (
@@ -77,9 +77,9 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({
               return (
                 <div
                   key={idx}
-                  className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800/80 flex items-start gap-2.5 text-xs text-slate-300 font-sans leading-relaxed"
+                  className="p-2.5 rounded bg-surface-elevated border border-border flex items-start gap-2.5 text-xs text-secondaryText font-sans leading-relaxed"
                 >
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-info mt-1.5 shrink-0" />
                   <span>{item}</span>
                 </div>
               );
@@ -88,26 +88,26 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({
             return (
               <div
                 key={idx}
-                className="p-3 rounded-lg bg-slate-900/80 border border-slate-800 flex items-start justify-between gap-3 text-xs"
+                className="p-2.5 rounded bg-surface-elevated border border-border flex items-start justify-between gap-3 text-xs"
               >
                 <div className="flex items-start gap-2.5 min-w-0">
-                  <div className="p-1.5 rounded bg-slate-800/80 mt-0.5 shrink-0">
+                  <div className="p-1 rounded bg-surface mt-0.5 shrink-0">
                     {getIcon(item.category)}
                   </div>
                   <div className="space-y-0.5 min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-200 font-sans truncate">
+                      <span className="font-medium text-primaryText font-sans truncate">
                         {item.title}
                       </span>
                       <span
-                        className={`text-[9px] font-mono px-1.5 py-0.2 rounded border font-semibold ${getSeverityBadge(
+                        className={`text-[10px] font-sans px-1.5 py-0.2 rounded border font-medium ${getSeverityBadge(
                           item.severity
                         )}`}
                       >
                         {item.severity}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-sans leading-relaxed">
+                    <p className="text-[11px] text-secondaryText font-sans leading-relaxed">
                       {item.detail}
                     </p>
                   </div>
@@ -115,7 +115,7 @@ export const EvidenceList: React.FC<EvidenceListProps> = ({
 
                 {typeof item.score === 'number' && Number.isFinite(item.score) && (
                   <div className="text-right shrink-0 font-mono">
-                    <span className="text-xs font-bold text-slate-200">
+                    <span className="text-xs font-semibold text-primaryText">
                       {(item.score * 100).toFixed(0)}%
                     </span>
                   </div>
